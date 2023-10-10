@@ -104,6 +104,9 @@ class BatchEnv:
         obs_space = {k: (v.low.min(), v.high.max(), v.shape, v.dtype) for k, v in self.observation_space.spaces.items()}
         a = self.action_space
         act_space = (a.low.min(), a.high.max(), a.shape, a.dtype)
-        return (
-            f'{self.__class__.__name__}(' f'len={len(self)}, ' f'observation_space={obs_space}, ' f'action_space={act_space})'
-        )
+
+        return f'{self.__class__.__name__}(\n' \
+            f'  num_envs={len(self)},\n' \
+            f'  device={self._device},\n' \
+            f'  observation_space={obs_space},\n' \
+            f'  action_space={act_space}\n)'
