@@ -22,7 +22,7 @@ class ActorCriticBase:
         self.env = env
         action_space = self.env.action_space
         self.action_dim = action_space.shape[0]
-        self.env_autoreset = full_cfg.task.get('env_autoreset', True)  # set to False to explicitly call env.reset
+        self.env_autoresets = full_cfg.task.get('env_autoresets', True)  # set to False to explicitly call env.reset
 
         # ---- Inputs ----
         self.obs_keys_cpu = re.compile(full_cfg.agent.get('obs_keys_cpu', '$^'))

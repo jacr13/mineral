@@ -148,6 +148,9 @@ class DDPG(ActorCriticBase):
 
         obs = self.obs
         for i in range(timesteps):
+            if not self.env_autoresets:
+                raise NotImplementedError
+
             if self.normalize_input:
                 for k, v in obs.items():
                     self.obs_rms[k].update(v)

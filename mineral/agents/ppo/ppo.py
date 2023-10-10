@@ -328,10 +328,11 @@ class PPO(ActorCriticBase):
 
     def play_steps(self):
         for n in range(self.horizon_length):
-            if not self.env_autoreset:
+            if not self.env_autoresets:
                 if any(self.dones):
                     done_indices = torch.where(self.dones)[0].tolist()
                     obs_reset = self.env.reset_idx(done_indices)
+                    obs_reset = self._convert_obs(obs_reset)
                     for k, v in obs_reset.items():
                         self.obs[k][done_indices] = v
 
