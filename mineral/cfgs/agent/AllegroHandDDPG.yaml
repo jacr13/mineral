@@ -1,0 +1,61 @@
+seed: ${..seed}
+algo: DDPG
+
+save_video_every: 0
+save_video_consecutive: 0
+tracker_len: 100
+
+normalize_input: True
+
+network:
+  encoder: null
+
+  actor: Actor
+  actor_kwargs:
+    mlp_kwargs:
+      units: [512, 256, 128]
+    tanh_policy: True
+
+  critic: EnsembleQ
+  critic_kwargs:
+    n_critics: 2
+
+ddpg:
+  multi_gpu: ${...multi_gpu}
+  num_actors: ${...task.env.numEnvs}
+
+  reward_shaper:
+    fn: scale
+    scale: 0.01
+
+  max_agent_steps: 200e6
+  horizon_len: 1
+  memory_size: 5e6
+  batch_size: 8192
+  # nstep: 1
+  nstep: 3
+  tau: 0.05
+  gamma: 0.99
+  warm_up: 32
+  no_tgt_actor: True
+  handle_timeout: True
+
+  # for TD3: set update_actor_interval=2, update_targets_interval=2, mini_epochs=1
+  update_actor_interval: 1
+  update_targets_interval: 1
+  mini_epochs: 8  # pql.update_times
+
+  actor_lr: 5e-4
+  critic_lr: 5e-4
+  adam_eps: 1e-5
+  max_grad_norm: 0.5
+
+  noise:
+    type: 'mixed' # ['fixed', 'mixed']
+    decay: null  #  "exp" and "linear"
+    exp_decay_rate: 0.99
+    lin_decay_iters: 10000
+    std_max: 0.8
+    std_min: 0.05
+    tgt_pol_std: 0.8
+    tgt_pol_noise_bound: 0.2
