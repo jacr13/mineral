@@ -18,6 +18,7 @@ class Worker:
         self.impl = {
             'blocking': BlockingWorker,
             'thread': ThreadWorker,
+            'torchprocess': bind(ProcessPipeWorker, initializers=inits, torchprocess=True),
             'process': bind(ProcessPipeWorker, initializers=inits),
             'daemon': bind(ProcessPipeWorker, initializers=inits, daemon=True),
             'process_slow': bind(ProcessWorker, initializers=inits),
@@ -123,12 +124,14 @@ class ProcessWorker:
 
 
 class ProcessPipeWorker:
-    def __init__(self, fn, initializers=(), daemon=False):
-        import multiprocessing
-
+    def __init__(self, fn, initializers=(), daemon=False, torchprocess=False, start_method='spawn'):
+        if torchprocess:
+            from torch import multiprocessing
+        else:
+            import multiprocessing
         import cloudpickle
 
-        self._context = multiprocessing.get_context('spawn')
+        self._context = multiprocessing.get_context(start_method)
         self._pipe, pipe = self._context.Pipe()
         fn = cloudpickle.dumps(fn)
         initializers = cloudpickle.dumps(initializers)
