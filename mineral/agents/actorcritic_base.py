@@ -4,12 +4,10 @@ import re
 
 import numpy as np
 import torch
-import torch.nn as nn
 from omegaconf import OmegaConf
 
 from ..common.tracker import Tracker
 from ..common.writer import TensorboardWriter, WandbWriter
-from .nets import RunningMeanStd
 
 
 class ActorCriticBase:
@@ -24,24 +22,17 @@ class ActorCriticBase:
         self.env = env
         action_space = self.env.action_space
         self.action_dim = action_space.shape[0]
-        self.call_env_reset = full_cfg.task.get('call_env_reset', False)  # False for vectorized envs that auto reset
+        self.env_autoreset = full_cfg.task.get('env_autoreset', True)  # set to False to explicitly call env.reset
 
         # ---- Inputs ----
-        self.obs_keys_cpu = full_cfg.agent.get('obs_keys_cpu', '$^')
+        self.obs_keys_cpu = re.compile(full_cfg.agent.get('obs_keys_cpu', '$^'))
+        self.input_keys_normalize = re.compile(full_cfg.agent.get('input_keys_normalize', ''))
         self.normalize_input = full_cfg.agent.get('normalize_input', False)
-        self.input_keys_normalize = full_cfg.agent.get('input_keys_normalize', '')
         self.observation_space = self.env.observation_space
         try:
             obs_space = {k: v.shape for k, v in self.observation_space.spaces.items()}
         except:
             obs_space = {'obs': self.observation_space.shape}
-        if self.normalize_input:
-            self.running_mean_std = {
-                k: RunningMeanStd(v).to(self.device) if re.match(self.input_keys_normalize, k) else nn.Identity()
-                for k, v in obs_space.items()
-            }
-            self.running_mean_std = nn.ModuleDict(self.running_mean_std)
-            print('RunningMeanStd:', self.running_mean_std)
         self.obs_space = obs_space
 
         # ---- Logging ----
@@ -66,12 +57,12 @@ class ActorCriticBase:
         # ---- Logging ----
         self.env_render = full_cfg.env_render
         info_keys_cfg = full_cfg.agent.get('info_keys', {})
-        self.info_keys_video = info_keys_cfg.get('video', '$^')
-        self.info_keys_sum = info_keys_cfg.get('sum', '$^')
-        self.info_keys_min = info_keys_cfg.get('min', '$^')
-        self.info_keys_max = info_keys_cfg.get('max', '$^')
-        self.info_keys_final = info_keys_cfg.get('final', '$^')
-        self.info_keys_scalar = info_keys_cfg.get('scalar', '$^')
+        self.info_keys_video = re.compile(info_keys_cfg.get('video', '$^'))
+        self.info_keys_sum = re.compile(info_keys_cfg.get('sum', '$^'))
+        self.info_keys_min = re.compile(info_keys_cfg.get('min', '$^'))
+        self.info_keys_max = re.compile(info_keys_cfg.get('max', '$^'))
+        self.info_keys_final = re.compile(info_keys_cfg.get('final', '$^'))
+        self.info_keys_scalar = re.compile(info_keys_cfg.get('scalar', '$^'))
         self.save_video_every = full_cfg.agent.get('save_video_every', 0)
         self.save_video_consecutive = full_cfg.agent.get('save_video_consecutive', 0)
 
@@ -89,8 +80,9 @@ class ActorCriticBase:
         self.current_rewards = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
         self.current_lengths = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
 
-        self.episode_rewards = Tracker(100)
-        self.episode_lengths = Tracker(100)
+        tracker_len = full_cfg.agent.get('tracker_len', 100)
+        self.episode_rewards = Tracker(tracker_len)
+        self.episode_lengths = Tracker(tracker_len)
 
         # ---- Wandb / Tensorboard Logger ----
         self._info_extra = {}
@@ -118,6 +110,20 @@ class ActorCriticBase:
         summary = tuple([(step, k, v) for k, v in metrics.items()])
         [w(summary) for w in self._writers]
 
+    def _convert_obs(self, obs):
+        if not isinstance(obs, dict):
+            obs = {'obs': obs}
+
+        # Copy obs dict since env.step may modify it (ie. IsaacGymEnvs)
+        _obs = {}
+        for k, v in obs.items():
+            if isinstance(v, np.ndarray):
+                _obs[k] = torch.tensor(v, device=self.device if not re.match(self.obs_keys_cpu, k) else 'cpu')
+            else:
+                # assert isinstance(v, torch.Tensor)
+                _obs[k] = v
+        return _obs
+
     @staticmethod
     def _reshape_env_render(k, v):
         if len(v.shape) == 3:  # H, W, C
@@ -130,7 +136,7 @@ class ActorCriticBase:
             raise RuntimeError(f'Unsupported {k} shape {v.shape}')
         return v
 
-    def _update_tracker(self, rewards, done_indices, infos, save_video=False):
+    def update_tracker(self, rewards, done_indices, infos, save_video=False):
         self.current_rewards += rewards
         self.current_lengths += 1
         self.episode_rewards.update(self.current_rewards[done_indices])

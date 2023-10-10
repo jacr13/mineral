@@ -117,11 +117,11 @@ def main(config: DictConfig):
         config.seed = set_seed(config.seed)
 
     resolved_config = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
-    print(pprint.pformat(resolved_config, compact=True, indent=0), '\n')
+    print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')
 
     cprint('Start Building the Environment', 'green', attrs=['bold'])
     env = make_envs(config)
-    print(env)
+    print(f'Env: {env}')
 
     logdir = config.logdir
     os.makedirs(logdir, exist_ok=True)

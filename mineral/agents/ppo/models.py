@@ -1,10 +1,8 @@
 import numpy as np
 import torch
-import torch.distributions as D
 import torch.nn as nn
-import torch.nn.functional as F
 
-from ..nets import MultiEncoder
+from ..nets import Dist, MultiEncoder
 
 
 class MLP(nn.Module):
@@ -34,7 +32,7 @@ class MLP(nn.Module):
     @staticmethod
     def init_weights(sequential, scales):
         [
-            torch.nn.init.orthogonal_(module.weight, gain=scales[idx])
+            nn.init.orthogonal_(module.weight, gain=scales[idx])
             for idx, module in enumerate(mod for mod in sequential if isinstance(mod, nn.Linear))
         ]
 
@@ -43,7 +41,7 @@ class ActorCritic(nn.Module):
     def __init__(self, obs_space, action_dim, config):
         super().__init__()
         self.separate_value_mlp = config.separate_value_mlp
-        self.actor_input_ind_std = config.actor_input_ind_std
+        self.fixed_sigma = config.fixed_sigma
         self.act_type = config.act_type
         self.norm_type = config.norm_type
         self.units = config.mlp.units
@@ -59,13 +57,13 @@ class ActorCritic(nn.Module):
         self.actor_mlp = MLP(input_size=mlp_in_dim, units=self.units, act_type=self.act_type, norm_type=self.norm_type)
         if self.separate_value_mlp:
             self.value_mlp = MLP(input_size=mlp_in_dim, units=self.units, act_type=self.act_type, norm_type=self.norm_type)
-        self.value = torch.nn.Linear(out_size, 1)
-        self.mu = torch.nn.Linear(out_size, action_dim)
+        self.value = nn.Linear(out_size, 1)
+        self.mu = nn.Linear(out_size, action_dim)
 
-        if self.actor_input_ind_std:
-            self.sigma = nn.Parameter(torch.zeros(action_dim, requires_grad=True, dtype=torch.float32), requires_grad=True)
+        if self.fixed_sigma:
+            self.sigma = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32), requires_grad=True)
         else:
-            self.sigma = torch.nn.Linear(out_size, action_dim)
+            self.sigma = nn.Linear(out_size, action_dim)
 
         actor_dist_config = config.get('actor_dist', {})
         self.dist = Dist(**actor_dist_config)
@@ -78,11 +76,11 @@ class ActorCritic(nn.Module):
                 fan_out = m.kernel_size[0] * m.out_channels
                 m.weight.data.normal_(mean=0.0, std=np.sqrt(2.0 / fan_out))
                 if getattr(m, 'bias', None) is not None:
-                    torch.nn.init.zeros_(m.bias)
+                    nn.init.zeros_(m.bias)
             if isinstance(m, nn.Linear):
                 # nn.init.orthogonal_(m.weight.data, gain=1.41421356237)
                 if getattr(m, 'bias', None) is not None:
-                    torch.nn.init.zeros_(m.bias)
+                    nn.init.zeros_(m.bias)
 
         self.actor_mlp.apply(weight_init)
         if self.separate_value_mlp:
@@ -94,7 +92,7 @@ class ActorCritic(nn.Module):
         # policy output layer with scale 0.01
         nn.init.orthogonal_(self.value.weight, gain=1.0)
         nn.init.orthogonal_(self.mu.weight, gain=0.01)
-        if self.actor_input_ind_std:
+        if self.fixed_sigma:
             nn.init.constant_(self.sigma, 0)
         else:
             nn.init.orthogonal_(self.sigma.weight, gain=0.01)
@@ -156,38 +154,8 @@ class ActorCritic(nn.Module):
             x = self.value_mlp(z)
         value = self.value(x)
 
-        if self.actor_input_ind_std:
+        if self.fixed_sigma:
             sigma = self.sigma
         else:
             sigma = self.sigma(x)
         return mu, mu * 0 + sigma, value
-
-
-class Dist(nn.Module):
-    def __init__(
-        self,
-        dist='normal',
-        minstd=1.0,
-        maxstd=1.0,
-    ):
-        super().__init__()
-        self._dist = dist
-        self._minstd = minstd
-        self._maxstd = maxstd
-
-    def forward(self, mu, logstd):
-        if self._dist == 'normal':
-            sigma = torch.exp(logstd)
-            distr = D.Normal(mu, sigma)
-        elif self._dist == 'normal_dreamerv3':
-            lo, hi = self._minstd, self._maxstd
-            std = (hi - lo) * torch.sigmoid(logstd + 2.0) + lo
-            mu = torch.tanh(mu)
-            distr = D.Normal(mu, std)
-            sigma = std
-        else:
-            raise NotImplementedError
-        return mu, sigma, distr
-
-    def __repr__(self):
-        return f'Dist(dist={self._dist})'
