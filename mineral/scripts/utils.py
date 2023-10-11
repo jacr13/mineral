@@ -28,7 +28,14 @@ def omegaconf_to_dict(d: DictConfig) -> Dict:
 def set_np_formatting():
     """formats numpy print"""
     np.set_printoptions(
-        edgeitems=30, infstr='inf', linewidth=4000, nanstr='nan', precision=2, suppress=False, threshold=10000, formatter=None
+        edgeitems=30,
+        infstr='inf',
+        linewidth=4000,
+        nanstr='nan',
+        precision=2,
+        suppress=False,
+        threshold=10000,
+        formatter=None,
     )
 
 
@@ -73,8 +80,8 @@ def limit_threads(n: int = 1):
     # if n == 1:
     #     blosc.use_threads = False
     # torch.set_num_threads(n)
-    os.environ["OMP_NUM_THREADS"] = str(n)
-    os.environ["MKL_NUM_THREADS"] = str(n)
-    os.environ["OPENBLAS_NUM_THREADS"] = str(n)
-    os.environ["VECLIB_MAXIMUM_THREADS"] = str(n)
-    os.environ["NUMEXPR_NUM_THREADS"] = str(n)
+    os.environ['OMP_NUM_THREADS'] = str(n)
+    os.environ['MKL_NUM_THREADS'] = str(n)
+    os.environ['OPENBLAS_NUM_THREADS'] = str(n)
+    os.environ['VECLIB_MAXIMUM_THREADS'] = str(n)
+    os.environ['NUMEXPR_NUM_THREADS'] = str(n)

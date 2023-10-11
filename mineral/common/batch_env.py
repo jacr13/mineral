@@ -105,8 +105,10 @@ class BatchEnv:
         a = self.action_space
         act_space = (a.low.min(), a.high.max(), a.shape, a.dtype)
 
-        return f'{self.__class__.__name__}(\n' \
-            f'  num_envs={len(self)},\n' \
-            f'  device={self._device},\n' \
-            f'  observation_space={obs_space},\n' \
+        return (
+            f'{self.__class__.__name__}(\n'
+            f'  num_envs={len(self)},\n'
+            f'  device={self._device},\n'
+            f'  observation_space={obs_space},\n'
             f'  action_space={act_space}\n)'
+        )
