@@ -5,6 +5,17 @@ import torch.nn as nn
 from ..nets import Dist, MultiEncoder
 
 
+def weight_init(m):
+    if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv1d):
+        fan_out = m.kernel_size[0] * m.out_channels
+        m.weight.data.normal_(mean=0.0, std=np.sqrt(2.0 / fan_out))
+        if getattr(m, 'bias', None) is not None:
+            nn.init.zeros_(m.bias)
+    if isinstance(m, nn.Linear):
+        if getattr(m, 'bias', None) is not None:
+            nn.init.zeros_(m.bias)
+
+
 class MLP(nn.Module):
     def __init__(self, input_size, units, act_type='ELU', norm_type=None):
         super().__init__()
@@ -22,19 +33,15 @@ class MLP(nn.Module):
             input_size = output_size
         self.mlp = nn.Sequential(*layers)
 
-        # orthogonal init of weights
-        # hidden layers scale np.sqrt(2)
-        self.init_weights(self.mlp, [np.sqrt(2)] * len(units))
+        self.reset_parameters()
 
     def forward(self, x):
         return self.mlp(x)
 
-    @staticmethod
-    def init_weights(sequential, scales):
-        [
-            nn.init.orthogonal_(module.weight, gain=scales[idx])
-            for idx, module in enumerate(mod for mod in sequential if isinstance(mod, nn.Linear))
-        ]
+    def reset_parameters(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight, gain=1.41421356237)  # np.sqrt(2)
 
 
 class ActorCritic(nn.Module):
@@ -71,17 +78,6 @@ class ActorCritic(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        def weight_init(m):
-            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv1d):
-                fan_out = m.kernel_size[0] * m.out_channels
-                m.weight.data.normal_(mean=0.0, std=np.sqrt(2.0 / fan_out))
-                if getattr(m, 'bias', None) is not None:
-                    nn.init.zeros_(m.bias)
-            if isinstance(m, nn.Linear):
-                # nn.init.orthogonal_(m.weight.data, gain=1.41421356237)
-                if getattr(m, 'bias', None) is not None:
-                    nn.init.zeros_(m.bias)
-
         self.actor_mlp.apply(weight_init)
         if self.separate_value_mlp:
             self.value_mlp.apply(weight_init)
