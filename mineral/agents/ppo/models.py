@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from ..nets import Dist, MultiEncoder
+from ...nets import Dist, MultiEncoder
 
 
 def weight_init(m):

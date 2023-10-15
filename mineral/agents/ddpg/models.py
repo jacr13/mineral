@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from ..nets import Dist
+from ...nets import Dist
 from .utils import weight_init_orthogonal_, weight_init_uniform_
 
 
