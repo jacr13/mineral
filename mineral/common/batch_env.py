@@ -76,7 +76,12 @@ class BatchEnv:
         imgs = [env.render(**kwargs) for env in self._envs]
         if self._parallel:
             imgs = [x() for x in imgs]
-        imgs = np.stack(imgs)
+        if isinstance(imgs[0], np.ndarray):
+            imgs = np.stack(imgs)
+        elif isinstance(imgs[0], torch.Tensor):
+            imgs = torch.stack(imgs)
+        else:
+            raise RuntimeError
         return imgs
 
     def seed(self, seeds):
