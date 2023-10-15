@@ -53,6 +53,9 @@ class ActorCriticBase:
     def play_steps(self):
         raise NotImplementedError
 
+    def restore_train(self, ckpt_path):
+        raise NotImplementedError
+
     def make_writers(self, full_cfg):
         # ---- Logging ----
         self.env_render = full_cfg.env_render
