@@ -13,7 +13,7 @@ from ..actorcritic_base import ActorCriticBase
 from . import models
 from .noise import add_mixed_normal_noise, add_normal_noise
 from .schedule_util import ExponentialSchedule, LinearSchedule
-from .utils import RewardShaper, RunningMeanStd
+from .utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
 
 
 class DDPG(ActorCriticBase):
@@ -31,8 +31,8 @@ class DDPG(ActorCriticBase):
         self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
         self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
 
-        print(self.actor)
-        print(self.critic, '\n')
+        print('Actor:', self.actor)
+        print('Critic:', self.critic, '\n')
 
         self.actor.to(self.device)
         self.critic.to(self.device)
@@ -189,6 +189,30 @@ class DDPG(ActorCriticBase):
 
         return data, timesteps * self.num_actors
 
+    def train(self):
+        _t = time.perf_counter()
+        _last_t = _t
+
+        obs = self.env.reset()
+        self.obs = self._convert_obs(obs)
+        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
+
+        self.set_eval()
+        trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
+        self.memory.add_to_buffer(trajectory)
+        self.agent_steps += steps
+
+        while self.agent_steps < self.max_agent_steps:
+            self.epoch += 1
+            self.set_eval()
+            trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, random=False)
+            self.agent_steps += steps
+            self.memory.add_to_buffer(trajectory)
+
+            self.set_train()
+            metrics = self.update_net(self.memory)
+            self.write_metrics(self.agent_steps, metrics)
+
     def update_net(self, memory):
         train_result = collections.defaultdict(list)
         for i in range(self.ddpg_config.mini_epochs):
@@ -257,30 +281,6 @@ class DDPG(ActorCriticBase):
         self.critic.requires_grad_(True)
         return actor_loss, grad_norm
 
-    def train(self):
-        _t = time.perf_counter()
-        _last_t = _t
-
-        obs = self.env.reset()
-        self.obs = self._convert_obs(obs)
-        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
-
-        self.set_eval()
-        trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
-        self.memory.add_to_buffer(trajectory)
-        self.agent_steps += steps
-
-        while self.agent_steps < self.max_agent_steps:
-            self.epoch += 1
-            self.set_eval()
-            trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, random=False)
-            self.agent_steps += steps
-            self.memory.add_to_buffer(trajectory)
-
-            self.set_train()
-            metrics = self.update_net(self.memory)
-            self.write_metrics(self.agent_steps, metrics)
-
     def optimizer_update(self, optimizer, objective):
         optimizer.zero_grad(set_to_none=True)
         objective.backward()
@@ -313,21 +313,3 @@ class DDPG(ActorCriticBase):
     def restore_train(self, f):
         if not f:
             return
-
-
-@torch.no_grad()
-def soft_update(target_net, current_net, tau: float):
-    for tar, cur in zip(target_net.parameters(), current_net.parameters()):
-        # tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
-        tar.mul_(1.0 - tau).add_(cur * tau)
-
-
-def handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated')):
-    timeout_envs = None
-    for timeout_key in timeout_keys:
-        if timeout_key in info:
-            timeout_envs = info[timeout_key]
-            break
-    if timeout_envs is not None:
-        dones = dones * (~timeout_envs)
-    return dones

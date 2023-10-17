@@ -4,6 +4,24 @@ import torch
 import torch.nn as nn
 
 
+@torch.no_grad()
+def soft_update(target_net, current_net, tau: float):
+    for tar, cur in zip(target_net.parameters(), current_net.parameters()):
+        # tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
+        tar.mul_(1.0 - tau).add_(cur * tau)
+
+
+def handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated')):
+    timeout_envs = None
+    for timeout_key in timeout_keys:
+        if timeout_key in info:
+            timeout_envs = info[timeout_key]
+            break
+    if timeout_envs is not None:
+        dones = dones * (~timeout_envs)
+    return dones
+
+
 class RewardShaper:
     def __init__(
         self,
