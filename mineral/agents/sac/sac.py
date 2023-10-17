@@ -1,138 +1,321 @@
+import collections
+import itertools
+import re
+import time
 from copy import deepcopy
-from dataclasses import dataclass
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from pql.algo.ac_base import ActorCriticBase
-from pql.replay.nstep_replay import NStepReplay
-from pql.utils.torch_util import soft_update
-from pql.utils.common import handle_timeout
+from ...buffers import NStepReplay, ReplayBuffer
+from ..actorcritic_base import ActorCriticBase
+from ..ddpg import models
+from ..ddpg.utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
 
-@dataclass
-class AgentSAC(ActorCriticBase):
-    def __post_init__(self):
-        super().__post_init__()
+
+class Lambda(nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x):
+        return self.fn(x)
+
+
+class SAC(ActorCriticBase):
+    def __init__(self, env, output_dir, full_cfg):
+        self.network_config = full_cfg.agent.network
+        self.sac_config = full_cfg.agent.sac
+        self.num_actors = self.sac_config.num_actors
+        super().__init__(env, output_dir, full_cfg)
+
+        if self.network_config.get("encoder", None) is not None:
+            EncoderCls = getattr(models, self.network_config.encoder)
+            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+        else:
+            self.encoder = Lambda(lambda x: x["obs"])
+
+        print('Encoder:', self.encoder)
+
+        ActorCls = getattr(models, self.network_config.actor)
+        CriticCls = getattr(models, self.network_config.critic)
+
+        obs_dim = self.obs_space['obs']
+        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
+        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
+        self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
+
+        print('Actor:', self.actor)
+        print('Critic:', self.critic, '\n')
+
+        self.encoder.to(self.device)
+        self.actor.to(self.device)
+        self.critic.to(self.device)
+
+        self.actor_optimizer = torch.optim.AdamW(
+            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
+            self.sac_config.actor_lr,
+        )
+        self.critic_optimizer = torch.optim.AdamW(
+            itertools.chain(self.encoder.parameters(), self.critic.parameters()),
+            self.sac_config.critic_lr,
+        )
+
+        self.encoder_target = deepcopy(self.encoder)
         self.critic_target = deepcopy(self.critic)
-        self.actor_target = deepcopy(self.actor) if not self.cfg.algo.no_tgt_actor else self.actor
+        self.actor_target = deepcopy(self.actor) if not self.sac_config.no_tgt_actor else self.actor
 
-        self.obs = None
-        if self.cfg.algo.alpha is None:
+        if self.normalize_input:
+            self.obs_rms = {
+                k: RunningMeanStd(v, device=self.device) if re.match(self.input_keys_normalize, k) else nn.Identity()
+                for k, v in self.obs_space.items()
+            }
+            self.obs_rms = nn.ModuleDict(self.obs_rms).to(self.device)
+        else:
+            self.obs_rms = None
+
+        if self.sac_config.alpha is None:
             self.log_alpha = nn.Parameter(torch.zeros(1, device=self.device))
-            self.alpha_optim = torch.optim.AdamW([self.log_alpha], lr=self.cfg.algo.alpha_lr)
+            self.alpha_optim = torch.optim.AdamW([self.log_alpha], lr=self.sac_config.alpha_lr)
 
         self.target_entropy = -self.action_dim
 
-        self.n_step_buffer = NStepReplay(self.obs_dim,
-                                         self.action_dim,
-                                         self.cfg.num_envs,
-                                         self.cfg.algo.nstep,
-                                         device=self.device)
+        self.memory = ReplayBuffer(
+            self.obs_space, self.action_dim, capacity=int(self.sac_config.memory_size), device=self.device
+        )
+        self.n_step_buffer = NStepReplay(
+            self.obs_space, self.action_dim, self.num_actors, self.sac_config.nstep, device=self.device
+        )
+
+        self.reward_shaper = RewardShaper(**self.sac_config['reward_shaper'])
+
+        self.epoch = -1
+        self.mini_epoch = -1
+        self.agent_steps = 0
+        self.max_agent_steps = int(self.sac_config['max_agent_steps'])
 
     def get_alpha(self, detach=True, scalar=False):
-        if self.cfg.algo.alpha is None:
+        if self.sac_config.alpha is None:
             alpha = self.log_alpha.exp()
             if detach:
                 alpha = alpha.detach()
             if scalar:
                 alpha = alpha.item()
         else:
-            alpha = self.cfg.algo.alpha
+            alpha = self.sac_config.alpha
         return alpha
 
-    def get_actions(self, obs, sample=True):
-        if self.cfg.algo.obs_norm:
-            obs = self.obs_rms.normalize(obs)
-        actions = self.actor.get_actions(obs, sample=sample)
-        return actions
+    def get_actions(self, obs=None, z=None, sample=True, logprob=False):
+        if z is None:
+            assert obs is not None
+            if self.normalize_input:
+                obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+            z = self.encoder(obs)
+
+        mu, sigma, dist = self.actor(z)
+        assert dist is not None
+
+        if sample:
+            actions = dist.rsample()
+        else:
+            actions = mu
+
+        if logprob:
+            log_prob = dist.log_prob(actions).sum(-1, keepdim=True)
+            return actions, dist, log_prob
+        else:
+            return actions
 
     @torch.no_grad()
     def explore_env(self, env, timesteps: int, random: bool) -> list:
-        obs_dim = (self.obs_dim,) if isinstance(self.obs_dim, int) else self.obs_dim
-        traj_obs = torch.empty((self.cfg.num_envs, timesteps) + (*obs_dim,), device=self.device)
-        traj_actions = torch.empty((self.cfg.num_envs, timesteps) + (self.action_dim,), device=self.device)
-        traj_rewards = torch.empty((self.cfg.num_envs, timesteps), device=self.device)
-        traj_next_obs = torch.empty((self.cfg.num_envs, timesteps) + (*obs_dim,), device=self.device)
-        traj_dones = torch.empty((self.cfg.num_envs, timesteps), device=self.device)
+        traj_obs = {
+            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
+            for k, v in self.obs_space.items()
+        }
+        traj_actions = torch.empty((self.num_actors, timesteps) + (self.action_dim,), device=self.device)
+        traj_rewards = torch.empty((self.num_actors, timesteps), device=self.device)
+        traj_next_obs = {
+            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
+            for k, v in self.obs_space.items()
+        }
+        traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
 
         obs = self.obs
         for i in range(timesteps):
-            if self.cfg.algo.obs_norm:
-                self.obs_rms.update(obs)
+            if not self.env_autoresets:
+                raise NotImplementedError
+
+            if self.normalize_input:
+                for k, v in obs.items():
+                    self.obs_rms[k].update(v)
             if random:
-                action = torch.rand((self.cfg.num_envs, self.action_dim),
-                                    device=self.cfg.device) * 2.0 - 1.0
+                actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
             else:
-                action = self.get_actions(obs, sample=True)
+                actions = self.get_actions(obs=obs, sample=True)
 
-            next_obs, reward, done, info = env.step(action)
-            self.update_tracker(reward, done, info)
-            if self.cfg.algo.handle_timeout:
-                done = handle_timeout(done, info)
+            next_obs, rewards, dones, infos = env.step(actions)
+            next_obs = self._convert_obs(next_obs)
 
-            traj_obs[:, i] = obs
-            traj_actions[:, i] = action
-            traj_dones[:, i] = done
-            traj_rewards[:, i] = reward
-            traj_next_obs[:, i] = next_obs
+            done_indices = torch.where(dones)[0].tolist()
+            save_video = (self.save_video_every > 0) and (self.epoch % self.save_video_every < self.save_video_consecutive)
+            self.update_tracker(rewards, done_indices, infos, save_video=save_video)
+            if self.sac_config.handle_timeout:
+                dones = handle_timeout(dones, infos)
+
+            for k, v in obs.items():
+                traj_obs[k][:, i] = v
+            traj_actions[:, i] = actions
+            traj_dones[:, i] = dones
+            traj_rewards[:, i] = rewards
+            for k, v in next_obs.items():
+                traj_next_obs[k][:, i] = v
             obs = next_obs
         self.obs = obs
 
-        traj_rewards = self.cfg.algo.reward_scale * traj_rewards.reshape(self.cfg.num_envs, timesteps, 1)
-        traj_dones = traj_dones.reshape(self.cfg.num_envs, timesteps, 1)
+        if self.save_video_every > 0:
+            if (self.epoch % self.save_video_every) == (self.save_video_consecutive - 1):
+                self._info_video = {f'video/{k}': np.concatenate(v, 1) for k, v in self._video_buf.items()}
+                self._video_buf = collections.defaultdict(list)
+
+        traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
+        traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
         data = self.n_step_buffer.add_to_buffer(traj_obs, traj_actions, traj_rewards, traj_next_obs, traj_dones)
 
-        return data, timesteps * self.cfg.num_envs
+        return data, timesteps * self.num_actors
+
+    def train(self):
+        _t = time.perf_counter()
+        _last_t = _t
+
+        obs = self.env.reset()
+        self.obs = self._convert_obs(obs)
+        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
+
+        self.set_eval()
+        trajectory, steps = self.explore_env(self.env, self.sac_config.warm_up, random=True)
+        self.memory.add_to_buffer(trajectory)
+        self.agent_steps += steps
+
+        while self.agent_steps < self.max_agent_steps:
+            self.epoch += 1
+            self.set_eval()
+            trajectory, steps = self.explore_env(self.env, self.sac_config.horizon_len, random=False)
+            self.agent_steps += steps
+            self.memory.add_to_buffer(trajectory)
+
+            self.set_train()
+            metrics = self.update_net(self.memory)
+            self.write_metrics(self.agent_steps, metrics)
 
     def update_net(self, memory):
-        critic_loss_list = list()
-        actor_loss_list = list()
-        for i in range(self.cfg.algo.update_times):
-            obs, action, reward, next_obs, done = memory.sample_batch(self.cfg.algo.batch_size)
-            if self.cfg.algo.obs_norm:
-                obs = self.obs_rms.normalize(obs)
-                next_obs = self.obs_rms.normalize(next_obs)
+        train_result = collections.defaultdict(list)
+        for i in range(self.sac_config.mini_epochs):
+            self.mini_epoch += 1
+            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size)
+
             critic_loss, critic_grad_norm = self.update_critic(obs, action, reward, next_obs, done)
-            critic_loss_list.append(critic_loss)
+            train_result["critic_loss"].append(critic_loss)
+            train_result["critic_grad_norm"].append(critic_grad_norm)
 
-            actor_loss, actor_grad_norm = self.update_actor(obs)
-            actor_loss_list.append(actor_loss)
+            if self.mini_epoch % self.sac_config.update_actor_interval == 0:
+                actor_loss, alpha_loss, actor_grad_norm = self.update_actor(obs)
+                train_result["actor_loss"].append(actor_loss)
+                train_result["alpha_loss"].append(alpha_loss)
+                train_result["actor_grad_norm"].append(actor_grad_norm)
 
-            soft_update(self.critic_target, self.critic, self.cfg.algo.tau)
-            if not self.cfg.algo.no_tgt_actor:
-                soft_update(self.actor_target, self.actor, self.cfg.algo.tau)
+            if self.mini_epoch % self.sac_config.update_targets_interval == 0:
+                soft_update(self.critic_target, self.critic, self.sac_config.tau)
+                if not self.sac_config.no_tgt_actor:
+                    soft_update(self.actor_target, self.actor, self.sac_config.tau)
 
-        log_info = {
-            "train/critic_loss": np.mean(critic_loss_list),
-            "train/actor_loss": np.mean(actor_loss_list),
-            "train/return": self.return_tracker.mean(),
-            "train/episode_length": self.step_tracker.mean(),
-            'train/alpha': self.get_alpha(scalar=True),
+        train_result = {k: torch.stack(v) for k, v in train_result.items()}
+        return self.summary_stats(train_result)
+
+    def summary_stats(self, train_result):
+        metrics = {
+            "metrics/episode_rewards": self.episode_rewards.mean(),
+            "metrics/episode_lengths": self.episode_lengths.mean(),
         }
-        self.add_info_tracker_log(log_info)
-        return log_info
+        log_dict = {
+            "train/epoch": self.epoch,
+            "train/mini_epoch": self.mini_epoch,
+            "train/alpha": self.get_alpha(scalar=True),
+            "train/loss/critic": torch.mean(train_result["critic_loss"]).item(),
+            "train/grad_norm/critic": torch.mean(train_result["critic_grad_norm"]).item(),
+        }
+        if "actor_loss" in train_result:
+            log_dict["train/loss/actor"] = torch.mean(train_result["actor_loss"]).item()
+            log_dict["train/loss/alpha"] = torch.mean(train_result["alpha_loss"]).item()
+            log_dict["train/grad_norm/actor"] = torch.mean(train_result["actor_grad_norm"]).item()
+        return {**metrics, **log_dict}
 
     def update_critic(self, obs, action, reward, next_obs, done):
         with torch.no_grad():
-            next_actions, _, log_prob = self.actor.get_actions_logprob(next_obs)
-            target_Q = self.critic_target.get_q_min(next_obs, next_actions) - self.get_alpha() * log_prob
-            target_Q = reward + (1 - done) * (self.cfg.algo.gamma ** self.cfg.algo.nstep) * target_Q
-        current_Q1, current_Q2 = self.critic.get_q1_q2(obs, action)
-        critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
+            if self.normalize_input:
+                next_obs = {k: self.obs_rms[k].normalize(v) for k, v in next_obs.items()}
+            next_z = self.encoder_target(next_obs)
+            next_actions, _, log_prob = self.get_actions(z=next_z, logprob=True)
+            target_Q = self.critic_target.get_q_min(next_z, next_actions) - self.get_alpha() * log_prob
+            target_Q = reward + (1 - done) * (self.sac_config.gamma**self.sac_config.nstep) * target_Q
+
+        if self.normalize_input:
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        z = self.encoder(obs)
+        current_Qs = self.critic.get_q_values(z, action)
+        critic_loss = torch.sum(torch.stack([F.mse_loss(current_Q, target_Q) for current_Q in current_Qs]))
         grad_norm = self.optimizer_update(self.critic_optimizer, critic_loss)
-        return critic_loss.item(), grad_norm
+        return critic_loss, grad_norm
 
     def update_actor(self, obs):
         self.critic.requires_grad_(False)
-        actions, _, log_prob = self.actor.get_actions_logprob(obs)
-        Q = self.critic.get_q_min(obs, actions)
+        if self.normalize_input:
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        z = self.encoder(obs)
+        z = z.detach()  # sac_ae
+        actions, _, log_prob = self.get_actions(z=z, logprob=True)
+        Q = self.critic.get_q_min(z, actions)
         actor_loss = (self.get_alpha() * log_prob - Q).mean()
         grad_norm = self.optimizer_update(self.actor_optimizer, actor_loss)
         self.critic.requires_grad_(True)
 
-        if self.cfg.algo.alpha is None:
+        if self.sac_config.alpha is None:
             alpha_loss = (self.get_alpha(detach=False) * (-log_prob - self.target_entropy).detach()).mean()
             self.optimizer_update(self.alpha_optim, alpha_loss)
-        return actor_loss.item(), grad_norm
+        return actor_loss, alpha_loss, grad_norm
+
+    def optimizer_update(self, optimizer, objective):
+        optimizer.zero_grad(set_to_none=True)
+        objective.backward()
+        if self.sac_config.max_grad_norm is not None:
+            grad_norm = nn.utils.clip_grad_norm_(
+                parameters=optimizer.param_groups[0]["params"],
+                max_norm=self.sac_config.max_grad_norm,
+            )
+        else:
+            grad_norm = None
+        optimizer.step()
+        return grad_norm
+
+    def set_eval(self):
+        self.obs_rms.eval()
+        self.encoder.eval()
+        self.actor.eval()
+        self.critic.eval()
+        self.encoder_target.eval()
+        self.actor_target.eval()
+        self.critic_target.eval()
+
+    def set_train(self):
+        self.obs_rms.eval()
+        self.encoder.train()
+        self.actor.train()
+        self.critic.train()
+        self.encoder_target.train()
+        self.actor_target.train()
+        self.critic_target.train()
+
+    def restore_train(self, f):
+        if not f:
+            return

@@ -119,10 +119,10 @@ class Actor(nn.Module):
     def forward(self, x, std=None):
         x = self.actor_mlp(x)
         mu = self.mu(x)
-        if self.tanh_policy:
+        if self.tanh_policy:  # DDPG
             mu = mu.tanh()
             sigma, dist = None, None
-        else:
+        else:  # SAC
             if self.fixed_sigma is None:
                 assert std is not None
                 sigma = std
@@ -130,9 +130,7 @@ class Actor(nn.Module):
                 sigma = self.sigma
             else:
                 sigma = self.sigma(x)
-
-            dist = None
-            raise NotImplementedError
+            mu, sigma, dist = self.dist(mu, sigma)
         return mu, sigma, dist
 
 
