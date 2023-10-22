@@ -1,27 +1,43 @@
 import collections
+import itertools
 import re
 import time
 from copy import deepcopy
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from ...buffers import NStepReplay, ReplayBuffer
 from ..actorcritic_base import ActorCriticBase
-from . import models
-from .noise import add_mixed_normal_noise, add_normal_noise
-from .schedule_util import ExponentialSchedule, LinearSchedule
-from .utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
+from ..ddpg import models
+from ..ddpg.utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
 
 
-class DDPG(ActorCriticBase):
+class Lambda(nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x):
+        return self.fn(x)
+
+
+class SAC(ActorCriticBase):
     def __init__(self, env, output_dir, full_cfg):
         self.network_config = full_cfg.agent.network
-        self.ddpg_config = full_cfg.agent.ddpg
-        self.num_actors = self.ddpg_config.num_actors
+        self.sac_config = full_cfg.agent.sac
+        self.num_actors = self.sac_config.num_actors
         super().__init__(env, output_dir, full_cfg)
+
+        if self.network_config.get("encoder", None) is not None:
+            EncoderCls = getattr(models, self.network_config.encoder)
+            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+        else:
+            self.encoder = Lambda(lambda x: x["obs"])
+
+        print('Encoder:', self.encoder)
 
         ActorCls = getattr(models, self.network_config.actor)
         CriticCls = getattr(models, self.network_config.critic)
@@ -34,14 +50,24 @@ class DDPG(ActorCriticBase):
         print('Actor:', self.actor)
         print('Critic:', self.critic, '\n')
 
+        self.encoder.to(self.device)
         self.actor.to(self.device)
         self.critic.to(self.device)
 
-        self.actor_optimizer = torch.optim.AdamW(self.actor.parameters(), self.ddpg_config.actor_lr)
-        self.critic_optimizer = torch.optim.AdamW(self.critic.parameters(), self.ddpg_config.critic_lr)
+        module = torch.optim
+        OptimCls = getattr(module, self.sac_config.optim_type)
+        self.actor_optim = OptimCls(
+            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
+            **self.sac_config.get("actor_optim_kwargs", {}),
+        )
+        self.critic_optim = OptimCls(
+            itertools.chain(self.encoder.parameters(), self.critic.parameters()),
+            **self.sac_config.get("critic_optim_kwargs", {}),
+        )
 
+        self.encoder_target = deepcopy(self.encoder)
         self.critic_target = deepcopy(self.critic)
-        self.actor_target = deepcopy(self.actor) if not self.ddpg_config.no_tgt_actor else self.actor
+        self.actor_target = deepcopy(self.actor) if not self.sac_config.no_tgt_actor else self.actor
 
         if self.normalize_input:
             self.obs_rms = {
@@ -52,88 +78,61 @@ class DDPG(ActorCriticBase):
         else:
             self.obs_rms = None
 
-        if self.ddpg_config.noise.decay == 'linear':
-            self.noise_scheduler = LinearSchedule(
-                start_val=self.ddpg_config.noise.std_max,
-                end_val=self.ddpg_config.noise.std_min,
-                total_iters=self.ddpg_config.noise.lin_decay_iters,
-            )
-        elif self.ddpg_config.noise.decay == 'exp':
-            self.noise_scheduler = ExponentialSchedule(
-                start_val=self.ddpg_config.noise.std_max,
-                gamma=self.ddpg_config.exp_decay_rate,
-                end_val=self.ddpg_config.noise.std_min,
-            )
-        else:
-            self.noise_scheduler = None
+        if self.sac_config.alpha is None:
+            init_alpha = np.log(self.sac_config.init_alpha)
+            self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
+            self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
+
+        self.target_entropy = -self.action_dim
 
         self.memory = ReplayBuffer(
-            self.obs_space, self.action_dim, capacity=int(self.ddpg_config.memory_size), device=self.device
+            self.obs_space, self.action_dim, capacity=int(self.sac_config.memory_size), device=self.device
         )
         self.n_step_buffer = NStepReplay(
-            self.obs_space, self.action_dim, self.num_actors, self.ddpg_config.nstep, device=self.device
+            self.obs_space, self.action_dim, self.num_actors, self.sac_config.nstep, device=self.device
         )
 
-        self.reward_shaper = RewardShaper(**self.ddpg_config['reward_shaper'])
+        self.reward_shaper = RewardShaper(**self.sac_config['reward_shaper'])
 
         self.epoch = -1
         self.mini_epoch = -1
         self.agent_steps = 0
-        self.max_agent_steps = int(self.ddpg_config['max_agent_steps'])
+        self.max_agent_steps = int(self.sac_config['max_agent_steps'])
 
-    def get_noise_std(self):
-        if self.noise_scheduler is None:
-            return self.ddpg_config.noise.std_max
+    def get_alpha(self, detach=True, scalar=False):
+        if self.sac_config.alpha is None:
+            alpha = self.log_alpha.exp()
+            if detach:
+                alpha = alpha.detach()
+            if scalar:
+                alpha = alpha.item()
         else:
-            return self.noise_scheduler.val()
+            alpha = self.sac_config.alpha
+        return alpha
 
-    def update_noise(self):
-        # TODO
-        if self.noise_scheduler is not None:
-            self.noise_scheduler.step()
+    def get_actions(self, obs=None, z=None, sample=True, logprob=False):
+        if z is None:
+            assert obs is not None
+            if self.normalize_input:
+                obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+            z = self.encoder(obs)
 
-    def get_actions(self, obs, sample=True):
-        if self.normalize_input:
-            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
-        obs = obs['obs']
-        mu, sigma, dist = self.actor(obs)
-        if dist is None:
-            actions = mu
-        else:
-            raise NotImplementedError
+        mu, sigma, dist = self.actor(z)
+        assert dist is not None
+
         if sample:
-            if self.ddpg_config.noise.type == 'fixed':
-                actions = add_normal_noise(actions, std=self.get_noise_std(), out_bounds=[-1.0, 1.0])
-            elif self.ddpg_config.noise.type == 'mixed':
-                actions = add_mixed_normal_noise(
-                    actions,
-                    std_min=self.ddpg_config.noise.std_min,
-                    std_max=self.ddpg_config.noise.std_max,
-                    out_bounds=[-1.0, 1.0],
-                )
-            else:
-                raise NotImplementedError
-        return actions
+            actions = dist.rsample()
+        else:
+            actions = mu
+
+        if logprob:
+            log_prob = dist.log_prob(actions).sum(-1, keepdim=True)
+            return actions, dist, log_prob
+        else:
+            return actions
 
     @torch.no_grad()
-    def get_tgt_policy_actions(self, obs, sample=True):
-        mu, sigma, dist = self.actor_target(obs)
-        if dist is None:
-            actions = mu
-        else:
-            raise NotImplementedError
-        if sample:
-            # target policy smoothing (TD3)
-            actions = add_normal_noise(
-                actions,
-                std=self.ddpg_config.noise.tgt_pol_std,
-                noise_bounds=[-self.ddpg_config.noise.tgt_pol_noise_bound, self.ddpg_config.noise.tgt_pol_noise_bound],
-                out_bounds=[-1.0, 1.0],
-            )
-        return actions
-
-    @torch.no_grad()
-    def explore_env(self, env, timesteps: int, random: bool = False) -> list:
+    def explore_env(self, env, timesteps: int, random: bool) -> list:
         traj_obs = {
             k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
             for k, v in self.obs_space.items()
@@ -157,7 +156,7 @@ class DDPG(ActorCriticBase):
             if random:
                 actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
             else:
-                actions = self.get_actions(obs, sample=True)
+                actions = self.get_actions(obs=obs, sample=True)
 
             next_obs, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs)
@@ -165,7 +164,7 @@ class DDPG(ActorCriticBase):
             done_indices = torch.where(dones)[0].tolist()
             save_video = (self.save_video_every > 0) and (self.epoch % self.save_video_every < self.save_video_consecutive)
             self.update_tracker(rewards, done_indices, infos, save_video=save_video)
-            if self.ddpg_config.handle_timeout:
+            if self.sac_config.handle_timeout:
                 dones = handle_timeout(dones, infos)
 
             for k, v in obs.items():
@@ -198,14 +197,14 @@ class DDPG(ActorCriticBase):
         self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
 
         self.set_eval()
-        trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
+        trajectory, steps = self.explore_env(self.env, self.sac_config.warm_up, random=True)
         self.memory.add_to_buffer(trajectory)
         self.agent_steps += steps
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
             self.set_eval()
-            trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, random=False)
+            trajectory, steps = self.explore_env(self.env, self.sac_config.horizon_len, random=False)
             self.agent_steps += steps
             self.memory.add_to_buffer(trajectory)
 
@@ -215,28 +214,24 @@ class DDPG(ActorCriticBase):
 
     def update_net(self, memory):
         train_result = collections.defaultdict(list)
-        for i in range(self.ddpg_config.mini_epochs):
+        for i in range(self.sac_config.mini_epochs):
             self.mini_epoch += 1
-            obs, action, reward, next_obs, done = memory.sample_batch(self.ddpg_config.batch_size)
-
-            if self.normalize_input:
-                obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
-                next_obs = {k: self.obs_rms[k].normalize(v) for k, v in next_obs.items()}
-            obs, next_obs = obs['obs'], next_obs['obs']
+            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size)
 
             critic_loss, critic_grad_norm = self.update_critic(obs, action, reward, next_obs, done)
             train_result["critic_loss"].append(critic_loss)
             train_result["critic_grad_norm"].append(critic_grad_norm)
 
-            if self.mini_epoch % self.ddpg_config.update_actor_interval == 0:
-                actor_loss, actor_grad_norm = self.update_actor(obs)
+            if self.mini_epoch % self.sac_config.update_actor_interval == 0:
+                actor_loss, alpha_loss, actor_grad_norm = self.update_actor(obs)
                 train_result["actor_loss"].append(actor_loss)
+                train_result["alpha_loss"].append(alpha_loss)
                 train_result["actor_grad_norm"].append(actor_grad_norm)
 
-            if self.mini_epoch % self.ddpg_config.update_targets_interval == 0:
-                soft_update(self.critic_target, self.critic, self.ddpg_config.tau)
-                if not self.ddpg_config.no_tgt_actor:
-                    soft_update(self.actor_target, self.actor, self.ddpg_config.tau)
+            if self.mini_epoch % self.sac_config.update_targets_interval == 0:
+                soft_update(self.critic_target, self.critic, self.sac_config.tau)
+                if not self.sac_config.no_tgt_actor:
+                    soft_update(self.actor_target, self.actor, self.sac_config.tau)
 
         train_result = {k: torch.stack(v) for k, v in train_result.items()}
         return self.summary_stats(train_result)
@@ -249,45 +244,57 @@ class DDPG(ActorCriticBase):
         log_dict = {
             "train/epoch": self.epoch,
             "train/mini_epoch": self.mini_epoch,
+            "train/alpha": self.get_alpha(scalar=True),
             "train/loss/critic": torch.mean(train_result["critic_loss"]).item(),
             "train/grad_norm/critic": torch.mean(train_result["critic_grad_norm"]).item(),
         }
         if "actor_loss" in train_result:
             log_dict["train/loss/actor"] = torch.mean(train_result["actor_loss"]).item()
+            log_dict["train/loss/alpha"] = torch.mean(train_result["alpha_loss"]).item()
             log_dict["train/grad_norm/actor"] = torch.mean(train_result["actor_grad_norm"]).item()
         return {**metrics, **log_dict}
 
     def update_critic(self, obs, action, reward, next_obs, done):
         with torch.no_grad():
-            next_actions = self.get_tgt_policy_actions(next_obs)
-            target_Q = self.critic_target.get_q_min(next_obs, next_actions)
-            target_Q = reward + (1 - done) * (self.ddpg_config.gamma**self.ddpg_config.nstep) * target_Q
+            if self.normalize_input:
+                next_obs = {k: self.obs_rms[k].normalize(v) for k, v in next_obs.items()}
+            next_z = self.encoder_target(next_obs)
+            next_actions, _, log_prob = self.get_actions(z=next_z, logprob=True)
+            target_Q = self.critic_target.get_q_min(next_z, next_actions) - self.get_alpha() * log_prob
+            target_Q = reward + (1 - done) * (self.sac_config.gamma**self.sac_config.nstep) * target_Q
 
-        current_Qs = self.critic.get_q_values(obs, action)
+        if self.normalize_input:
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        z = self.encoder(obs)
+        current_Qs = self.critic.get_q_values(z, action)
         critic_loss = torch.sum(torch.stack([F.mse_loss(current_Q, target_Q) for current_Q in current_Qs]))
-        grad_norm = self.optimizer_update(self.critic_optimizer, critic_loss)
+        grad_norm = self.optimizer_update(self.critic_optim, critic_loss)
         return critic_loss, grad_norm
 
     def update_actor(self, obs):
         self.critic.requires_grad_(False)
-        mu, sigma, dist = self.actor(obs)
-        if dist is None:
-            action = mu
-        else:
-            raise NotImplementedError
-        Q = self.critic.get_q_min(obs, action)
-        actor_loss = -Q.mean()
-        grad_norm = self.optimizer_update(self.actor_optimizer, actor_loss)
+        if self.normalize_input:
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        z = self.encoder(obs)
+        z = z.detach()  # sac_ae
+        actions, _, log_prob = self.get_actions(z=z, logprob=True)
+        Q = self.critic.get_q_min(z, actions)
+        actor_loss = (self.get_alpha() * log_prob - Q).mean()
+        grad_norm = self.optimizer_update(self.actor_optim, actor_loss)
         self.critic.requires_grad_(True)
-        return actor_loss, grad_norm
+
+        if self.sac_config.alpha is None:
+            alpha_loss = (self.get_alpha(detach=False) * (-log_prob - self.target_entropy).detach()).mean()
+            self.optimizer_update(self.alpha_optim, alpha_loss)
+        return actor_loss, alpha_loss, grad_norm
 
     def optimizer_update(self, optimizer, objective):
         optimizer.zero_grad(set_to_none=True)
         objective.backward()
-        if self.ddpg_config.max_grad_norm is not None:
+        if self.sac_config.max_grad_norm is not None:
             grad_norm = nn.utils.clip_grad_norm_(
                 parameters=optimizer.param_groups[0]["params"],
-                max_norm=self.ddpg_config.max_grad_norm,
+                max_norm=self.sac_config.max_grad_norm,
             )
         else:
             grad_norm = None
@@ -295,20 +302,22 @@ class DDPG(ActorCriticBase):
         return grad_norm
 
     def set_eval(self):
+        self.obs_rms.eval()
+        self.encoder.eval()
         self.actor.eval()
         self.critic.eval()
+        self.encoder_target.eval()
         self.actor_target.eval()
         self.critic_target.eval()
 
-        self.obs_rms.eval()
-
     def set_train(self):
+        self.obs_rms.eval()
+        self.encoder.train()
         self.actor.train()
         self.critic.train()
+        self.encoder_target.train()
         self.actor_target.train()
         self.critic_target.train()
-
-        self.obs_rms.eval()
 
     def restore_train(self, f):
         if not f:

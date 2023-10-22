@@ -108,6 +108,15 @@ class Actor(nn.Module):
     def reset_parameters(self):
         if self.weight_init == "orthogonal":  # drqv2
             self.actor_mlp.apply(weight_init_orthogonal_)
+            self.mu.apply(weight_init_orthogonal_)
+            nn.init.orthogonal_(self.mu.weight, gain=0.01)
+            if self.fixed_sigma is None:
+                pass
+            elif self.fixed_sigma:
+                nn.init.constant_(self.sigma, 0)
+            else:
+                nn.init.orthogonal_(self.sigma.weight, gain=0.01)
+                nn.init.zeros_(self.sigma.bias)
         elif self.weight_init == "uniform":  # original DDPG paper
             self.actor_mlp.apply(weight_init_uniform_)
             nn.init.uniform_(self.mu.weight, -0.003, 0.003)
@@ -119,10 +128,10 @@ class Actor(nn.Module):
     def forward(self, x, std=None):
         x = self.actor_mlp(x)
         mu = self.mu(x)
-        if self.tanh_policy:
+        if self.tanh_policy:  # DDPG
             mu = mu.tanh()
             sigma, dist = None, None
-        else:
+        else:  # SAC
             if self.fixed_sigma is None:
                 assert std is not None
                 sigma = std
@@ -130,9 +139,7 @@ class Actor(nn.Module):
                 sigma = self.sigma
             else:
                 sigma = self.sigma(x)
-
-            dist = None
-            raise NotImplementedError
+            mu, sigma, dist = self.dist(mu, sigma)
         return mu, sigma, dist
 
 
