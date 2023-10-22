@@ -12,13 +12,20 @@ network:
 
   actor: Actor
   actor_kwargs:
+    tanh_policy: True
     mlp_kwargs:
       units: [512, 256, 128]
-    tanh_policy: True
+    #   act_type: SiLU
+    #   norm_type: LayerNorm
+    # weight_init: orthogonal
 
   critic: EnsembleQ
   critic_kwargs:
     n_critics: 2
+    # mlp_kwargs:
+    #   act_type: SiLU
+    #   norm_type: LayerNorm
+    # weight_init: orthogonal
 
 ddpg:
   multi_gpu: ${...multi_gpu}
@@ -45,9 +52,9 @@ ddpg:
   update_targets_interval: 1
   mini_epochs: 8  # pql.update_times
 
-  actor_lr: 5e-4
-  critic_lr: 5e-4
-  adam_eps: 1e-5
+  optim_type: AdamW
+  actor_optim_kwargs: {lr: 5e-4}
+  critic_optim_kwargs: {lr: 5e-4}
   max_grad_norm: 0.5
 
   noise:

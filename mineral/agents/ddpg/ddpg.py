@@ -37,8 +37,15 @@ class DDPG(ActorCriticBase):
         self.actor.to(self.device)
         self.critic.to(self.device)
 
-        self.actor_optimizer = torch.optim.AdamW(self.actor.parameters(), self.ddpg_config.actor_lr)
-        self.critic_optimizer = torch.optim.AdamW(self.critic.parameters(), self.ddpg_config.critic_lr)
+        OptimCls = getattr(torch.optim, self.ddpg_config.optim_type)
+        self.actor_optim = OptimCls(
+            self.actor.parameters(),
+            **self.ddpg_config.get("actor_optim_kwargs", {}),
+        )
+        self.critic_optim = OptimCls(
+            self.critic.parameters(),
+            **self.ddpg_config.get("critic_optim_kwargs", {}),
+        )
 
         self.critic_target = deepcopy(self.critic)
         self.actor_target = deepcopy(self.actor) if not self.ddpg_config.no_tgt_actor else self.actor
@@ -265,7 +272,7 @@ class DDPG(ActorCriticBase):
 
         current_Qs = self.critic.get_q_values(obs, action)
         critic_loss = torch.sum(torch.stack([F.mse_loss(current_Q, target_Q) for current_Q in current_Qs]))
-        grad_norm = self.optimizer_update(self.critic_optimizer, critic_loss)
+        grad_norm = self.optimizer_update(self.critic_optim, critic_loss)
         return critic_loss, grad_norm
 
     def update_actor(self, obs):
@@ -277,7 +284,7 @@ class DDPG(ActorCriticBase):
             raise NotImplementedError
         Q = self.critic.get_q_min(obs, action)
         actor_loss = -Q.mean()
-        grad_norm = self.optimizer_update(self.actor_optimizer, actor_loss)
+        grad_norm = self.optimizer_update(self.actor_optim, actor_loss)
         self.critic.requires_grad_(True)
         return actor_loss, grad_norm
 
