@@ -21,10 +21,12 @@ network:
       dist: squashed_normal
       minlogstd: -5.0
       maxlogstd: 5.0
+    # weight_init: orthogonal
 
   critic: EnsembleQ
   critic_kwargs:
     n_critics: 2
+    # weight_init: orthogonal
 
 sac:
   multi_gpu: ${...multi_gpu}
@@ -51,10 +53,15 @@ sac:
   update_targets_interval: 1
   mini_epochs: 8  # pql.update_times
 
+  init_alpha: 1.0
+  # init_alpha: 0.01
   alpha: null
-  alpha_lr: 5e-3
+  alpha_optim_kwargs:
+    lr: 5e-3
+    # betas: [0.5, 0.999]
+    # eps: 1e-5
 
-  actor_lr: 5e-4
-  critic_lr: 5e-4
-  adam_eps: 1e-5
+  optim_type: AdamW
+  actor_optim_kwargs: {lr: 5e-4}
+  critic_optim_kwargs: {lr: 5e-4}
   max_grad_norm: 0.5

@@ -54,13 +54,15 @@ class SAC(ActorCriticBase):
         self.actor.to(self.device)
         self.critic.to(self.device)
 
-        self.actor_optimizer = torch.optim.AdamW(
+        module = torch.optim
+        OptimCls = getattr(module, self.sac_config.optim_type)
+        self.actor_optim = OptimCls(
             itertools.chain(self.encoder.parameters(), self.actor.parameters()),
-            self.sac_config.actor_lr,
+            **self.sac_config.get("actor_optim_kwargs", {}),
         )
-        self.critic_optimizer = torch.optim.AdamW(
+        self.critic_optim = OptimCls(
             itertools.chain(self.encoder.parameters(), self.critic.parameters()),
-            self.sac_config.critic_lr,
+            **self.sac_config.get("critic_optim_kwargs", {}),
         )
 
         self.encoder_target = deepcopy(self.encoder)
@@ -77,8 +79,9 @@ class SAC(ActorCriticBase):
             self.obs_rms = None
 
         if self.sac_config.alpha is None:
-            self.log_alpha = nn.Parameter(torch.zeros(1, device=self.device))
-            self.alpha_optim = torch.optim.AdamW([self.log_alpha], lr=self.sac_config.alpha_lr)
+            init_alpha = np.log(self.sac_config.init_alpha)
+            self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
+            self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
 
         self.target_entropy = -self.action_dim
 
@@ -265,7 +268,7 @@ class SAC(ActorCriticBase):
         z = self.encoder(obs)
         current_Qs = self.critic.get_q_values(z, action)
         critic_loss = torch.sum(torch.stack([F.mse_loss(current_Q, target_Q) for current_Q in current_Qs]))
-        grad_norm = self.optimizer_update(self.critic_optimizer, critic_loss)
+        grad_norm = self.optimizer_update(self.critic_optim, critic_loss)
         return critic_loss, grad_norm
 
     def update_actor(self, obs):
@@ -277,7 +280,7 @@ class SAC(ActorCriticBase):
         actions, _, log_prob = self.get_actions(z=z, logprob=True)
         Q = self.critic.get_q_min(z, actions)
         actor_loss = (self.get_alpha() * log_prob - Q).mean()
-        grad_norm = self.optimizer_update(self.actor_optimizer, actor_loss)
+        grad_norm = self.optimizer_update(self.actor_optim, actor_loss)
         self.critic.requires_grad_(True)
 
         if self.sac_config.alpha is None:
