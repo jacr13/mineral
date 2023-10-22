@@ -54,8 +54,7 @@ class SAC(ActorCriticBase):
         self.actor.to(self.device)
         self.critic.to(self.device)
 
-        module = torch.optim
-        OptimCls = getattr(module, self.sac_config.optim_type)
+        OptimCls = getattr(torch.optim, self.sac_config.optim_type)
         self.actor_optim = OptimCls(
             itertools.chain(self.encoder.parameters(), self.actor.parameters()),
             **self.sac_config.get("actor_optim_kwargs", {}),

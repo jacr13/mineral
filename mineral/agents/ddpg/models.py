@@ -106,22 +106,13 @@ class Actor(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.weight_init == "orthogonal":  # drqv2
-            self.actor_mlp.apply(weight_init_orthogonal_)
-            self.mu.apply(weight_init_orthogonal_)
-            nn.init.orthogonal_(self.mu.weight, gain=0.01)
-            if self.fixed_sigma is None:
-                pass
-            elif self.fixed_sigma:
-                nn.init.constant_(self.sigma, 0)
-            else:
-                nn.init.orthogonal_(self.sigma.weight, gain=0.01)
-                nn.init.zeros_(self.sigma.bias)
-        elif self.weight_init == "uniform":  # original DDPG paper
-            self.actor_mlp.apply(weight_init_uniform_)
-            nn.init.uniform_(self.mu.weight, -0.003, 0.003)
-        elif self.weight_init == None:
+        if self.weight_init == None:
             pass
+        elif self.weight_init == "orthogonal":  # drqv2
+            self.apply(weight_init_orthogonal_)
+        elif self.weight_init == "uniform":  # original DDPG paper
+            self.apply(weight_init_uniform_)
+            nn.init.uniform_(self.mu.weight, -0.003, 0.003)
         else:
             raise NotImplementedError(self.weight_init)
 
@@ -158,13 +149,13 @@ class EnsembleQ(nn.Module):
 
     def reset_parameters(self):
         for critic in self.critics:
-            if self.weight_init == "orthogonal":  # drqv2
+            if self.weight_init == None:
+                pass
+            elif self.weight_init == "orthogonal":  # drqv2
                 critic.apply(weight_init_orthogonal_)
             elif self.weight_init == "uniform":  # original DDPG paper
                 critic.apply(weight_init_uniform_)
                 nn.init.uniform_(critic.mlp[-1].weight, -0.003, 0.003)
-            elif self.weight_init == None:
-                pass
             else:
                 raise NotImplementedError(self.weight_init)
 

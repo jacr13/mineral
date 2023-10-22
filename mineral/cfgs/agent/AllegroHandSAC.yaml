@@ -14,19 +14,24 @@ network:
   actor_kwargs:
     mlp_kwargs:
       units: [512, 256, 128]
-    tanh_policy: False
+      act_type: SiLU
+      norm_type: LayerNorm
+    weight_init: orthogonal
 
+    tanh_policy: False
     fixed_sigma: False
     dist_kwargs:
       dist: squashed_normal
       minlogstd: -5.0
       maxlogstd: 5.0
-    # weight_init: orthogonal
 
   critic: EnsembleQ
   critic_kwargs:
     n_critics: 2
-    # weight_init: orthogonal
+    mlp_kwargs:
+      act_type: SiLU
+      norm_type: LayerNorm
+    weight_init: orthogonal
 
 sac:
   multi_gpu: ${...multi_gpu}
