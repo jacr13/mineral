@@ -6,3 +6,5 @@ A minimal robot learning library that aggregates reliable implementations for:
 - PPO ([`minimal-stable-PPO`](https://github.com/ToruOwO/minimal-stable-PPO), [`rl_games`](https://github.com/Denys88/rl_games))
 
 - DDPG, TD3 ([`pql`](https://github.com/Improbable-AI/pql), [`drqv2`](https://github.com/facebookresearch/drqv2), [`TD3`](https://github.com/sfujim/TD3))
+
+- SAC ([`pql`](https://github.com/Improbable-AI/pql), [`pytorch-sac-ae`](https://github.com/denisyarats/pytorch_sac_ae))
