@@ -108,6 +108,15 @@ class Actor(nn.Module):
     def reset_parameters(self):
         if self.weight_init == "orthogonal":  # drqv2
             self.actor_mlp.apply(weight_init_orthogonal_)
+            self.mu.apply(weight_init_orthogonal_)
+            nn.init.orthogonal_(self.mu.weight, gain=0.01)
+            if self.fixed_sigma is None:
+                pass
+            elif self.fixed_sigma:
+                nn.init.constant_(self.sigma, 0)
+            else:
+                nn.init.orthogonal_(self.sigma.weight, gain=0.01)
+                nn.init.zeros_(self.sigma.bias)
         elif self.weight_init == "uniform":  # original DDPG paper
             self.actor_mlp.apply(weight_init_uniform_)
             nn.init.uniform_(self.mu.weight, -0.003, 0.003)
