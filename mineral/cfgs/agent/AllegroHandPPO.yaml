@@ -1,8 +1,8 @@
 seed: ${..seed}
 algo: PPO
 
-info_keys:
-  scalar: 'consecutive_successes'
+# info_keys:
+#   scalar: 'consecutive_successes'
 save_video_every: 0
 save_video_consecutive: 0
 tracker_len: 100
@@ -18,11 +18,12 @@ network:
   # norm_type: null
   # actor_dist:
   #   dist: normal
+  # fixed_sigma: True
 
   act_type: SiLU
   norm_type: LayerNorm
   actor_dist:
-    dist: normal_dreamerv3
+    dist: dreamerv3_normal
     minstd: 0.1
     maxstd: 1.0
   fixed_sigma: False

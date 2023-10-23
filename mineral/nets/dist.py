@@ -31,7 +31,7 @@ class Dist(nn.Module):
             logstd = torch.clamp(logstd, self._minlogstd, self._maxlogstd)
             sigma = logstd.exp()
             distr = SquashedNormal(mu, sigma, validate_args=self.validate_args)
-        elif self._dist == 'normal_dreamerv3':
+        elif self._dist == 'dreamerv3_normal':
             lo, hi = self._minstd, self._maxstd
             std = (hi - lo) * torch.sigmoid(logstd + 2.0) + lo
             mu = torch.tanh(mu)
