@@ -12,6 +12,7 @@ def weight_init(m):
         if getattr(m, 'bias', None) is not None:
             nn.init.zeros_(m.bias)
     if isinstance(m, nn.Linear):
+        nn.init.orthogonal_(m.weight, gain=1.41421356237)  # np.sqrt(2)
         if getattr(m, 'bias', None) is not None:
             nn.init.zeros_(m.bias)
 
@@ -33,15 +34,8 @@ class MLP(nn.Module):
             input_size = output_size
         self.mlp = nn.Sequential(*layers)
 
-        self.reset_parameters()
-
     def forward(self, x):
         return self.mlp(x)
-
-    def reset_parameters(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.orthogonal_(m.weight, gain=1.41421356237)  # np.sqrt(2)
 
 
 class ActorCritic(nn.Module):
