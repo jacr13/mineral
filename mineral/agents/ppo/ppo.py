@@ -55,7 +55,7 @@ class PPO(ActorCriticBase):
         self.gamma = self.ppo_config['gamma']
         self.tau = self.ppo_config['tau']
         self.truncate_grads = self.ppo_config['truncate_grads']
-        self.grad_norm = self.ppo_config['grad_norm']
+        self.max_grad_norm = self.ppo_config['max_grad_norm']
         self.value_bootstrap = self.ppo_config['value_bootstrap']
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_value = self.ppo_config['normalize_value']
@@ -226,7 +226,7 @@ class PPO(ActorCriticBase):
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
-                    grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
+                    grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
                 with torch.no_grad():
