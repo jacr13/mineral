@@ -67,5 +67,5 @@ env_render: False
 test: False
 # used to set checkpoint path
 checkpoint: ''
-# set to True to use multi-gpu horovod training
+# set to True when using multi-gpu training with huggingface Accelerate
 multi_gpu: False

@@ -11,12 +11,20 @@ from ..common.writer import TensorboardWriter, WandbWriter
 
 
 class ActorCriticBase:
-    def __init__(self, env, output_dir, full_cfg):
+    def __init__(self, env, output_dir, full_cfg, accelerator=None):
         self.output_dir = output_dir
         self.full_cfg = full_cfg
 
         self.rank = -1
         self.device = full_cfg.rl_device
+        self.multi_gpu = full_cfg.multi_gpu
+        if self.multi_gpu:
+            self.rank = int(os.getenv('LOCAL_RANK', '0'))
+            self.rank_size = int(os.getenv('WORLD_SIZE', '1'))
+
+            assert accelerator is not None
+            self.accelerator = accelerator
+            self.device = self.accelerator.device
 
         # ---- Environment ----
         self.env = env

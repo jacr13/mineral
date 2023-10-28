@@ -101,20 +101,38 @@ def main(config: DictConfig):
     # set numpy formatting for printing only
     set_np_formatting()
 
+    logdir = config.logdir
+    os.makedirs(logdir, exist_ok=True)
+
     if config.multi_gpu:
+        from accelerate import Accelerator
+
+        accelerator = Accelerator()
         rank = int(os.getenv('LOCAL_RANK', '0'))
-        # torchrun --standalone --nnodes=1 --nproc_per_node=2 train.py
+        if str(accelerator.device) == 'cuda':
+            pass
+        else:
+            assert rank == accelerator.device.index, print(rank, accelerator.device, accelerator.device.index)
+
         config.sim_device = f'cuda:{rank}'
         config.rl_device = f'cuda:{rank}'
         config.graphics_device_id = rank
         # sets seed. if seed is -1 will pick a random one
         config.seed = set_seed(config.seed + rank)
+
+        # if rank != 0:
+        #     f = open(os.path.join(config.logdir, 'log_{rank}.txt', 'w'))
+        #     sys.stdout = f
     else:
+        rank = 0
+
         # use the same device for sim and rl
         config.sim_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.rl_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.graphics_device_id = config.device_id if config.device_id >= 0 else 0
         config.seed = set_seed(config.seed)
+
+        accelerator = None
 
     resolved_config = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')
@@ -123,14 +141,11 @@ def main(config: DictConfig):
     env = make_envs(config)
     print(f'Env: {env}')
 
-    logdir = config.logdir
-    os.makedirs(logdir, exist_ok=True)
-
     from .. import agents
 
     AgentCls = getattr(agents, config.agent.algo)
     print(f'AgentCls: {AgentCls}')
-    agent = AgentCls(env, logdir, config)
+    agent = AgentCls(env, logdir, config, accelerator=accelerator)
 
     if config.test:
         if config.checkpoint:
@@ -138,27 +153,27 @@ def main(config: DictConfig):
             agent.load(config.checkpoint)
         agent.test()
     else:
-        wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
-
-        os.environ['WANDB_START_METHOD'] = 'thread'
-        # connect to wandb
-        wandb_run = wandb.init(
-            **wandb_config,
-            dir=logdir,
-            config=resolved_config,
-        )
-        run_name, run_id = wandb_run.name, wandb_run.id
-        print(f'run_name: {run_name}, run_id: {run_id}')
-
-        save_run_metadata(logdir, run_name, run_id, resolved_config)
+        if rank == 0:
+            os.environ['WANDB_START_METHOD'] = 'thread'
+            # connect to wandb
+            wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
+            wandb_run = wandb.init(
+                **wandb_config,
+                dir=logdir,
+                config=resolved_config,
+            )
+            run_name, run_id = wandb_run.name, wandb_run.id
+            print(f'run_name: {run_name}, run_id: {run_id}')
+            save_run_metadata(logdir, run_name, run_id, resolved_config)
 
         if config.checkpoint:
             print(f'Loading checkpoint: {config.checkpoint}')
             agent.load(config.checkpoint)
         agent.train()
 
-        # close wandb
-        wandb.finish()
+        if rank == 0:
+            # close wandb
+            wandb.finish()
 
 
 import_isaacgym()  # uncomment for isaacgym (need to import before torch)

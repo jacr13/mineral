@@ -15,20 +15,12 @@ from .utils import AdaptiveScheduler, LinearScheduler, RewardShaper, RunningMean
 
 
 class PPO(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg):
+    def __init__(self, env, output_dir, full_cfg, accelerator=None):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
         self.num_actors = self.ppo_config['num_actors']
-        super().__init__(env, output_dir, full_cfg)
+        super().__init__(env, output_dir, full_cfg, accelerator=accelerator)
 
-        # --- Multi GPU ---
-        self.multi_gpu = full_cfg.agent.ppo.multi_gpu
-        if self.multi_gpu:
-            self.rank = int(os.getenv('LOCAL_RANK', '0'))
-            self.rank_size = int(os.getenv('WORLD_SIZE', '1'))
-            dist.init_process_group('nccl', rank=self.rank, world_size=self.rank_size)
-            self.device = 'cuda:' + str(self.rank)
-            print(f'current rank: {self.rank} and use device {self.device}')
         # ---- Normalizer ----
         if self.normalize_input:
             self.running_mean_std = {
@@ -104,6 +96,16 @@ class PPO(ActorCriticBase):
         self.rl_train_time = 0
         self.all_time = 0
 
+        if self.multi_gpu:
+            self.model = self.accelerator.prepare(self.model)
+            self.optimizer = self.accelerator.prepare(self.optimizer)
+            # TODO: prepare scheduler
+
+            if self.normalize_input:
+                self.running_mean_std = self.accelerator.prepare(self.running_mean_std)
+            if self.normalize_value:
+                self.value_mean_std = self.accelerator.prepare(self.value_mean_std)
+
     def set_eval(self):
         self.model.eval()
         if self.normalize_input:
@@ -131,12 +133,6 @@ class PPO(ActorCriticBase):
         self.obs = self._convert_obs(obs)
         self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
         self.agent_steps = self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
-
-        if self.multi_gpu:
-            torch.cuda.set_device(self.rank)
-            model_params = [self.model.state_dict()]
-            dist.broadcast_object_list(model_params, 0)
-            self.model.load_state_dict(model_params[0])
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch_num += 1
@@ -226,23 +222,7 @@ class PPO(ActorCriticBase):
                 loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
 
                 self.optimizer.zero_grad()
-                loss.backward()
-
-                if self.multi_gpu:
-                    # batch all_reduce ops https://github.com/entity-neural-network/incubator/pull/220
-                    all_grads_list = []
-                    for param in self.model.parameters():
-                        if param.grad is not None:
-                            all_grads_list.append(param.grad.view(-1))
-                    all_grads = torch.cat(all_grads_list)
-                    dist.all_reduce(all_grads, op=dist.ReduceOp.SUM)
-                    offset = 0
-                    for param in self.model.parameters():
-                        if param.grad is not None:
-                            param.grad.data.copy_(
-                                all_grads[offset : offset + param.numel()].view_as(param.grad.data) / self.rank_size
-                            )
-                            offset += param.numel()
+                loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
                     grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
@@ -251,6 +231,12 @@ class PPO(ActorCriticBase):
                 with torch.no_grad():
                     kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
 
+                if self.multi_gpu:
+                    metrics = (kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma)
+                    metrics = self.accelerator.gather_for_metrics(metrics)
+                    kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma = metrics
+
+                self.storage.update_mu_sigma(mu.detach(), sigma.detach())
                 ep_kls.append(kl_dist)
                 train_result['loss'].append(loss)
                 train_result['a_loss'].append(a_loss)
@@ -264,12 +250,7 @@ class PPO(ActorCriticBase):
                 if self.truncate_grads:
                     train_result['grad_norm/all'].append(grad_norm_all)
 
-                self.storage.update_mu_sigma(mu.detach(), sigma.detach())
-
             avg_kl = torch.mean(torch.stack(ep_kls))
-            if self.multi_gpu:
-                dist.all_reduce(avg_kl, op=dist.ReduceOp.SUM)
-                avg_kl /= self.rank_size
             train_result['avg_kl'].append(avg_kl)
 
             if self.lr_schedule == 'kl':
@@ -279,15 +260,8 @@ class PPO(ActorCriticBase):
                     self.init_lr, mini_ep, self.mini_epochs, self.agent_steps, self.max_agent_steps
                 )
 
-            if self.multi_gpu:
-                lr_tensor = torch.tensor([self.last_lr], device=self.device)
-                dist.broadcast(lr_tensor, 0)
-                lr = lr_tensor.item()
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = lr
-            else:
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = self.last_lr
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.last_lr
 
         self.rl_train_time += time.time() - _t
         return train_result
@@ -375,9 +349,7 @@ class PPO(ActorCriticBase):
         res_dict = self.model_act(obs)
         last_values = res_dict['values']
 
-        self.agent_steps = (
-            (self.agent_steps + self.batch_size) if not self.multi_gpu else self.agent_steps + self.batch_size * self.rank_size
-        )
+        self.agent_steps += self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
         self.storage.compute_return(last_values, self.gamma, self.tau)
         self.storage.prepare_training()
 
@@ -400,6 +372,7 @@ class PPO(ActorCriticBase):
         if self.normalize_value:
             ckpt['value_mean_std'] = self.value_mean_std.state_dict()
         torch.save(ckpt, f'{f}.pth')
+        # TODO: accelerator.save
 
     def load(self, f):
         ckpt = torch.load(f)
@@ -408,6 +381,7 @@ class PPO(ActorCriticBase):
             self.running_mean_std.load_state_dict(ckpt['running_mean_std'])
         if self.normalize_value:
             self.value_mean_std.load_state_dict(ckpt['value_mean_std'])
+        # TODO: accelerator.load
 
 
 def smooth_clamp(x, mi, mx):

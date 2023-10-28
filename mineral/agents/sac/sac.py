@@ -25,11 +25,11 @@ class Lambda(nn.Module):
 
 
 class SAC(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg):
+    def __init__(self, env, output_dir, full_cfg, accelerator=None):
         self.network_config = full_cfg.agent.network
         self.sac_config = full_cfg.agent.sac
         self.num_actors = self.sac_config.num_actors
-        super().__init__(env, output_dir, full_cfg)
+        super().__init__(env, output_dir, full_cfg, accelerator=accelerator)
 
         if self.network_config.get("encoder", None) is not None:
             EncoderCls = getattr(models, self.network_config.encoder)

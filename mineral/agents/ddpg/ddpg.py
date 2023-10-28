@@ -17,11 +17,11 @@ from .utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
 
 
 class DDPG(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg):
+    def __init__(self, env, output_dir, full_cfg, accelerator=None):
         self.network_config = full_cfg.agent.network
         self.ddpg_config = full_cfg.agent.ddpg
         self.num_actors = self.ddpg_config.num_actors
-        super().__init__(env, output_dir, full_cfg)
+        super().__init__(env, output_dir, full_cfg, accelerator=accelerator)
 
         ActorCls = getattr(models, self.network_config.actor)
         CriticCls = getattr(models, self.network_config.critic)
