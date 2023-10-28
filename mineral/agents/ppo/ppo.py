@@ -44,9 +44,13 @@ class PPO(ActorCriticBase):
         print(self.model, '\n')
         self.value_mean_std = RunningMeanStd((1,)).to(self.device)
         # ---- Optim ----
-        self.init_lr = float(self.ppo_config['learning_rate'])
-        self.last_lr = float(self.ppo_config['learning_rate'])
-        self.optimizer = torch.optim.Adam(self.model.parameters(), self.init_lr, eps=self.ppo_config['adam_eps'])
+        optim_kwargs = self.ppo_config.get('optim_kwargs', {})
+        learning_rate = optim_kwargs.get('lr', 3e-4)
+        self.init_lr = float(learning_rate)
+        self.last_lr = float(learning_rate)
+        OptimCls = getattr(torch.optim, self.ppo_config.optim_type)
+        self.optimizer = OptimCls(self.model.parameters(), **optim_kwargs)
+        print(self.optimizer, '\n')
         # ---- PPO Train Param ----
         self.e_clip = self.ppo_config['e_clip']
         self.use_smooth_clamp = self.ppo_config['use_smooth_clamp']
