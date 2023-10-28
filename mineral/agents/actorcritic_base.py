@@ -53,7 +53,10 @@ class ActorCriticBase:
     def play_steps(self):
         raise NotImplementedError
 
-    def restore_train(self, ckpt_path):
+    def save(self, f):
+        raise NotImplementedError
+
+    def load(self, f):
         raise NotImplementedError
 
     def make_writers(self, full_cfg):

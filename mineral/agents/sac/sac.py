@@ -318,6 +318,8 @@ class SAC(ActorCriticBase):
         self.actor_target.train()
         self.critic_target.train()
 
-    def restore_train(self, f):
-        if not f:
-            return
+    def save(self, f):
+        pass
+
+    def load(self, f):
+        pass

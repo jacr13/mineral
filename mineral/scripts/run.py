@@ -134,7 +134,8 @@ def main(config: DictConfig):
 
     if config.test:
         if config.checkpoint:
-            agent.restore_test(config.checkpoint)
+            print(f'Loading checkpoint: {config.checkpoint}')
+            agent.load(config.checkpoint)
         agent.test()
     else:
         wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
@@ -151,7 +152,9 @@ def main(config: DictConfig):
 
         save_run_metadata(logdir, run_name, run_id, resolved_config)
 
-        agent.restore_train(config.checkpoint)
+        if config.checkpoint:
+            print(f'Loading checkpoint: {config.checkpoint}')
+            agent.load(config.checkpoint)
         agent.train()
 
         # close wandb

@@ -391,28 +391,23 @@ class PPO(ActorCriticBase):
         self.storage.data_dict['values'] = values
         self.storage.data_dict['returns'] = returns
 
-    def save(self, name):
-        weights = {
+    def save(self, f):
+        ckpt = {
             'model': self.model.state_dict(),
         }
-        if self.running_mean_std:
-            weights['running_mean_std'] = self.running_mean_std.state_dict()
-        if self.value_mean_std:
-            weights['value_mean_std'] = self.value_mean_std.state_dict()
-        torch.save(weights, f'{name}.pth')
-
-    def restore_train(self, f):
-        if not f:
-            return
-        checkpoint = torch.load(f)
-        self.model.load_state_dict(checkpoint['model'])
-        self.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
-
-    def restore_test(self, f):
-        checkpoint = torch.load(f)
-        self.model.load_state_dict(checkpoint['model'])
         if self.normalize_input:
-            self.running_mean_std.load_state_dict(checkpoint['running_mean_std'])
+            ckpt['running_mean_std'] = self.running_mean_std.state_dict()
+        if self.normalize_value:
+            ckpt['value_mean_std'] = self.value_mean_std.state_dict()
+        torch.save(ckpt, f'{f}.pth')
+
+    def load(self, f):
+        ckpt = torch.load(f)
+        self.model.load_state_dict(ckpt['model'])
+        if self.normalize_input:
+            self.running_mean_std.load_state_dict(ckpt['running_mean_std'])
+        if self.normalize_value:
+            self.value_mean_std.load_state_dict(ckpt['value_mean_std'])
 
 
 def smooth_clamp(x, mi, mx):

@@ -317,6 +317,8 @@ class DDPG(ActorCriticBase):
 
         self.obs_rms.eval()
 
-    def restore_train(self, f):
-        if not f:
-            return
+    def save(self, f):
+        pass
+
+    def load(self, f):
+        pass
