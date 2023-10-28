@@ -262,7 +262,7 @@ class PPO(ActorCriticBase):
                 train_result['mu'].append(mu.detach())
                 train_result['sigma'].append(sigma.detach())
                 if self.truncate_grads:
-                    train_result['grad_norm/all'].append(grad_norm_all.item())
+                    train_result['grad_norm/all'].append(grad_norm_all)
 
                 self.storage.update_mu_sigma(mu.detach(), sigma.detach())
 
@@ -312,6 +312,7 @@ class PPO(ActorCriticBase):
             'train/avg_kl': torch.mean(torch.stack(train_result['avg_kl'])).item(),
             'train/clip_frac': torch.mean(torch.stack(train_result['clip_frac'])).item(),
             'train/explained_var': torch.mean(torch.stack(train_result['explained_var'])).item(),
+            'train/grad_norm/all': torch.mean(torch.stack(train_result['grad_norm/all'])).item() if self.truncate_grads else 0,
             'train/actor_dist/mu': torch.mean(torch.cat(train_result['mu']), 0).cpu().numpy(),
             'train/actor_dist/sigma': torch.mean(torch.cat(train_result['sigma']), 0).cpu().numpy(),
             'train/last_lr': self.last_lr,
