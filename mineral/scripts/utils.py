@@ -85,3 +85,21 @@ def limit_threads(n: int = 1):
     os.environ['OPENBLAS_NUM_THREADS'] = str(n)
     os.environ['VECLIB_MAXIMUM_THREADS'] = str(n)
     os.environ['NUMEXPR_NUM_THREADS'] = str(n)
+
+
+def make_batch_env(num_envs, make_env_fn, parallel='process', device='numpy'):
+    from functools import partial as bind
+
+    from ..common.batch_env import BatchEnv
+    from ..common.parallel import Parallel
+
+    ctors = []
+    for index in range(num_envs):
+        ctor = lambda: make_env_fn()
+        if parallel != 'none':
+            ctor = bind(Parallel, ctor, parallel)
+        ctors.append(ctor)
+
+    envs = [ctor() for ctor in ctors]
+    env = BatchEnv(envs, parallel=parallel != 'none', device=device)
+    return env
