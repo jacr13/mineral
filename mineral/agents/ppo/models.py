@@ -109,10 +109,10 @@ class ActorCritic(nn.Module):
         return result
 
     @torch.no_grad()
-    def act(self, obs_dict):
-        # used specifically to collection samples during training
-        # it contains exploration so needs to sample from distribution
+    def act(self, obs_dict, sample=True):
         mu, logstd, value = self._actor_critic(obs_dict)
+        if not sample:
+            return mu
         mu, sigma, distr = self.dist(mu, logstd)
         selected_action = distr.sample()
         neglogp = -distr.log_prob(selected_action).sum(1)
@@ -124,12 +124,6 @@ class ActorCritic(nn.Module):
             'sigmas': sigma,
         }
         return result
-
-    @torch.no_grad()
-    def act_inference(self, obs_dict):
-        # used for testing
-        mu, logstd, value = self._actor_critic(obs_dict)
-        return mu
 
     def _encode(self, obs_dict):
         if 'obs' in self.obs_space:

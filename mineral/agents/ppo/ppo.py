@@ -301,7 +301,7 @@ class PPO(ActorCriticBase):
         obs_dict = self.env.reset()
         while True:
             input_dict = {k: self.running_mean_std[k](obs_dict[k]) for k in self.running_mean_std.keys()}
-            mu = self.model.act_inference(input_dict)
+            mu = self.model.act(input_dict, sample=False)
             mu = torch.clamp(mu, -1.0, 1.0)
             obs_dict, r, done, info = self.env.step(mu)
             info['reward'] = r
