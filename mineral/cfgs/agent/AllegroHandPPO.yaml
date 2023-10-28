@@ -10,23 +10,25 @@ tracker_len: 100
 normalize_input: True
 
 network:
-  mlp:
-    units: [512, 256, 128]
-  separate_value_mlp: True
+  actor_critic: ActorCritic
+  actor_critic_kwargs:
+    separate_value_mlp: True
+    mlp_kwargs:
+      units: [512, 256, 128]
 
-  # act_type: ELU
-  # norm_type: null
-  # actor_dist:
-  #   dist: normal
-  # fixed_sigma: True
+    #   act_type: ELU
+    #   norm_type: null
+    # actor_dist_kwargs:
+    #   dist: normal
+    # fixed_sigma: True
 
-  act_type: SiLU
-  norm_type: LayerNorm
-  actor_dist:
-    dist: dreamerv3_normal
-    minstd: 0.1
-    maxstd: 1.0
-  fixed_sigma: False
+      act_type: SiLU
+      norm_type: LayerNorm
+    actor_dist_kwargs:
+      dist: dreamerv3_normal
+      minstd: 0.1
+      maxstd: 1.0
+    fixed_sigma: False
 
 ppo:
   multi_gpu: ${...multi_gpu}

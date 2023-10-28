@@ -8,12 +8,17 @@ tracker_len: 100
 normalize_input: True
 
 network:
-  mlp:
-    units: [32, 32]
-  separate_value_mlp: True
-  act_type: ELU
-  norm_type: null
-  fixed_sigma: True
+  actor_critic: ActorCritic
+  actor_critic_kwargs:
+    separate_value_mlp: True
+    mlp_kwargs:
+      units: [32, 32]
+
+      act_type: ELU
+      norm_type: null
+    actor_dist_kwargs:
+      dist: normal
+    fixed_sigma: True
 
 ppo:
   multi_gpu: ${...multi_gpu}
@@ -27,8 +32,10 @@ ppo:
   normalize_advantage: True
   gamma: 0.99
   tau: 0.95
-  learning_rate: 3e-4
-  adam_eps: 1e-5
+  optim_type: Adam
+  optim_kwargs:
+    lr: 3e-4
+    eps: 1e-5
   lr_schedule: kl  # 'fixed' | 'linear' | 'kl' | 'cos'
   kl_threshold: 0.008
   grad_norm: 1.0

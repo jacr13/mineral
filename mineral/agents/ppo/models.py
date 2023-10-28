@@ -18,20 +18,21 @@ def weight_init(m):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, units, act_type='ELU', norm_type=None):
+    def __init__(self, in_size, units=[512, 256, 128], act_type='ELU', norm_type=None):
         super().__init__()
+        self.out_dim = units[-1]
         layers = []
-        for output_size in units:
-            layers.append(nn.Linear(input_size, output_size))
+        for out_size in units:
+            layers.append(nn.Linear(in_size, out_size))
             if norm_type is not None:
                 module = torch.nn
                 Cls = getattr(module, norm_type)
-                layers.append(Cls(output_size))
+                layers.append(Cls(out_size))
             if act_type is not None:
                 module = torch.nn.modules.activation
                 Cls = getattr(module, act_type)
                 layers.append(Cls())
-            input_size = output_size
+            in_size = out_size
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -39,35 +40,39 @@ class MLP(nn.Module):
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_space, action_dim, config):
+    def __init__(
+        self,
+        obs_space,
+        action_dim,
+        mlp_kwargs={},
+        separate_value_mlp=True,
+        fixed_sigma=True,
+        actor_dist_kwargs=dict(dist='normal'),
+        encoder_kwargs={},
+    ):
         super().__init__()
-        self.separate_value_mlp = config.separate_value_mlp
-        self.fixed_sigma = config.fixed_sigma
-        self.act_type = config.act_type
-        self.norm_type = config.norm_type
-        self.units = config.mlp.units
-        out_size = self.units[-1]
-
         self.obs_space = obs_space
+        self.separate_value_mlp = separate_value_mlp
+        self.fixed_sigma = fixed_sigma
+
         if 'obs' in obs_space:
             self.encoder = nn.Identity()
             mlp_in_dim = obs_space['obs'][0]
         else:
-            self.encoder = MultiEncoder(obs_space, config)
+            self.encoder = MultiEncoder(obs_space, **encoder_kwargs)
             mlp_in_dim = self.encoder.out_dim
-        self.actor_mlp = MLP(input_size=mlp_in_dim, units=self.units, act_type=self.act_type, norm_type=self.norm_type)
+
+        self.actor_mlp = MLP(in_size=mlp_in_dim, **mlp_kwargs)
         if self.separate_value_mlp:
-            self.value_mlp = MLP(input_size=mlp_in_dim, units=self.units, act_type=self.act_type, norm_type=self.norm_type)
+            self.value_mlp = MLP(in_size=mlp_in_dim, **mlp_kwargs)
+        out_size = self.actor_mlp.out_dim
         self.value = nn.Linear(out_size, 1)
         self.mu = nn.Linear(out_size, action_dim)
-
         if self.fixed_sigma:
             self.sigma = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32), requires_grad=True)
         else:
             self.sigma = nn.Linear(out_size, action_dim)
-
-        actor_dist_config = config.get('actor_dist', {})
-        self.dist = Dist(**actor_dist_config)
+        self.dist = Dist(**actor_dist_kwargs)
 
         self.reset_parameters()
 
@@ -123,7 +128,7 @@ class ActorCritic(nn.Module):
     @torch.no_grad()
     def act_inference(self, obs_dict):
         # used for testing
-        mu, logstd, value = self._actor_critic(obs_dict, inference=True)
+        mu, logstd, value = self._actor_critic(obs_dict)
         return mu
 
     def _encode(self, obs_dict):
@@ -134,7 +139,7 @@ class ActorCritic(nn.Module):
             z, z_local = self.encoder(obs_dict)
         return z, z_local
 
-    def _actor_critic(self, obs_dict, inference=False):
+    def _actor_critic(self, obs_dict):
         z, z_local = self._encode(obs_dict)
 
         x = self.actor_mlp(z)
