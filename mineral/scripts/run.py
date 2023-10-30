@@ -124,6 +124,7 @@ def main(config: DictConfig):
         #     f = open(os.path.join(config.logdir, 'log_{rank}.txt', 'w'))
         #     sys.stdout = f
     else:
+        accelerator = None
         rank = 0
 
         # use the same device for sim and rl
@@ -131,8 +132,6 @@ def main(config: DictConfig):
         config.rl_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.graphics_device_id = config.device_id if config.device_id >= 0 else 0
         config.seed = set_seed(config.seed)
-
-        accelerator = None
 
     resolved_config = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')

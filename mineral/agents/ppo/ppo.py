@@ -5,7 +5,6 @@ import time
 
 import numpy as np
 import torch
-import torch.distributed as dist
 import torch.nn as nn
 
 from ..actorcritic_base import ActorCriticBase
@@ -226,7 +225,11 @@ class PPO(ActorCriticBase):
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
-                    grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                    if self.multi_gpu:
+                        assert self.accelerator.sync_gradients
+                        grad_norm_all = self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                    else:
+                        grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
                 with torch.no_grad():
