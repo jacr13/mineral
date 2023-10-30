@@ -300,6 +300,9 @@ class SAC(ActorCriticBase):
         optimizer.step()
         return grad_norm
 
+    def eval(self):
+        raise NotImplementedError
+
     def set_eval(self):
         self.obs_rms.eval()
         self.encoder.eval()

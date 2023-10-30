@@ -296,7 +296,7 @@ class PPO(ActorCriticBase):
         }
         return {**metrics, **log_dict}
 
-    def test(self):
+    def eval(self):
         self.set_eval()
         obs_dict = self.env.reset()
         while True:

@@ -301,6 +301,9 @@ class DDPG(ActorCriticBase):
         optimizer.step()
         return grad_norm
 
+    def eval(self):
+        raise NotImplementedError
+
     def set_eval(self):
         self.actor.eval()
         self.critic.eval()

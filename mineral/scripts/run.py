@@ -151,7 +151,7 @@ def main(config: DictConfig):
         if config.checkpoint:
             print(f'Loading checkpoint: {config.checkpoint}')
             agent.load(config.checkpoint)
-        agent.test()
+        agent.eval()
     else:
         if rank == 0:
             os.environ['WANDB_START_METHOD'] = 'thread'
