@@ -29,9 +29,10 @@ class PPO(ActorCriticBase):
             self.running_mean_std = nn.ModuleDict(self.running_mean_std).to(self.device)
             print('RunningMeanStd:', self.running_mean_std)
         # ---- Model ----
+        encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
         ModelCls = getattr(models, self.network_config.get('actor_critic', 'ActorCritic'))
         model_kwargs = self.network_config.get('actor_critic_kwargs', {})
-        self.model = ModelCls(self.obs_space, self.action_dim, **model_kwargs)
+        self.model = ModelCls(self.obs_space, self.action_dim, encoder=encoder, encoder_kwargs=encoder_kwargs, **model_kwargs)
         self.model.to(self.device)
         print(self.model, '\n')
         self.value_mean_std = RunningMeanStd((1,)).to(self.device)

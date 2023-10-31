@@ -6,11 +6,11 @@ import torch.nn as nn
 
 
 class MultiEncoder(nn.Module):
-    def __init__(self, obs_space, config):
+    def __init__(self, obs_space, cfg):
         super().__init__()
-        cnn_keys = config.encoder.get('cnn_keys', '$^')
-        pcd_keys = config.encoder.get('pcd_keys', '$^')
-        mlp_keys = config.encoder.get('mlp_keys', '$^')
+        cnn_keys = cfg.get('cnn_keys', '$^')
+        pcd_keys = cfg.get('pcd_keys', '$^')
+        mlp_keys = cfg.get('mlp_keys', '$^')
 
         excluded = {}
         shapes = {k: v for k, v in obs_space.items() if k not in excluded and not k.startswith('info_')}
@@ -26,7 +26,7 @@ class MultiEncoder(nn.Module):
         self.out_dim = 0
         self.out_dim_local = None
         if self.cnn_shapes:
-            cnn, cnn_kwargs = config.encoder.cnn, config.encoder.cnn_kwargs
+            cnn, cnn_kwargs = cfg.cnn, cfg.cnn_kwargs
 
             if cnn == 'resnet':
                 raise NotImplementedError
@@ -34,7 +34,7 @@ class MultiEncoder(nn.Module):
                 raise NotImplementedError(cnn)
 
         if self.pcd_shapes:
-            pcd, pcd_kwargs = config.encoder.pcd, config.encoder.pcd_kwargs
+            pcd, pcd_kwargs = cfg.pcd, cfg.pcd_kwargs
 
             if pcd == 'pointnet2':
                 raise NotImplementedError

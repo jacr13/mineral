@@ -48,7 +48,8 @@ class ActorCritic(nn.Module):
         separate_value_mlp=True,
         fixed_sigma=True,
         actor_dist_kwargs=dict(dist='normal'),
-        encoder_kwargs={},
+        encoder=None,
+        encoder_kwargs=None,
     ):
         super().__init__()
         self.obs_space = obs_space
@@ -59,7 +60,7 @@ class ActorCritic(nn.Module):
             self.encoder = nn.Identity()
             mlp_in_dim = obs_space['obs'][0]
         else:
-            self.encoder = MultiEncoder(obs_space, **encoder_kwargs)
+            self.encoder = MultiEncoder(obs_space, encoder_kwargs)
             mlp_in_dim = self.encoder.out_dim
 
         self.actor_mlp = MLP(in_size=mlp_in_dim, **mlp_kwargs)
