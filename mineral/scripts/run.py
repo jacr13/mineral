@@ -80,11 +80,6 @@ def save_run_metadata(logdir, run_name, run_id, resolved_config):
     yaml.dump(resolved_config, open(os.path.join(logdir, 'resolved_config.yaml'), 'w'), default_flow_style=False)
 
 
-@hydra.main(
-    config_name='config',
-    config_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../cfgs'),
-    version_base='1.1',
-)
 def main(config: DictConfig):
     if config.checkpoint:
         config.checkpoint = to_absolute_path(config.checkpoint)
@@ -175,6 +170,15 @@ def main(config: DictConfig):
             wandb.finish()
 
 
-import_isaacgym()  # uncomment for isaacgym (need to import before torch)
 if __name__ == '__main__':
-    main()
+    c = []
+    hydra.main(
+        config_name='config',
+        config_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../cfgs'),
+        version_base='1.1',
+    )(lambda x: c.append(x))()
+    config = c[0]
+
+    import_isaacgym()  # uncomment for isaacgym (need to import before torch)
+
+    main(config)
