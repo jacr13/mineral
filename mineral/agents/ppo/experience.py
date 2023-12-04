@@ -32,10 +32,10 @@ class ExperienceBuffer(Dataset):
             'actions': torch.zeros(
                 (self.transitions_per_env, self.num_envs, self.act_dim), dtype=torch.float32, device=self.device
             ),
-            'mus': torch.zeros(
+            'mu': torch.zeros(
                 (self.transitions_per_env, self.num_envs, self.act_dim), dtype=torch.float32, device=self.device
             ),
-            'sigmas': torch.zeros(
+            'sigma': torch.zeros(
                 (self.transitions_per_env, self.num_envs, self.act_dim), dtype=torch.float32, device=self.device
             ),
             'returns': torch.zeros((self.transitions_per_env, self.num_envs, 1), dtype=torch.float32, device=self.device),
@@ -73,8 +73,8 @@ class ExperienceBuffer(Dataset):
             input_dict['values'],
             input_dict['neglogp'],
             input_dict['advantages'],
-            input_dict['mus'],
-            input_dict['sigmas'],
+            input_dict['mu'],
+            input_dict['sigma'],
             input_dict['returns'],
             input_dict['actions'],
             input_dict['obses'],
@@ -83,8 +83,8 @@ class ExperienceBuffer(Dataset):
     def update_mu_sigma(self, mu, sigma):
         start = self.last_range[0]
         end = self.last_range[1]
-        self.data_dict['mus'][start:end] = mu
-        self.data_dict['sigmas'][start:end] = sigma
+        self.data_dict['mu'][start:end] = mu
+        self.data_dict['sigma'][start:end] = sigma
 
     def update_data(self, name, index, val):
         if type(val) is dict:

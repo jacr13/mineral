@@ -104,8 +104,9 @@ class ActorCritic(nn.Module):
             'prev_neglogp': torch.squeeze(prev_neglogp),
             'values': value,
             'entropy': entropy,
-            'mus': mu,
-            'sigmas': sigma,
+            'mu': mu,
+            'sigma': sigma,
+            'dist': distr,
         }
         return result
 
@@ -121,8 +122,9 @@ class ActorCritic(nn.Module):
             'neglogp': neglogp,
             'values': value,
             'actions': selected_action,
-            'mus': mu,
-            'sigmas': sigma,
+            'mu': mu,
+            'sigma': sigma,
+            'dist': distr,
         }
         return result
 

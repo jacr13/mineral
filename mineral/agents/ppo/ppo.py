@@ -123,9 +123,9 @@ class PPO(ActorCriticBase):
 
     def model_act(self, obs_dict):
         input_dict = {k: self.running_mean_std[k](obs_dict[k]) for k in self.running_mean_std.keys()}
-        res_dict = self.model.act(input_dict)
-        res_dict['values'] = self.value_mean_std(res_dict['values'], True)
-        return res_dict
+        model_out = self.model.act(input_dict)
+        model_out['values'] = self.value_mean_std(model_out['values'], True)
+        return model_out
 
     def train(self):
         _t = time.time()
@@ -205,12 +205,12 @@ class PPO(ActorCriticBase):
                     **input_dict,
                 }
 
-                res_dict = self.model(batch_dict)
-                action_log_probs = res_dict['prev_neglogp']
-                values = res_dict['values']
-                entropy = res_dict['entropy']
-                mu = res_dict['mus']
-                sigma = res_dict['sigmas']
+                model_out = self.model(batch_dict)
+                action_log_probs = model_out['prev_neglogp']
+                values = model_out['values']
+                entropy = model_out['entropy']
+                mu = model_out['mu']
+                sigma = model_out['sigma']
 
                 a_loss, clip_frac = actor_loss(
                     old_action_log_probs, action_log_probs, advantage, self.e_clip, self.use_smooth_clamp
@@ -320,13 +320,13 @@ class PPO(ActorCriticBase):
                     for k, v in obs_reset.items():
                         self.obs[k][done_indices] = v
 
-            res_dict = self.model_act(self.obs)
+            model_out = self.model_act(self.obs)
             # collect o_t
             self.storage.update_data('obses', n, self.obs)
-            for k in ['actions', 'neglogp', 'values', 'mus', 'sigmas']:
-                self.storage.update_data(k, n, res_dict[k])
+            for k in ['actions', 'neglogp', 'values', 'mu', 'sigma']:
+                self.storage.update_data(k, n, model_out[k])
             # do env step
-            actions = torch.clamp(res_dict['actions'], -1.0, 1.0)
+            actions = torch.clamp(model_out['actions'], -1.0, 1.0)
             obs, r, self.dones, infos = self.env.step(actions)
             self.obs = self._convert_obs(obs)
             r, self.dones = torch.tensor(r, device=self.device), torch.tensor(self.dones, device=self.device)
@@ -338,7 +338,7 @@ class PPO(ActorCriticBase):
             if self.value_bootstrap and 'time_outs' in infos:
                 time_outs = torch.tensor(infos['time_outs'], device=self.device)
                 time_outs = time_outs.reshape(-1, 1)
-                shaped_rewards += self.gamma * res_dict['values'] * time_outs.float()
+                shaped_rewards += self.gamma * model_out['values'] * time_outs.float()
             self.storage.update_data('rewards', n, shaped_rewards)
 
             done_indices = torch.where(self.dones)[0].tolist()
@@ -351,8 +351,8 @@ class PPO(ActorCriticBase):
                 self._info_video = {f'video/{k}': np.concatenate(v, 1) for k, v in self._video_buf.items()}
                 self._video_buf = collections.defaultdict(list)
 
-        res_dict = self.model_act(obs)
-        last_values = res_dict['values']
+        model_out = self.model_act(obs)
+        last_values = model_out['values']
 
         self.agent_steps += self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
         self.storage.compute_return(last_values, self.gamma, self.tau)
