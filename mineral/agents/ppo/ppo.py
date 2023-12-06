@@ -132,7 +132,7 @@ class PPO(ActorCriticBase):
         _last_t = time.time()
         obs = self.env.reset()
         self.obs = self._convert_obs(obs)
-        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
+        self.dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
         self.agent_steps = self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
 
         while self.agent_steps < self.max_agent_steps:
