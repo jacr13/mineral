@@ -94,25 +94,26 @@ class ActorCritic(nn.Module):
             nn.init.orthogonal_(self.sigma.weight, gain=0.01)
             nn.init.zeros_(self.sigma.bias)
 
-    def forward(self, input_dict):
+    def forward(self, input_dict, **kwargs):
         prev_actions = input_dict.get('prev_actions', None)
-        mu, logstd, value = self._actor_critic(input_dict)
+        mu, logstd, value = self._actor_critic(input_dict, **kwargs)
         mu, sigma, distr = self.dist(mu, logstd)
         entropy = distr.entropy().sum(dim=-1)
-        prev_neglogp = -distr.log_prob(prev_actions).sum(1)
         result = {
-            'prev_neglogp': torch.squeeze(prev_neglogp),
             'values': value,
             'entropy': entropy,
             'mu': mu,
             'sigma': sigma,
             'dist': distr,
         }
+        if prev_actions is not None:
+            prev_neglogp = -distr.log_prob(prev_actions).sum(dim=-1)
+            result['prev_neglogp'] = torch.squeeze(prev_neglogp)
         return result
 
     @torch.no_grad()
-    def act(self, obs_dict, sample=True):
-        mu, logstd, value = self._actor_critic(obs_dict)
+    def act(self, obs_dict, sample=True, **kwargs):
+        mu, logstd, value = self._actor_critic(obs_dict, **kwargs)
         if not sample:
             return mu
         mu, sigma, distr = self.dist(mu, logstd)
