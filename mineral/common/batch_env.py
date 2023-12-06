@@ -7,7 +7,7 @@ except ImportError:
 
 
 class BatchEnv:
-    def __init__(self, envs, parallel, device='numpy'):
+    def __init__(self, envs, parallel: bool, device='numpy'):
         # assert all(len(env) == 0 for env in envs)
         assert len(envs) > 0
         self._envs = envs
@@ -22,6 +22,10 @@ class BatchEnv:
     @property
     def action_space(self):
         return self._envs[0].action_space
+
+    @property
+    def max_episode_length(self):
+        return self._envs[0].max_episode_length
 
     def __len__(self):
         return len(self._envs)
@@ -66,9 +70,13 @@ class BatchEnv:
 
         if self._device == 'numpy':
             obs = {k: np.array([ob[k] for ob in obs]) for k in obs[0]}
+            reward = np.concatenate(reward)
+            done = np.concatenate(done)
             info = {k: np.array([i[k] for i in info]) for k in info[0]}
         else:
             obs = {k: torch.stack([ob[k] for ob in obs]) for k in obs[0]}
+            reward = torch.cat(reward)
+            done = torch.cat(done)
             info = {k: torch.stack([i[k] for i in info]) for k in info[0]}
         return obs, reward, done, info
 
