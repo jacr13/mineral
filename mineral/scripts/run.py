@@ -148,15 +148,33 @@ def main(config: DictConfig):
     print(f'AgentCls: {AgentCls}')
     agent = AgentCls(env, logdir, config, accelerator=accelerator, datasets=datasets)
 
+    if rank == 0:
+        os.environ['WANDB_START_METHOD'] = 'thread'
+        # connect to wandb
+        wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
+        wandb_run = wandb.init(
+            **wandb_config,
+            dir=logdir,
+            config=resolved_config,
+        )
+        run_name, run_id = wandb_run.name, wandb_run.id
+        print(f'run_name: {run_name}, run_id: {run_id}')
+        save_run_metadata(logdir, run_name, run_id, resolved_config)
 
+    if config.test:
+        if config.checkpoint:
+            print(f'Loading checkpoint: {config.checkpoint}')
+            agent.load(config.checkpoint)
+        agent.eval()
+    else:
         if config.checkpoint:
             print(f'Loading checkpoint: {config.checkpoint}')
             agent.load(config.checkpoint)
         agent.train()
 
-        if rank == 0:
-            # close wandb
-            wandb.finish()
+    if rank == 0:
+        # close wandb
+        wandb.finish()
 
 
 if __name__ == '__main__':
