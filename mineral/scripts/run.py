@@ -16,6 +16,10 @@ def make_envs(config):
     return make_isaacgym_envs(config)
 
 
+def make_datasets(config, env):
+    return None
+
+
 def import_isaacgym():
     # https://github.com/NVlabs/sim-web-visualizer/blob/main/example/isaacgym/train_isaacgym_remote_server.ipynb
     import os
@@ -132,6 +136,9 @@ def main(config: DictConfig):
     env = make_envs(config)
     print(f'Env: {env}')
 
+    datasets = make_datasets(config, env)
+    print(f'Datasets: {datasets}')
+
     logdir = config.logdir
     os.makedirs(logdir, exist_ok=True)
 
@@ -139,26 +146,8 @@ def main(config: DictConfig):
 
     AgentCls = getattr(agents, config.agent.algo)
     print(f'AgentCls: {AgentCls}')
-    agent = AgentCls(env, logdir, config, accelerator=accelerator)
+    agent = AgentCls(env, logdir, config, accelerator=accelerator, datasets=datasets)
 
-    if config.test:
-        if config.checkpoint:
-            print(f'Loading checkpoint: {config.checkpoint}')
-            agent.load(config.checkpoint)
-        agent.eval()
-    else:
-        if rank == 0:
-            os.environ['WANDB_START_METHOD'] = 'thread'
-            # connect to wandb
-            wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
-            wandb_run = wandb.init(
-                **wandb_config,
-                dir=logdir,
-                config=resolved_config,
-            )
-            run_name, run_id = wandb_run.name, wandb_run.id
-            print(f'run_name: {run_name}, run_id: {run_id}')
-            save_run_metadata(logdir, run_name, run_id, resolved_config)
 
         if config.checkpoint:
             print(f'Loading checkpoint: {config.checkpoint}')

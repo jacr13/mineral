@@ -14,11 +14,11 @@ from .utils import AdaptiveScheduler, LinearScheduler, RewardShaper, RunningMean
 
 
 class PPO(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg, accelerator=None):
+    def __init__(self, env, output_dir, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
         self.num_actors = self.ppo_config['num_actors']
-        super().__init__(env, output_dir, full_cfg, accelerator=accelerator)
+        super().__init__(env, output_dir, full_cfg, **kwargs)
 
         # ---- Normalizer ----
         if self.normalize_input:

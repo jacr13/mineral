@@ -11,7 +11,7 @@ from ..common.writer import TensorboardWriter, WandbWriter
 
 
 class ActorCriticBase:
-    def __init__(self, env, output_dir, full_cfg, accelerator=None):
+    def __init__(self, env, output_dir, full_cfg, accelerator=None, datasets=None):
         self.output_dir = output_dir
         self.full_cfg = full_cfg
 
@@ -25,6 +25,9 @@ class ActorCriticBase:
             assert accelerator is not None
             self.accelerator = accelerator
             self.device = self.accelerator.device
+
+        # ---- Datasets ----
+        self.datasets = datasets
 
         # ---- Environment ----
         self.env = env
