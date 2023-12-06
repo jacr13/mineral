@@ -132,13 +132,13 @@ class ActorCritic(nn.Module):
     def _encode(self, obs_dict):
         if 'obs' in self.obs_space:
             z = obs_dict['obs']
-            z_local = None
         else:
-            z, z_local = self.encoder(obs_dict)
-        return z, z_local
+            encoder_out = self.encoder(obs_dict)
+            z = encoder_out['z']
+        return z
 
     def _actor_critic(self, obs_dict):
-        z, z_local = self._encode(obs_dict)
+        z = self._encode(obs_dict)
 
         x = self.actor_mlp(z)
         mu = self.mu(x)
