@@ -96,9 +96,6 @@ def main(config: DictConfig):
     # set numpy formatting for printing only
     set_np_formatting()
 
-    logdir = config.logdir
-    os.makedirs(logdir, exist_ok=True)
-
     if config.multi_gpu:
         from accelerate import Accelerator
 
@@ -134,6 +131,9 @@ def main(config: DictConfig):
     cprint('Start Building the Environment', 'green', attrs=['bold'])
     env = make_envs(config)
     print(f'Env: {env}')
+
+    logdir = config.logdir
+    os.makedirs(logdir, exist_ok=True)
 
     from .. import agents
 
