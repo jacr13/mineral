@@ -4,23 +4,6 @@ import torch
 import torch.nn as nn
 
 
-class RewardShaper:
-    def __init__(
-        self,
-        fn='scale',
-        scale=1.0,
-    ):
-        self.fn = fn
-        self.scale = scale
-
-    def __call__(self, rewards):
-        if self.fn == 'scale':
-            rewards *= self.scale
-        else:
-            raise NotImplementedError(self.fn)
-        return rewards
-
-
 class RunningMeanStd(nn.Module):
     def __init__(self, insize, epsilon=1e-05, per_channel=False, norm_only=False):
         super().__init__()

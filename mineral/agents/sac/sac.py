@@ -10,9 +10,10 @@ import torch.nn.functional as F
 from torch import nn
 
 from ...buffers import NStepReplay, ReplayBuffer
+from ...common.reward_shaper import RewardShaper
 from ..actorcritic_base import ActorCriticBase
 from ..ddpg import models
-from ..ddpg.utils import RewardShaper, RunningMeanStd, handle_timeout, soft_update
+from ..ddpg.utils import RunningMeanStd, handle_timeout, soft_update
 
 
 class Lambda(nn.Module):

@@ -7,10 +7,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from ...common.reward_shaper import RewardShaper
 from ..actorcritic_base import ActorCriticBase
 from . import models
 from .experience import ExperienceBuffer
-from .utils import AdaptiveScheduler, LinearScheduler, RewardShaper, RunningMeanStd, adjust_learning_rate_cos
+from .utils import AdaptiveScheduler, LinearScheduler, RunningMeanStd, adjust_learning_rate_cos
 
 
 class PPO(ActorCriticBase):
@@ -60,7 +61,6 @@ class PPO(ActorCriticBase):
         self.value_bootstrap = self.ppo_config['value_bootstrap']
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_value = self.ppo_config['normalize_value']
-        self.reward_shaper = RewardShaper(**self.ppo_config['reward_shaper'])
         # ---- PPO Collect Param ----
         self.horizon_length = self.ppo_config['horizon_length']
         self.batch_size = self.horizon_length * self.num_actors
@@ -86,6 +86,7 @@ class PPO(ActorCriticBase):
             self.device,
             self.obs_keys_cpu,
         )
+        self.reward_shaper = RewardShaper(**self.ppo_config['reward_shaper'])
         self.best_rewards = -float('inf')
         # ---- Timing
         self.data_collect_time = 0

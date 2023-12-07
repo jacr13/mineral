@@ -22,23 +22,6 @@ def handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated'
     return dones
 
 
-class RewardShaper:
-    def __init__(
-        self,
-        fn='scale',
-        scale=1.0,
-    ):
-        self.fn = fn
-        self.scale = scale
-
-    def __call__(self, rewards):
-        if self.fn == 'scale':
-            rewards *= self.scale
-        else:
-            raise NotImplementedError(self.fn)
-        return rewards
-
-
 class RunningMeanStd(nn.Module):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
     def __init__(self, shape, epsilon=1e-4, device='cuda'):
