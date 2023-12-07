@@ -17,7 +17,8 @@ class PPO(ActorCriticBase):
     def __init__(self, env, output_dir, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
-        self.num_actors = self.ppo_config['num_actors']
+        self.num_actors = self.ppo_config.num_actors
+        self.max_agent_steps = int(self.ppo_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
         # ---- Normalizer ----
@@ -73,9 +74,6 @@ class PPO(ActorCriticBase):
             self.scheduler = AdaptiveScheduler(self.kl_threshold)
         elif self.lr_schedule == 'linear':
             self.scheduler = LinearScheduler(self.init_lr, self.ppo_config['max_agent_steps'])
-        # ---- Snapshot
-        self.save_frequency = self.ppo_config['save_frequency']
-        self.save_best_after = self.ppo_config['save_best_after']
         # --- Training ---
         self.obs = None
         self.storage = ExperienceBuffer(
@@ -88,10 +86,7 @@ class PPO(ActorCriticBase):
             self.device,
             self.obs_keys_cpu,
         )
-        self.best_rewards = -10000
-        self.epoch_num = -1
-        self.agent_steps = 0
-        self.max_agent_steps = int(self.ppo_config['max_agent_steps'])
+        self.best_rewards = -float('inf')
         # ---- Timing
         self.data_collect_time = 0
         self.rl_train_time = 0
@@ -136,7 +131,7 @@ class PPO(ActorCriticBase):
         self.agent_steps = self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
 
         while self.agent_steps < self.max_agent_steps:
-            self.epoch_num += 1
+            self.epoch += 1
             train_result = self.train_epoch()
             self.storage.data_dict = None
 
@@ -151,7 +146,7 @@ class PPO(ActorCriticBase):
                 )
                 _last_t = time.time()
                 info_string = (
-                    f'Epoch: {self.epoch_num} | '
+                    f'Epoch: {self.epoch} | '
                     f'Agent Steps: {int(self.agent_steps):,} | SPS: {all_sps:.1f} | '
                     f'Last SPS: {last_sps:.1f} | '
                     f'Collect Time: {self.data_collect_time / 60:.1f} min | '
@@ -164,22 +159,25 @@ class PPO(ActorCriticBase):
                 self.write_metrics(self.agent_steps, metrics)
 
                 mean_rewards = metrics['metrics/episode_rewards']
-                ckpt_name = f'ep={self.epoch_num}_step={int(self.agent_steps // 1e6):04}m_reward={mean_rewards:.2f}'
-                if self.save_frequency > 0:
-                    if (self.epoch_num % self.save_frequency == 0) and (mean_rewards <= self.best_rewards):
-                        self.save(os.path.join(self.ckpt_dir, ckpt_name))
-                    self.save(os.path.join(self.ckpt_dir, f'last'))
+                if self.ckpt_every > 0 and (self.epoch % self.ckpt_every == 0):
+                    ckpt_name = f'epoch={self.epoch}_steps={self.agent_steps}_reward={mean_rewards:.2f}'
+                    self.save(os.path.join(self.ckpt_dir, ckpt_name + '.pth'))
+                    latest_ckpt_path = os.path.join(self.ckpt_dir, 'latest.pth')
+                    if os.path.exists(latest_ckpt_path):
+                        os.unlink(latest_ckpt_path)
+                    os.symlink(ckpt_name + '.pth', latest_ckpt_path)
 
                 if mean_rewards > self.best_rewards:
                     print(f'saving current best_rewards={mean_rewards:.2f}')
+
                     # remove previous best file
                     prev_best_ckpt = os.path.join(self.ckpt_dir, f'best_reward={self.best_rewards:.2f}.pth')
                     if os.path.exists(prev_best_ckpt):
                         os.remove(prev_best_ckpt)
-                    self.best_rewards = mean_rewards
-                    self.save(os.path.join(self.ckpt_dir, f'best_reward={mean_rewards:.2f}'))
 
-        print('max steps achieved')
+                    self.best_rewards = mean_rewards
+                    self.save(os.path.join(self.ckpt_dir, f'best_reward={self.best_rewards:.2f}.pth'))
+        self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def train_epoch(self):
         # collect minibatch data
@@ -193,6 +191,7 @@ class PPO(ActorCriticBase):
 
         train_result = collections.defaultdict(list)
         for mini_ep in range(0, self.mini_epochs):
+            self.mini_epoch += 1
             ep_kls = []
             for i in range(len(self.storage)):
                 value_preds, old_action_log_probs, advantage, old_mu, old_sigma, returns, actions, obs_dict = self.storage[i]
@@ -226,11 +225,11 @@ class PPO(ActorCriticBase):
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
-                    if self.multi_gpu:
+                    if not self.multi_gpu:
+                        grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                    else:
                         assert self.accelerator.sync_gradients
                         grad_norm_all = self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-                    else:
-                        grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
                 self.optimizer.step()
 
                 with torch.no_grad():
@@ -296,7 +295,7 @@ class PPO(ActorCriticBase):
             'train/actor_dist/sigma': torch.mean(torch.cat(train_result['sigma']), 0).cpu().numpy(),
             'train/last_lr': self.last_lr,
             'train/e_clip': self.e_clip,
-            'train/epoch': self.epoch_num,
+            'train/epoch': self.epoch,
         }
         return {**metrics, **log_dict}
 
@@ -342,12 +341,12 @@ class PPO(ActorCriticBase):
             self.storage.update_data('rewards', n, shaped_rewards)
 
             done_indices = torch.where(self.dones)[0].tolist()
-            save_video = (self.save_video_every > 0) and (self.epoch_num % self.save_video_every < self.save_video_consecutive)
+            save_video = (self.save_video_every > 0) and (self.epoch % self.save_video_every < self.save_video_consecutive)
             self.update_tracker(rewards.squeeze(-1), done_indices, infos, save_video=save_video)
 
         if self.save_video_every > 0:
             # saved video steps depends on horizon_length in play_steps()
-            if (self.epoch_num % self.save_video_every) == (self.save_video_consecutive - 1):
+            if (self.epoch % self.save_video_every) == (self.save_video_consecutive - 1):
                 self._info_video = {f'video/{k}': np.concatenate(v, 1) for k, v in self._video_buf.items()}
                 self._video_buf = collections.defaultdict(list)
 
@@ -370,17 +369,20 @@ class PPO(ActorCriticBase):
 
     def save(self, f):
         ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
             'model': self.model.state_dict(),
         }
         if self.normalize_input:
             ckpt['running_mean_std'] = self.running_mean_std.state_dict()
         if self.normalize_value:
             ckpt['value_mean_std'] = self.value_mean_std.state_dict()
-        torch.save(ckpt, f'{f}.pth')
+        torch.save(ckpt, f)
         # TODO: accelerator.save
 
     def load(self, f):
-        ckpt = torch.load(f)
+        ckpt = torch.load(f, map_location=self.device)
         self.model.load_state_dict(ckpt['model'])
         if self.normalize_input:
             self.running_mean_std.load_state_dict(ckpt['running_mean_std'])

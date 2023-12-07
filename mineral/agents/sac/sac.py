@@ -29,6 +29,7 @@ class SAC(ActorCriticBase):
         self.network_config = full_cfg.agent.network
         self.sac_config = full_cfg.agent.sac
         self.num_actors = self.sac_config.num_actors
+        self.max_agent_steps = int(self.sac_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
         if self.network_config.get("encoder", None) is not None:
@@ -91,12 +92,7 @@ class SAC(ActorCriticBase):
             self.obs_space, self.action_dim, self.num_actors, self.sac_config.nstep, device=self.device
         )
 
-        self.reward_shaper = RewardShaper(**self.sac_config['reward_shaper'])
-
-        self.epoch = -1
-        self.mini_epoch = -1
-        self.agent_steps = 0
-        self.max_agent_steps = int(self.sac_config['max_agent_steps'])
+        self.reward_shaper = RewardShaper(**self.sac_config.reward_shaper)
 
     def get_alpha(self, detach=True, scalar=False):
         if self.sac_config.alpha is None:

@@ -49,11 +49,13 @@ class ActorCriticBase:
         # ---- Logging ----
         self.make_writers(full_cfg)
 
-    def set_train(self):
-        raise NotImplementedError
+        self.print_every = full_cfg.agent.get('print_every', -1)
+        self.ckpt_every = full_cfg.agent.get('ckpt_every', -1)
+        self.eval_every = full_cfg.agent.get('eval_every', -1)
 
-    def set_eval(self):
-        raise NotImplementedError
+        self.epoch = -1
+        self.mini_epoch = -1
+        self.agent_steps = 0
 
     def train(self):
         raise NotImplementedError
@@ -62,6 +64,12 @@ class ActorCriticBase:
         raise NotImplementedError
 
     def play_steps(self):
+        raise NotImplementedError
+
+    def set_train(self):
+        raise NotImplementedError
+
+    def set_eval(self):
         raise NotImplementedError
 
     def save(self, f):

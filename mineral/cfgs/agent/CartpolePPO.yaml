@@ -50,5 +50,3 @@ ppo:
   minibatch_size: 8192
   mini_epochs: 8
   max_agent_steps: 1.5e6
-  save_best_after: 500
-  save_frequency: 100

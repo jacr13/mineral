@@ -1,6 +1,9 @@
 seed: ${..seed}
 algo: PPO
 
+print_every: 1
+ckpt_every: 200
+
 # info_keys:
 #   scalar: 'consecutive_successes'
 save_video_every: 0
@@ -60,5 +63,3 @@ ppo:
   minibatch_size: 32768
   mini_epochs: 5
   max_agent_steps: 700e6
-  save_best_after: 500
-  save_frequency: 200

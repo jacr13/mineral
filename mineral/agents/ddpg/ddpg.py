@@ -21,6 +21,7 @@ class DDPG(ActorCriticBase):
         self.network_config = full_cfg.agent.network
         self.ddpg_config = full_cfg.agent.ddpg
         self.num_actors = self.ddpg_config.num_actors
+        self.max_agent_steps = int(self.ddpg_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
         ActorCls = getattr(models, self.network_config.actor)
@@ -81,12 +82,7 @@ class DDPG(ActorCriticBase):
             self.obs_space, self.action_dim, self.num_actors, self.ddpg_config.nstep, device=self.device
         )
 
-        self.reward_shaper = RewardShaper(**self.ddpg_config['reward_shaper'])
-
-        self.epoch = -1
-        self.mini_epoch = -1
-        self.agent_steps = 0
-        self.max_agent_steps = int(self.ddpg_config['max_agent_steps'])
+        self.reward_shaper = RewardShaper(**self.ddpg_config.reward_shaper)
 
     def get_noise_std(self):
         if self.noise_scheduler is None:
