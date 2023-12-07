@@ -14,8 +14,8 @@ network:
   actor_kwargs:
     mlp_kwargs:
       units: [512, 256, 128]
-      act_type: SiLU
       norm_type: LayerNorm
+      act_type: SiLU
     weight_init: orthogonal
 
     tanh_policy: False
@@ -29,8 +29,8 @@ network:
   critic_kwargs:
     n_critics: 2
     mlp_kwargs:
-      act_type: SiLU
       norm_type: LayerNorm
+      act_type: SiLU
     weight_init: orthogonal
 
 sac:

@@ -18,7 +18,7 @@ def weight_init(m):
 
 
 class MLP(nn.Module):
-    def __init__(self, in_size, units=[512, 256, 128], act_type='ELU', norm_type=None):
+    def __init__(self, in_size, units=[512, 256, 128], norm_type=None, act_type='ELU'):
         super().__init__()
         self.out_dim = units[-1]
         layers = []

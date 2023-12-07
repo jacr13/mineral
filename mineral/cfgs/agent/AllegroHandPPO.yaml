@@ -19,14 +19,14 @@ network:
     mlp_kwargs:
       units: [512, 256, 128]
 
-    #   act_type: ELU
     #   norm_type: null
+    #   act_type: ELU
     # actor_dist_kwargs:
     #   dist: normal
     # fixed_sigma: True
 
-      act_type: SiLU
       norm_type: LayerNorm
+      act_type: SiLU
     actor_dist_kwargs:
       dist: dreamerv3_normal
       minstd: 0.1

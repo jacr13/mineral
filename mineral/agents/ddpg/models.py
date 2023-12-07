@@ -14,10 +14,10 @@ class MLP(nn.Module):
         in_dim,
         out_dim=None,
         units=[512, 256, 128],
-        act_type="ELU",
-        act_kwargs=dict(inplace=True),
         norm_type=None,
         norm_kwargs={},
+        act_type="ELU",
+        act_kwargs=dict(inplace=True),
         plain_last=None,
     ):
         super().__init__()
