@@ -104,7 +104,7 @@ class ActorCritic(nn.Module):
             'entropy': entropy,
             'mu': mu,
             'sigma': sigma,
-            'dist': distr,
+            'distr': distr,
         }
         if prev_actions is not None:
             prev_neglogp = -distr.log_prob(prev_actions).sum(dim=-1)
@@ -125,7 +125,7 @@ class ActorCritic(nn.Module):
             'actions': selected_action,
             'mu': mu,
             'sigma': sigma,
-            'dist': distr,
+            'distr': distr,
         }
         return result
 

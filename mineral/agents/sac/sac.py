@@ -112,17 +112,17 @@ class SAC(ActorCriticBase):
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
             z = self.encoder(obs)
 
-        mu, sigma, dist = self.actor(z)
-        assert dist is not None
+        mu, sigma, distr = self.actor(z)
+        assert distr is not None
 
         if sample:
-            actions = dist.rsample()
+            actions = distr.rsample()
         else:
             actions = mu
 
         if logprob:
-            log_prob = dist.log_prob(actions).sum(-1, keepdim=True)
-            return actions, dist, log_prob
+            log_prob = distr.log_prob(actions).sum(-1, keepdim=True)
+            return actions, distr, log_prob
         else:
             return actions
 

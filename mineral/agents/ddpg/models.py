@@ -121,7 +121,7 @@ class Actor(nn.Module):
         mu = self.mu(x)
         if self.tanh_policy:  # DDPG
             mu = mu.tanh()
-            sigma, dist = None, None
+            sigma, distr = None, None
         else:  # SAC
             if self.fixed_sigma is None:
                 assert std is not None
@@ -130,8 +130,8 @@ class Actor(nn.Module):
                 sigma = self.sigma
             else:
                 sigma = self.sigma(x)
-            mu, sigma, dist = self.dist(mu, sigma)
-        return mu, sigma, dist
+            mu, sigma, distr = self.dist(mu, sigma)
+        return mu, sigma, distr
 
 
 class EnsembleQ(nn.Module):

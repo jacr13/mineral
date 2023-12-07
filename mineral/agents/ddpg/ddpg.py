@@ -99,8 +99,8 @@ class DDPG(ActorCriticBase):
         if self.normalize_input:
             obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
         obs = obs['obs']
-        mu, sigma, dist = self.actor(obs)
-        if dist is None:
+        mu, sigma, distr = self.actor(obs)
+        if distr is None:
             actions = mu
         else:
             raise NotImplementedError
@@ -120,8 +120,8 @@ class DDPG(ActorCriticBase):
 
     @torch.no_grad()
     def get_tgt_policy_actions(self, obs, sample=True):
-        mu, sigma, dist = self.actor_target(obs)
-        if dist is None:
+        mu, sigma, distr = self.actor_target(obs)
+        if distr is None:
             actions = mu
         else:
             raise NotImplementedError
@@ -273,8 +273,8 @@ class DDPG(ActorCriticBase):
 
     def update_actor(self, obs):
         self.critic.requires_grad_(False)
-        mu, sigma, dist = self.actor(obs)
-        if dist is None:
+        mu, sigma, distr = self.actor(obs)
+        if distr is None:
             action = mu
         else:
             raise NotImplementedError
