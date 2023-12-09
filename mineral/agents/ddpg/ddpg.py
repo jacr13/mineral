@@ -10,11 +10,12 @@ import torch.nn.functional as F
 
 from ...buffers import NStepReplay, ReplayBuffer
 from ...common.reward_shaper import RewardShaper
+from ...common.running_mean_std import RunningMeanStd
 from ..actorcritic_base import ActorCriticBase
 from . import models
 from .noise import add_mixed_normal_noise, add_normal_noise
 from .schedule_util import ExponentialSchedule, LinearSchedule
-from .utils import RunningMeanStd, handle_timeout, soft_update
+from .utils import handle_timeout, soft_update
 
 
 class DDPG(ActorCriticBase):
@@ -306,16 +307,16 @@ class DDPG(ActorCriticBase):
         self.critic.eval()
         self.actor_target.eval()
         self.critic_target.eval()
-
-        self.obs_rms.eval()
+        if self.normalize_input:
+            self.obs_rms.eval()
 
     def set_train(self):
         self.actor.train()
         self.critic.train()
         self.actor_target.train()
         self.critic_target.train()
-
-        self.obs_rms.eval()
+        if self.normalize_input:
+            self.obs_rms.train()
 
     def save(self, f):
         pass

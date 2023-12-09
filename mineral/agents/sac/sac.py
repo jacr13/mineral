@@ -11,9 +11,10 @@ from torch import nn
 
 from ...buffers import NStepReplay, ReplayBuffer
 from ...common.reward_shaper import RewardShaper
+from ...common.running_mean_std import RunningMeanStd
 from ..actorcritic_base import ActorCriticBase
 from ..ddpg import models
-from ..ddpg.utils import RunningMeanStd, handle_timeout, soft_update
+from ..ddpg.utils import handle_timeout, soft_update
 
 
 class Lambda(nn.Module):
@@ -301,7 +302,8 @@ class SAC(ActorCriticBase):
         raise NotImplementedError
 
     def set_eval(self):
-        self.obs_rms.eval()
+        if self.normalize_inputs:
+            self.obs_rms.eval()
         self.encoder.eval()
         self.actor.eval()
         self.critic.eval()
@@ -310,7 +312,8 @@ class SAC(ActorCriticBase):
         self.critic_target.eval()
 
     def set_train(self):
-        self.obs_rms.eval()
+        if self.normalize_inputs:
+            self.obs_rms.train()
         self.encoder.train()
         self.actor.train()
         self.critic.train()
