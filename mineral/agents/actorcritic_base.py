@@ -58,13 +58,16 @@ class ActorCriticBase:
         self.mini_epoch = -1
         self.agent_steps = 0
 
+    def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
+        raise NotImplementedError
+
+    def get_actions(self, obs, sample: bool = True):
+        raise NotImplementedError
+
     def train(self):
         raise NotImplementedError
 
     def eval(self):
-        raise NotImplementedError
-
-    def play_steps(self):
         raise NotImplementedError
 
     def set_train(self):
@@ -92,3 +95,14 @@ class ActorCriticBase:
                 # assert isinstance(v, torch.Tensor)
                 _obs[k] = v
         return _obs
+
+    @staticmethod
+    def _handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated')):
+        timeout_envs = None
+        for timeout_key in timeout_keys:
+            if timeout_key in info:
+                timeout_envs = info[timeout_key]
+                break
+        if timeout_envs is not None:
+            dones = dones * (~timeout_envs)
+        return dones

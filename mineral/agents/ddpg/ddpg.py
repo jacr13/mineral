@@ -15,7 +15,7 @@ from ..actorcritic_base import ActorCriticBase
 from . import models
 from .noise import add_mixed_normal_noise, add_normal_noise
 from .schedule_util import ExponentialSchedule, LinearSchedule
-from .utils import handle_timeout, soft_update
+from .utils import soft_update
 
 
 class DDPG(ActorCriticBase):
@@ -55,7 +55,7 @@ class DDPG(ActorCriticBase):
 
         if self.normalize_input:
             self.obs_rms = {
-                k: RunningMeanStd(v, device=self.device) if re.match(self.input_keys_normalize, k) else nn.Identity()
+                k: RunningMeanStd(v) if re.match(self.input_keys_normalize, k) else nn.Identity()
                 for k, v in self.obs_space.items()
             }
             self.obs_rms = nn.ModuleDict(self.obs_rms).to(self.device)
@@ -138,7 +138,7 @@ class DDPG(ActorCriticBase):
         return actions
 
     @torch.no_grad()
-    def explore_env(self, env, timesteps: int, random: bool = False) -> list:
+    def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
         traj_obs = {
             k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
             for k, v in self.obs_space.items()
@@ -151,18 +151,17 @@ class DDPG(ActorCriticBase):
         }
         traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
 
-        obs = self.obs
         for i in range(timesteps):
             if not self.env_autoresets:
                 raise NotImplementedError
 
             if self.normalize_input:
-                for k, v in obs.items():
+                for k, v in self.obs.items():
                     self.obs_rms[k].update(v)
             if random:
                 actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
             else:
-                actions = self.get_actions(obs, sample=True)
+                actions = self.get_actions(self.obs, sample=sample)
 
             next_obs, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs)
@@ -171,16 +170,15 @@ class DDPG(ActorCriticBase):
             self.metrics_tracker.update_tracker(self.epoch, self.env, self.obs, rewards, done_indices, infos)
 
             if self.ddpg_config.handle_timeout:
-                dones = handle_timeout(dones, infos)
-            for k, v in obs.items():
+                dones = self._handle_timeout(dones, infos)
+            for k, v in self.obs.items():
                 traj_obs[k][:, i] = v
             traj_actions[:, i] = actions
             traj_dones[:, i] = dones
             traj_rewards[:, i] = rewards
             for k, v in next_obs.items():
                 traj_next_obs[k][:, i] = v
-            obs = next_obs
-        self.obs = obs
+            self.obs = next_obs
 
         self.metrics_tracker.flush_video_buf(self.epoch)
 
@@ -206,7 +204,7 @@ class DDPG(ActorCriticBase):
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
             self.set_eval()
-            trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, random=False)
+            trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, sample=True)
             self.agent_steps += steps
             self.memory.add_to_buffer(trajectory)
 
