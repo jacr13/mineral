@@ -48,32 +48,6 @@ class MLP(nn.Module):
         return self.mlp(x)
 
 
-def create_simple_mlp(in_dim, out_dim, hidden_layers, act_type="ELU", act_kwargs=dict(inplace=True)):
-    layer_nums = [in_dim, *hidden_layers, out_dim]
-    model = []
-    for idx, (in_f, out_f) in enumerate(zip(layer_nums[:-1], layer_nums[1:])):
-        model.append(nn.Linear(in_f, out_f))
-        if idx < len(layer_nums) - 2:
-            module = torch.nn.modules.activation
-            Cls = getattr(module, act_type)
-            act = Cls(**act_kwargs)
-            model.append(act)
-    return nn.Sequential(*model)
-
-
-class MLPNet(nn.Module):
-    def __init__(self, in_dim, out_dim, hidden_layers=None):
-        super().__init__()
-        if isinstance(in_dim, Sequence):
-            in_dim = in_dim[0]
-        if hidden_layers is None:
-            hidden_layers = [512, 256, 128]
-        self.net = create_simple_mlp(in_dim=in_dim, out_dim=out_dim, hidden_layers=hidden_layers)
-
-    def forward(self, x):
-        return self.net(x)
-
-
 class Actor(nn.Module):
     def __init__(
         self,
@@ -165,27 +139,60 @@ class EnsembleQ(nn.Module):
         return Qs
 
     def get_q_min(self, state, action):
-        return torch.min(*self.forward(state, action))
+        Qs = self.forward(state, action)
+        return torch.min(torch.stack(Qs), dim=0).values
 
     def get_q_values(self, state, action):
         return self.forward(state, action)
 
 
-class DistributionalDoubleQ(nn.Module):
-    def __init__(self, state_dim, act_dim, v_min=-10, v_max=10, num_atoms=51, device="cuda"):
+class DistributionalEnsembleQ(nn.Module):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        v_min=-10,
+        v_max=10,
+        num_atoms=51,
+        n_critics=2,
+        mlp_kwargs={},
+        weight_init=None,
+    ):
         super().__init__()
-        self.device = device
-        self.net_q1 = MLPNet(in_dim=state_dim + act_dim, out_dim=num_atoms)
-        self.net_q2 = MLPNet(in_dim=state_dim + act_dim, out_dim=num_atoms)
+        self.v_min = v_min
+        self.v_max = v_max
+        self.num_atoms = num_atoms
+        self.z_atoms = torch.linspace(v_min, v_max, num_atoms)
 
-        self.z_atoms = torch.linspace(v_min, v_max, num_atoms, device=device)
+        self.n_critics = n_critics
+        critics = []
+        for _ in range(n_critics):
+            q = MLP(state_dim + action_dim, out_dim=num_atoms, **mlp_kwargs)
+            critics.append(q)
+        self.critics = nn.ModuleList(critics)
 
-    def get_q_min(self, state: Tensor, action: Tensor) -> Tensor:
-        Q1, Q2 = self.get_q1_q2(state, action)
-        Q1 = torch.sum(Q1 * self.z_atoms.to(self.device), dim=1)
-        Q2 = torch.sum(Q2 * self.z_atoms.to(self.device), dim=1)
-        return torch.min(Q1, Q2)  # min Q value
+        self.weight_init = weight_init
+        self.reset_parameters()
 
-    def get_q_values(self, state: Tensor, action: Tensor) -> Sequence[Tensor]:
+    @property
+    def distl(self):
+        return True
+
+    def reset_parameters(self):
+        if self.weight_init != None:
+            raise NotImplementedError(self.weight_init)
+
+    def forward(self, state, action):
         input_x = torch.cat((state, action), dim=1)
-        return torch.softmax(self.net_q1(input_x), dim=1), torch.softmax(self.net_q2(input_x), dim=1)  # two Q values
+        Qs = [critic(input_x) for critic in self.critics]
+        return Qs
+
+    def get_q_min(self, state, action):
+        Qs = self.get_q_values(state, action)
+        Qs = [torch.sum(Q * self.z_atoms.to(Q.device), dim=1) for Q in Qs]
+        return torch.min(torch.stack(Qs), dim=0).values
+
+    def get_q_values(self, state, action):
+        Qs = self.forward(state, action)
+        Qs = [torch.softmax(Q, dim=1) for Q in Qs]
+        return Qs
