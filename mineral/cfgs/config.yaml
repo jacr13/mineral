@@ -63,8 +63,7 @@ headless: True
 env_render: False
 
 ## RL Arguments
-# test - if set, run policy in inference mode (requires setting checkpoint to load)
-test: False
+run: 'train'  # train | eval | train_eval
 # used to set checkpoint path
 checkpoint: ''
 # set to True when using multi-gpu training with huggingface Accelerate

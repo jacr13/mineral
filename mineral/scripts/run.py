@@ -134,6 +134,7 @@ def main(config: DictConfig):
 
     cprint('Start Building the Environment', 'green', attrs=['bold'])
     env = make_envs(config)
+    print('-' * 20)
     print(f'Env: {env}')
 
     datasets = make_datasets(config, env)
@@ -161,16 +162,20 @@ def main(config: DictConfig):
         print(f'run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
 
-    if config.test:
-        if config.checkpoint:
-            print(f'Loading checkpoint: {config.checkpoint}')
-            agent.load(config.checkpoint)
+    if config.checkpoint:
+        print(f'Loading checkpoint: {config.checkpoint}')
+        agent.load(config.checkpoint)
+
+    if config.run == 'train':
+        agent.train()
+    elif config.run == 'eval':
+        agent.eval()
+    elif config.run == 'train_eval':
+        agent.train()
+        agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
         agent.eval()
     else:
-        if config.checkpoint:
-            print(f'Loading checkpoint: {config.checkpoint}')
-            agent.load(config.checkpoint)
-        agent.train()
+        raise NotImplementedError(config.run)
 
     if rank == 0:
         # close wandb

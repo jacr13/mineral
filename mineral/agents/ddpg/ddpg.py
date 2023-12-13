@@ -1,4 +1,5 @@
 import collections
+import os
 import re
 import time
 from copy import deepcopy
@@ -213,6 +214,8 @@ class DDPG(ActorCriticBase):
             self.set_train()
             metrics = self.update_net(self.memory)
             self.metrics_tracker.write_metrics(self.agent_steps, metrics)
+
+        self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def update_net(self, memory):
         train_result = collections.defaultdict(list)
