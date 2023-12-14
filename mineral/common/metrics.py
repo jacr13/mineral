@@ -29,11 +29,10 @@ class Metrics(nn.Module):
         self.save_video_consecutive = full_cfg.agent.get('save_video_consecutive', 0)
 
         # --- Tracking ---
-        self._episode_info = {}
-        self._video_buf = collections.defaultdict(list)
-
         self.current_rewards = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
         self.current_lengths = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
+        self._current_info = {}
+        self._video_buf = collections.defaultdict(list)
 
         tracker_len = full_cfg.agent.get('tracker_len', 100)
         self.tracker_len = tracker_len
@@ -85,43 +84,45 @@ class Metrics(nn.Module):
                         v = v.cpu().numpy()
                     self._video_buf[k].append(v)
 
-        ep = self._episode_info
+        d = self._current_info
         for k, v in obs.items():
             if isinstance(v, np.ndarray):
                 v = torch.from_numpy(v)
 
             if re.match(self.info_keys_sum, k):
                 _k = f'{k}_sum'
-                if _k not in ep:
-                    ep[_k] = v.clone()
+                if _k not in d:
+                    d[_k] = v.clone()
                 else:
-                    ep[_k] += v
+                    d[_k] += v
             if re.match(self.info_keys_min, k):
                 _k = f'{k}_min'
-                if _k not in ep:
-                    ep[_k] = v.clone()
+                if _k not in d:
+                    d[_k] = v.clone()
                 else:
-                    ep[_k] = torch.fmin(ep[_k], v)
+                    d[_k] = torch.fmin(d[_k], v)
             if re.match(self.info_keys_max, k):
                 _k = f'{k}_max'
-                if _k not in ep:
-                    ep[_k] = v.clone()
+                if _k not in d:
+                    d[_k] = v.clone()
                 else:
-                    ep[_k] = torch.fmax(ep[_k], v)
+                    d[_k] = torch.fmax(d[_k], v)
             if re.match(self.info_keys_final, k):
                 _k = f'{k}_final'
-                if _k not in ep:
-                    ep[_k] = torch.zeros_like(v)
-                ep[_k][done_indices] = v[done_indices]
+                if _k not in d:
+                    d[_k] = torch.zeros_like(v)
+                d[_k][done_indices] = v[done_indices]
 
         if len(done_indices) > 0:
-            for k in ep.keys():
-                v = ep[k][done_indices].cpu().numpy()
+            for k in d.keys():
+                v = d[k][done_indices].cpu().numpy()
                 self.episode_stats[k].append(v)
+
+                # reset
                 if 'sum' in k or 'final' in k:
-                    ep[k][done_indices] = 0
+                    d[k][done_indices] = 0
                 else:
-                    ep[k][done_indices] = torch.nan
+                    d[k][done_indices] = torch.nan
 
     def flush_video_buf(self, epoch):
         if self.save_video_every > 0:
