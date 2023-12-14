@@ -12,11 +12,12 @@ from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
 from ..actorcritic_base import ActorCriticBase
 from . import models
+from .dapg import DAPGMixin
 from .experience import ExperienceBuffer
 from .utils import AdaptiveScheduler, LinearScheduler, adjust_learning_rate_cos
 
 
-class PPO(ActorCriticBase):
+class PPO(DAPGMixin, ActorCriticBase):
     def __init__(self, env, output_dir, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
@@ -51,8 +52,8 @@ class PPO(ActorCriticBase):
         self.init_lr = float(learning_rate)
         self.last_lr = float(learning_rate)
         OptimCls = getattr(torch.optim, self.ppo_config.optim_type)
-        self.optimizer = OptimCls(self.model.parameters(), **optim_kwargs)
-        print(self.optimizer, '\n')
+        self.optim = OptimCls(self.model.parameters(), **optim_kwargs)
+        print(self.optim, '\n')
         # ---- PPO Train Param ----
         self.e_clip = self.ppo_config['e_clip']
         self.use_smooth_clamp = self.ppo_config['use_smooth_clamp']
@@ -101,7 +102,7 @@ class PPO(ActorCriticBase):
 
         if self.multi_gpu:
             self.model = self.accelerator.prepare(self.model)
-            self.optimizer = self.accelerator.prepare(self.optimizer)
+            self.optim = self.accelerator.prepare(self.optim)
             # TODO: prepare scheduler
 
             if self.normalize_input:
@@ -207,7 +208,11 @@ class PPO(ActorCriticBase):
 
                 loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
 
-                self.optimizer.zero_grad()
+                if self.dapg_config is not None:
+                    demo_actor_loss, demo_nll_loss = self.update_dapg()
+                    loss += demo_actor_loss
+
+                self.optim.zero_grad()
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
@@ -216,7 +221,7 @@ class PPO(ActorCriticBase):
                     else:
                         assert self.accelerator.sync_gradients
                         grad_norm_all = self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-                self.optimizer.step()
+                self.optim.step()
 
                 with torch.no_grad():
                     kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
@@ -225,6 +230,9 @@ class PPO(ActorCriticBase):
                     metrics = (kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma)
                     metrics = self.accelerator.gather_for_metrics(metrics)
                     kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma = metrics
+
+                    if self.dapg_config is not None:
+                        demo_actor_loss, demo_nll_loss = self.accelerator.gather_for_metrics((demo_actor_loss, demo_nll_loss))
 
                 self.storage.update_mu_sigma(mu.detach(), sigma.detach())
                 ep_kls.append(kl_dist)
@@ -240,6 +248,12 @@ class PPO(ActorCriticBase):
                 if self.truncate_grads:
                     train_result['grad_norm/all'].append(grad_norm_all)
 
+                if self.dapg_config is not None:
+                    train_result['dapg_demo_nll_loss'].append(demo_nll_loss)
+                    train_result['dapg_demo_actor_loss'].append(demo_actor_loss)
+                    train_result['dapg_lambda'].append(torch.tensor(self.dapg_lambda))
+                    self.update_dapg_lambda()
+
             avg_kl = torch.mean(torch.stack(ep_kls))
             train_result['avg_kl'].append(avg_kl)
 
@@ -250,7 +264,7 @@ class PPO(ActorCriticBase):
                     self.init_lr, mini_ep, self.mini_epochs, self.agent_steps, self.max_agent_steps
                 )
 
-            for param_group in self.optimizer.param_groups:
+            for param_group in self.optim.param_groups:
                 param_group['lr'] = self.last_lr
 
         if self.lr_schedule == 'linear':
@@ -281,6 +295,13 @@ class PPO(ActorCriticBase):
             'train/e_clip': self.e_clip,
             'train/epoch': self.epoch,
         }
+        if self.dapg_config is not None:
+            dapg_log_dict = {
+                'train/dapg/demo_nll_loss': torch.mean(torch.stack(train_result['dapg_demo_nll_loss'])).item(),
+                'train/dapg/demo_actor_loss': torch.mean(torch.stack(train_result['dapg_demo_actor_loss'])).item(),
+                'train/dapg/lambda': torch.mean(torch.stack(train_result['dapg_lambda'])).item(),
+            }
+            log_dict.update(dapg_log_dict)
         return {**metrics, **log_dict}
 
     def eval(self):
@@ -366,8 +387,14 @@ class PPO(ActorCriticBase):
         self.model.load_state_dict(ckpt['model'])
         if self.normalize_input:
             self.obs_rms.load_state_dict(ckpt['obs_rms'])
-        if self.normalize_value:
-            self.value_rms.load_state_dict(ckpt['value_rms'])
+        try:
+            if self.normalize_value:
+                self.value_rms.load_state_dict(ckpt['value_rms'])
+        except KeyError as e:
+            if self.dapg_config is not None:
+                print('Warning: loading checkpoint without `value_rms`')
+            else:
+                raise e
         # TODO: accelerator.load
 
 
