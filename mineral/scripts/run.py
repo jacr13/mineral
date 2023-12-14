@@ -85,8 +85,8 @@ def save_run_metadata(logdir, run_name, run_id, resolved_config):
 
 
 def main(config: DictConfig):
-    if config.checkpoint:
-        config.checkpoint = to_absolute_path(config.checkpoint)
+    if config.ckpt:
+        config.ckpt = to_absolute_path(config.ckpt)
 
     if 'isaacgym' in sys.modules or 'isaacgymenvs' in sys.modules:
         from isaacgymenvs.utils.utils import set_np_formatting, set_seed
@@ -162,9 +162,9 @@ def main(config: DictConfig):
         print(f'run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
 
-    if config.checkpoint:
-        print(f'Loading checkpoint: {config.checkpoint}')
-        agent.load(config.checkpoint)
+    if config.ckpt:
+        print(f'Loading checkpoint: {config.ckpt}')
+        agent.load(config.ckpt, ckpt_keys=config.ckpt_keys)
 
     if config.run == 'train':
         agent.train()

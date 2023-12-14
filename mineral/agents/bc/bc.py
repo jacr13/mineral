@@ -242,24 +242,26 @@ class BC(ActorCriticBase):
 
     def save(self, f):
         ckpt = {
-            'model': self.model.state_dict(),
-            'optim': self.optim.state_dict(),
             'epoch': self.epoch,
             'mini_epoch': self.mini_epoch,
+            'model': self.model.state_dict(),
+            'optim': self.optim.state_dict(),
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
         }
-        if self.normalize_input:
-            ckpt['obs_rms'] = self.obs_rms.state_dict()
         torch.save(ckpt, f)
+        # TODO: accelerator.save
 
-    def load(self, f):
+    def load(self, f, ckpt_keys=''):
         ckpt = torch.load(f, map_location=self.device)
-        self.model.load_state_dict(ckpt['model'])
-        if self.normalize_input:
-            self.obs_rms.load_state_dict(ckpt['obs_rms'])
+        for k in ('epoch', 'mini_epoch', 'model', 'optim', 'obs_rms'):
+            if not re.match(ckpt_keys, k):
+                print(f'Warning: ckpt skipped loading `{k}`')
+                continue
+            if k == 'obs_rms' and not self.normalize_input:
+                continue
 
-        try:
-            self.optim.load_state_dict(ckpt['optim'])
-            self.epoch = ckpt['epoch']
-            self.mini_epoch = ckpt['mini_epoch']
-        except KeyError:
-            print('Did not find one of {optim, epoch, mini_epoch} in checkpoint.')
+            if hasattr(getattr(self, k), 'load_state_dict'):
+                # TODO: accelerator.load
+                getattr(self, k).load_state_dict(ckpt[k])
+            else:
+                setattr(self, k, ckpt[k])
