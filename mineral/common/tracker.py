@@ -7,8 +7,8 @@ import torch
 
 class Tracker:
     def __init__(self, max_len):
-        self.window = deque([0 for _ in range(max_len)], maxlen=max_len)
         self.max_len = max_len
+        self.reset()
 
     def __repr__(self):
         return self.window.__repr__()
@@ -32,3 +32,6 @@ class Tracker:
 
     def min(self):
         return np.min(self.window)
+
+    def reset(self):
+        self.window = deque([0 for _ in range(self.max_len)], maxlen=self.max_len)
