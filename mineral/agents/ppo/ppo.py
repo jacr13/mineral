@@ -147,9 +147,6 @@ class PPO(ActorCriticBase):
             train_result = self.train_epoch()
             self.storage.data_dict = None
 
-            if self.lr_schedule == 'linear':
-                self.last_lr = self.scheduler.update(self.agent_steps)
-
             if not self.multi_gpu or (self.multi_gpu and self.rank == 0):
                 timings = self.timer.stats(step=self.agent_steps, total_names=('agent.play_steps', 'agent.train_epoch'))
                 info_string = (
@@ -255,6 +252,9 @@ class PPO(ActorCriticBase):
 
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.last_lr
+
+        if self.lr_schedule == 'linear':
+            self.last_lr = self.scheduler.update(self.agent_steps)
 
         return train_result
 
