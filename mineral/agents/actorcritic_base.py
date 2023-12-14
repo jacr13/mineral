@@ -88,7 +88,7 @@ class ActorCriticBase:
         raise NotImplementedError
 
     def checkpoint_save(self, stat, stat_name='rewards', higher_better=True):
-        if self.ckpt_every > 0 and (self.epoch % self.ckpt_every == 0):
+        if self.ckpt_every > 0 and (self.epoch + 1) % self.ckpt_every == 0:
             ckpt_name = f'epoch={self.epoch}_steps={self.agent_steps}_{stat_name}={stat:.2f}'
             self.save(os.path.join(self.ckpt_dir, ckpt_name + '.pth'))
             latest_ckpt_path = os.path.join(self.ckpt_dir, 'latest.pth')
