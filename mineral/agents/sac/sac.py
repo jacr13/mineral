@@ -206,6 +206,7 @@ class SAC(ActorCriticBase):
             metrics = self.update_net(self.memory)
             metrics = self.metrics.result(metrics)
             self.writer.add(self.agent_steps, metrics)
+            self.writer.write()
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
