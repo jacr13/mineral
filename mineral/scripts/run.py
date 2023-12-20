@@ -131,7 +131,7 @@ def main(config: DictConfig):
         config.sim_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.rl_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.graphics_device_id = config.device_id if config.device_id >= 0 else 0
-        config.seed = set_seed(config.seed)
+        config.seed = set_seed(config.seed + rank)
 
     resolved_config = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')
@@ -168,13 +168,17 @@ def main(config: DictConfig):
         print(f'Loading checkpoint: {config.ckpt}')
         agent.load(config.ckpt, ckpt_keys=config.ckpt_keys)
 
+    print('-' * 20)
+    cprint(f'Running: {config.run}', 'green', attrs=['bold'])
     if config.run == 'train':
         agent.train()
     elif config.run == 'eval':
+        set_seed(config.seed + rank + 1)
         agent.eval()
     elif config.run == 'train_eval':
         agent.train()
         agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
+        set_seed(config.seed + rank + 1)
         agent.eval()
     else:
         raise NotImplementedError(config.run)
