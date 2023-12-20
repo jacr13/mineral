@@ -166,7 +166,7 @@ class PPO(DAPGMixin, ActorCriticBase):
                 self.writer.add(self.agent_steps, metrics)
                 self.writer.write()
 
-                self.checkpoint_save(metrics['metrics/episode_rewards'])
+                self._checkpoint_save(metrics['metrics/episode_rewards'])
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def train_epoch(self):

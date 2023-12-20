@@ -87,7 +87,13 @@ class ActorCriticBase:
     def set_eval(self):
         raise NotImplementedError
 
-    def checkpoint_save(self, stat, stat_name='rewards', higher_better=True):
+    def save(self, f):
+        raise NotImplementedError
+
+    def load(self, f):
+        raise NotImplementedError
+
+    def _checkpoint_save(self, stat, stat_name='rewards', higher_better=True):
         if self.ckpt_every > 0 and (self.epoch + 1) % self.ckpt_every == 0:
             ckpt_name = f'epoch={self.epoch}_steps={self.agent_steps}_{stat_name}={stat:.2f}'
             self.save(os.path.join(self.ckpt_dir, ckpt_name + '.pth'))
@@ -106,12 +112,6 @@ class ActorCriticBase:
                     os.remove(prev_best_ckpt)
             self.best_stat = stat
             self.save(os.path.join(self.ckpt_dir, f'best_{stat_name}={self.best_stat:.2f}.pth'))
-
-    def save(self, f):
-        raise NotImplementedError
-
-    def load(self, f):
-        raise NotImplementedError
 
     def _convert_obs(self, obs):
         if not isinstance(obs, dict):
