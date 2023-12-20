@@ -158,11 +158,12 @@ class BC(ActorCriticBase):
         self.metrics.episode_lengths.reset()
 
         max_steps = self.env.max_episode_length
-        eval_episodes = 0
-        while eval_episodes < self.metrics.tracker_len:
+        eval_episodes, total_eval_episodes = 0, self.metrics.tracker_len
+        while eval_episodes < total_eval_episodes:
             # TODO: assumes envs do not terminate early
             trajectory, steps = self.explore_env(self.env, max_steps, random=False, sample=False)
             eval_episodes += self.num_actors
+            print(f"Evaluated {eval_episodes} / {total_eval_episodes} episodes")
 
         eval_metrics = {
             "metrics/episode_rewards": self.metrics.episode_rewards.mean(),
