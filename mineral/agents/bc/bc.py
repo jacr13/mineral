@@ -47,6 +47,8 @@ class BC(ActorCriticBase):
 
         self.reward_shaper = RewardShaper(**self.bc_config.reward_shaper)
 
+        self.loss_weights = self.bc_config.get('loss_weights', {})
+
     def dataloader(self, dataset, split='train'):
         sampler = None
         loader = torch.utils.data.DataLoader(
@@ -121,12 +123,12 @@ class BC(ActorCriticBase):
         reward = self.reward_shaper(reward)
         mu, std, distr = self.actor(obs)
 
-        l1_loss = F.l1_loss(mu, action)
-        mse_loss = F.mse_loss(mu, action)
-        nll_loss = -distr.log_prob(action).mean()
+        losses = {}
+        losses["l1"] = F.l1_loss(mu, action) if "l1" in self.loss_weights else None
+        losses["mse"] = F.mse_loss(mu, action) if "mse" in self.loss_weights else None
+        losses["nll"] = -distr.log_prob(action).mean() if "nll" in self.loss_weights else None
 
-        loss = nll_loss
-
+        loss = torch.sum(torch.stack([v * losses[k] for k, v in self.loss_weights.items()]))
         self.optim.zero_grad(set_to_none=True)
         loss.backward()
         if self.bc_config.max_grad_norm is not None:
@@ -139,9 +141,9 @@ class BC(ActorCriticBase):
         self.optim.step()
 
         train_result["loss/total"].append(loss)
-        train_result["loss/mse"].append(mse_loss)
-        train_result["loss/nle"].append(nll_loss)
-        train_result["loss/l1"].append(l1_loss)
+        for k, v in losses.items():
+            if v is not None:
+                train_result[f"loss/{k}"].append(v)
         if grad_norm is not None:
             train_result["grad_norm/all"].append(grad_norm)
 
