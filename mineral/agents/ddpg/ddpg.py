@@ -27,33 +27,7 @@ class DDPG(ActorCriticBase):
         self.max_agent_steps = int(self.ddpg_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        ActorCls = getattr(models, self.network_config.actor)
-        CriticCls = getattr(models, self.network_config.critic)
-
-        obs_dim = self.obs_space['obs']
-        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
-        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
-        self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
-
-        print('Actor:', self.actor)
-        print('Critic:', self.critic, '\n')
-
-        self.actor.to(self.device)
-        self.critic.to(self.device)
-
-        OptimCls = getattr(torch.optim, self.ddpg_config.optim_type)
-        self.actor_optim = OptimCls(
-            self.actor.parameters(),
-            **self.ddpg_config.get("actor_optim_kwargs", {}),
-        )
-        self.critic_optim = OptimCls(
-            self.critic.parameters(),
-            **self.ddpg_config.get("critic_optim_kwargs", {}),
-        )
-
-        self.critic_target = deepcopy(self.critic)
-        self.actor_target = deepcopy(self.actor) if not self.ddpg_config.no_tgt_actor else self.actor
-
+        # --- Obs Normalizer ---
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -65,6 +39,46 @@ class DDPG(ActorCriticBase):
         else:
             self.obs_rms = None
 
+        # --- Model ---
+        obs_dim = self.obs_space['obs']
+        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
+
+        ActorCls = getattr(models, self.network_config.actor)
+        CriticCls = getattr(models, self.network_config.critic)
+        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
+        self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
+        self.actor.to(self.device)
+        self.critic.to(self.device)
+        print('Actor:', self.actor)
+        print('Critic:', self.critic, '\n')
+
+        # --- Optim ---
+        OptimCls = getattr(torch.optim, self.ddpg_config.optim_type)
+        self.actor_optim = OptimCls(
+            self.actor.parameters(),
+            **self.ddpg_config.get("actor_optim_kwargs", {}),
+        )
+        self.critic_optim = OptimCls(
+            self.critic.parameters(),
+            **self.ddpg_config.get("critic_optim_kwargs", {}),
+        )
+        print('Actor Optim:', self.actor_optim)
+        print('Critic Optim:', self.critic_optim, '\n')
+
+        # --- Target Networks ---
+        self.critic_target = deepcopy(self.critic)
+        self.actor_target = deepcopy(self.actor) if not self.ddpg_config.no_tgt_actor else self.actor
+
+        # --- Buffers ---
+        self.memory = ReplayBuffer(
+            self.obs_space, self.action_dim, capacity=int(self.ddpg_config.memory_size), device=self.device
+        )
+        self.n_step_buffer = NStepReplay(
+            self.obs_space, self.action_dim, self.num_actors, self.ddpg_config.nstep, device=self.device
+        )
+        self.reward_shaper = RewardShaper(**self.ddpg_config.reward_shaper)
+
+        # --- DDPG Exploration Noise Scheduler ---
         if self.ddpg_config.noise.decay == 'linear':
             self.noise_scheduler = LinearSchedule(
                 start_val=self.ddpg_config.noise.std_max,
@@ -80,15 +94,6 @@ class DDPG(ActorCriticBase):
         else:
             self.noise_scheduler = None
 
-        self.memory = ReplayBuffer(
-            self.obs_space, self.action_dim, capacity=int(self.ddpg_config.memory_size), device=self.device
-        )
-        self.n_step_buffer = NStepReplay(
-            self.obs_space, self.action_dim, self.num_actors, self.ddpg_config.nstep, device=self.device
-        )
-
-        self.reward_shaper = RewardShaper(**self.ddpg_config.reward_shaper)
-
     def get_noise_std(self):
         if self.noise_scheduler is None:
             return self.ddpg_config.noise.std_max
@@ -96,7 +101,7 @@ class DDPG(ActorCriticBase):
             return self.noise_scheduler.val()
 
     def update_noise(self):
-        # TODO
+        # TODO: currently unused
         if self.noise_scheduler is not None:
             self.noise_scheduler.step()
 
@@ -113,7 +118,7 @@ class DDPG(ActorCriticBase):
             if self.ddpg_config.noise.type == 'fixed':
                 actions = add_normal_noise(actions, std=self.get_noise_std(), out_bounds=[-1.0, 1.0])
             elif self.ddpg_config.noise.type == 'mixed':
-                actions = add_mixed_normal_noise(
+                actions = add_mixed_normal_noise(  # PQL mixed exploration
                     actions,
                     std_min=self.ddpg_config.noise.std_min,
                     std_max=self.ddpg_config.noise.std_max,
@@ -192,9 +197,6 @@ class DDPG(ActorCriticBase):
         return data, timesteps * self.num_actors
 
     def train(self):
-        _t = time.perf_counter()
-        _last_t = _t
-
         obs = self.env.reset()
         self.obs = self._convert_obs(obs)
         self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)

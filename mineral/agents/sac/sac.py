@@ -35,43 +35,7 @@ class SAC(ActorCriticBase):
         self.max_agent_steps = int(self.sac_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        if self.network_config.get("encoder", None) is not None:
-            EncoderCls = getattr(models, self.network_config.encoder)
-            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
-        else:
-            self.encoder = Lambda(lambda x: x["obs"])
-
-        print('Encoder:', self.encoder)
-
-        ActorCls = getattr(models, self.network_config.actor)
-        CriticCls = getattr(models, self.network_config.critic)
-
-        obs_dim = self.obs_space['obs']
-        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
-        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
-        self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
-
-        print('Actor:', self.actor)
-        print('Critic:', self.critic, '\n')
-
-        self.encoder.to(self.device)
-        self.actor.to(self.device)
-        self.critic.to(self.device)
-
-        OptimCls = getattr(torch.optim, self.sac_config.optim_type)
-        self.actor_optim = OptimCls(
-            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
-            **self.sac_config.get("actor_optim_kwargs", {}),
-        )
-        self.critic_optim = OptimCls(
-            itertools.chain(self.encoder.parameters(), self.critic.parameters()),
-            **self.sac_config.get("critic_optim_kwargs", {}),
-        )
-
-        self.encoder_target = deepcopy(self.encoder)
-        self.critic_target = deepcopy(self.critic)
-        self.actor_target = deepcopy(self.actor) if not self.sac_config.no_tgt_actor else self.actor
-
+        # --- Obs Normalizer ---
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -83,21 +47,61 @@ class SAC(ActorCriticBase):
         else:
             self.obs_rms = None
 
-        if self.sac_config.alpha is None:
-            init_alpha = np.log(self.sac_config.init_alpha)
-            self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
-            self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
+        # --- Encoder ---
+        if self.network_config.get("encoder", None) is not None:
+            EncoderCls = getattr(models, self.network_config.encoder)
+            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+        else:
+            self.encoder = Lambda(lambda x: x["obs"])
+        self.encoder.to(self.device)
+        print('Encoder:', self.encoder)
 
-        self.target_entropy = -self.action_dim
+        # --- Model ---
+        obs_dim = self.obs_space['obs']
+        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
 
+        ActorCls = getattr(models, self.network_config.actor)
+        CriticCls = getattr(models, self.network_config.critic)
+        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
+        self.critic = CriticCls(obs_dim, self.action_dim, **self.network_config.get("critic_kwargs", {}))
+        self.actor.to(self.device)
+        self.critic.to(self.device)
+        print('Actor:', self.actor)
+        print('Critic:', self.critic, '\n')
+
+        # --- Optim ---
+        OptimCls = getattr(torch.optim, self.sac_config.optim_type)
+        self.actor_optim = OptimCls(
+            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
+            **self.sac_config.get("actor_optim_kwargs", {}),
+        )
+        self.critic_optim = OptimCls(
+            itertools.chain(self.encoder.parameters(), self.critic.parameters()),
+            **self.sac_config.get("critic_optim_kwargs", {}),
+        )
+        print('Actor Optim:', self.actor_optim)
+        print('Critic Optim:', self.critic_optim, '\n')
+
+        # --- Target Networks ---
+        self.encoder_target = deepcopy(self.encoder)
+        self.critic_target = deepcopy(self.critic)
+        self.actor_target = deepcopy(self.actor) if not self.sac_config.no_tgt_actor else self.actor
+
+        # --- Buffers ---
         self.memory = ReplayBuffer(
             self.obs_space, self.action_dim, capacity=int(self.sac_config.memory_size), device=self.device
         )
         self.n_step_buffer = NStepReplay(
             self.obs_space, self.action_dim, self.num_actors, self.sac_config.nstep, device=self.device
         )
-
         self.reward_shaper = RewardShaper(**self.sac_config.reward_shaper)
+
+        # --- SAC Entropy ---
+        self.target_entropy = -self.action_dim
+        if self.sac_config.alpha is None:
+            init_alpha = np.log(self.sac_config.init_alpha)
+            self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
+            self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
 
     def get_alpha(self, detach=True, scalar=False):
         if self.sac_config.alpha is None:
@@ -183,9 +187,6 @@ class SAC(ActorCriticBase):
         return data, timesteps * self.num_actors
 
     def train(self):
-        _t = time.perf_counter()
-        _last_t = _t
-
         obs = self.env.reset()
         self.obs = self._convert_obs(obs)
         self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
