@@ -1,9 +1,10 @@
 seed: ${..seed}
 algo: SAC
 
-save_video_every: 0
-save_video_consecutive: 0
-tracker_len: 100
+metrics_kwargs:
+  save_video_every: 0
+  save_video_consecutive: 0
+  tracker_len: 100
 
 normalize_input: True
 

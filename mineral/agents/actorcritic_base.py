@@ -47,13 +47,16 @@ class ActorCriticBase:
             obs_space = {'obs': self.observation_space.shape}
         self.obs_space = obs_space
 
+        # --- Metrics ---
+        metrics_kwargs = full_cfg.agent.get('metrics_kwargs', {})
+        self.metrics = Metrics(self.num_actors, self.device, full_cfg.env_render, **metrics_kwargs)
+
         # --- Logging ---
         self.ckpt_dir = os.path.join(self.logdir, 'ckpt')
         os.makedirs(self.ckpt_dir, exist_ok=True)
         self.tb_dir = os.path.join(self.logdir, 'tb')
         os.makedirs(self.tb_dir, exist_ok=True)
 
-        self.metrics = Metrics(full_cfg, self.logdir, self.num_actors, self.device)
         resolved_config = OmegaConf.to_container(full_cfg, resolve=True)
         writers = [
             WandbWriter(),

@@ -10,23 +10,32 @@ from .tracker import Tracker
 
 
 class Metrics(nn.Module):
-    def __init__(self, full_cfg, logdir, num_actors, device):
+    def __init__(
+        self,
+        num_actors,
+        device,
+        env_render,
+        save_video_every=0,
+        save_video_consecutive=0,
+        tracker_len=100,
+        info_keys={},
+    ):
         super().__init__()
-        self.logdir = logdir
         self.num_actors = num_actors
         self.device = device
 
         # --- Logging ---
-        self.env_render = full_cfg.env_render
-        info_keys_cfg = full_cfg.agent.get('info_keys', {})
-        self.info_keys_sum = re.compile(info_keys_cfg.get('sum', '$^'))
-        self.info_keys_min = re.compile(info_keys_cfg.get('min', '$^'))
-        self.info_keys_max = re.compile(info_keys_cfg.get('max', '$^'))
-        self.info_keys_final = re.compile(info_keys_cfg.get('final', '$^'))
-        self.info_keys_scalar = re.compile(info_keys_cfg.get('scalar', '$^'))
-        self.info_keys_video = re.compile(info_keys_cfg.get('video', '$^'))
-        self.save_video_every = full_cfg.agent.get('save_video_every', 0)
-        self.save_video_consecutive = full_cfg.agent.get('save_video_consecutive', 0)
+        self.info_keys_sum = re.compile(info_keys.get('sum', '$^'))
+        self.info_keys_min = re.compile(info_keys.get('min', '$^'))
+        self.info_keys_max = re.compile(info_keys.get('max', '$^'))
+        self.info_keys_final = re.compile(info_keys.get('final', '$^'))
+        self.info_keys_scalar = re.compile(info_keys.get('scalar', '$^'))
+        self.info_keys_video = re.compile(info_keys.get('video', '$^'))
+
+        # --- Video ---
+        self.env_render = env_render
+        self.save_video_every = save_video_every
+        self.save_video_consecutive = save_video_consecutive
 
         # --- Tracking ---
         self.current_rewards = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
@@ -34,7 +43,6 @@ class Metrics(nn.Module):
         self._current_info = {}
         self._video_buf = collections.defaultdict(list)
 
-        tracker_len = full_cfg.agent.get('tracker_len', 100)
         self.tracker_len = tracker_len
         self.episode_rewards = Tracker(tracker_len)
         self.episode_lengths = Tracker(tracker_len)
