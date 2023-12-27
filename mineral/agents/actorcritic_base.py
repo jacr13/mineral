@@ -38,7 +38,7 @@ class ActorCriticBase:
 
         # --- Inputs ---
         self.obs_keys_cpu = re.compile(full_cfg.agent.get('obs_keys_cpu', '$^'))
-        self.normalize_keys_rms = re.compile(full_cfg.agent.get('normalize_keys_rms', ''))
+        self.obs_rms_keys = re.compile(full_cfg.agent.get('obs_rms_keys', ''))
         self.normalize_input = full_cfg.agent.get('normalize_input', False)
         self.observation_space = self.env.observation_space
         try:
