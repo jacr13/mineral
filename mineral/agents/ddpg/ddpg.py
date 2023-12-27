@@ -1,10 +1,8 @@
 import collections
 import os
 import re
-import time
 from copy import deepcopy
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +25,7 @@ class DDPG(ActorCriticBase):
         self.max_agent_steps = int(self.ddpg_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        # --- Obs Normalizer ---
+        # --- Normalizers ---
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -94,17 +92,6 @@ class DDPG(ActorCriticBase):
         else:
             self.noise_scheduler = None
 
-    def get_noise_std(self):
-        if self.noise_scheduler is None:
-            return self.ddpg_config.noise.std_max
-        else:
-            return self.noise_scheduler.val()
-
-    def update_noise(self):
-        # TODO: currently unused
-        if self.noise_scheduler is not None:
-            self.noise_scheduler.step()
-
     def get_actions(self, obs, sample=True):
         if self.normalize_input:
             obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
@@ -127,6 +114,17 @@ class DDPG(ActorCriticBase):
             else:
                 raise NotImplementedError
         return actions
+
+    def get_noise_std(self):
+        if self.noise_scheduler is None:
+            return self.ddpg_config.noise.std_max
+        else:
+            return self.noise_scheduler.val()
+
+    def update_noise(self):
+        # TODO: currently unused
+        if self.noise_scheduler is not None:
+            self.noise_scheduler.step()
 
     @torch.no_grad()
     def get_tgt_policy_actions(self, obs, sample=True):
@@ -328,14 +326,6 @@ class DDPG(ActorCriticBase):
     def eval(self):
         raise NotImplementedError
 
-    def set_eval(self):
-        self.actor.eval()
-        self.critic.eval()
-        self.actor_target.eval()
-        self.critic_target.eval()
-        if self.normalize_input:
-            self.obs_rms.eval()
-
     def set_train(self):
         self.actor.train()
         self.critic.train()
@@ -343,6 +333,14 @@ class DDPG(ActorCriticBase):
         self.critic_target.train()
         if self.normalize_input:
             self.obs_rms.train()
+
+    def set_eval(self):
+        self.actor.eval()
+        self.critic.eval()
+        self.actor_target.eval()
+        self.critic_target.eval()
+        if self.normalize_input:
+            self.obs_rms.eval()
 
     def save(self, f):
         pass

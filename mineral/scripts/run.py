@@ -161,7 +161,7 @@ def main(config: DictConfig):
     from .. import agents
 
     AgentCls = getattr(agents, config.agent.algo)
-    print(f'AgentCls: {AgentCls}')
+    print(f'AgentCls: {AgentCls}', '\n')
     agent = AgentCls(env, logdir, config, accelerator=accelerator, datasets=datasets)
 
     if config.ckpt:

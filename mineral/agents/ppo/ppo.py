@@ -1,9 +1,7 @@
 import collections
 import os
 import re
-import time
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -25,7 +23,7 @@ class PPO(DAPGMixin, ActorCriticBase):
         self.max_agent_steps = int(self.ppo_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        # ---- Normalizer ----
+        # ---- Normalizers ----
         rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)
         if self.normalize_input:
             self.obs_rms = {}
@@ -38,6 +36,9 @@ class PPO(DAPGMixin, ActorCriticBase):
         else:
             self.obs_rms = None
         print('obs_rms:', self.obs_rms)
+
+        self.value_rms = normalizers.RunningMeanStd((1,), **rms_config).to(self.device)
+
         # ---- Model ----
         encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
         ModelCls = getattr(models, self.network_config.get('actor_critic', 'ActorCritic'))
@@ -45,7 +46,7 @@ class PPO(DAPGMixin, ActorCriticBase):
         self.model = ModelCls(self.obs_space, self.action_dim, encoder=encoder, encoder_kwargs=encoder_kwargs, **model_kwargs)
         self.model.to(self.device)
         print(self.model, '\n')
-        self.value_rms = normalizers.RunningMeanStd((1,), **rms_config).to(self.device)
+
         # ---- Optim ----
         optim_kwargs = self.ppo_config.get('optim_kwargs', {})
         learning_rate = optim_kwargs.get('lr', 3e-4)
@@ -54,7 +55,8 @@ class PPO(DAPGMixin, ActorCriticBase):
         OptimCls = getattr(torch.optim, self.ppo_config.optim_type)
         self.optim = OptimCls(self.model.parameters(), **optim_kwargs)
         print(self.optim, '\n')
-        # ---- PPO Train Param ----
+
+        # ---- PPO Train Params ----
         self.e_clip = self.ppo_config['e_clip']
         self.use_smooth_clamp = self.ppo_config['use_smooth_clamp']
         self.clip_value_loss = self.ppo_config['clip_value_loss']
@@ -69,21 +71,24 @@ class PPO(DAPGMixin, ActorCriticBase):
         self.value_bootstrap = self.ppo_config['value_bootstrap']
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_value = self.ppo_config['normalize_value']
-        # ---- PPO Collect Param ----
+
+        # ---- PPO Collect Params ----
         self.horizon_length = self.ppo_config['horizon_length']
         self.batch_size = self.horizon_length * self.num_actors
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs = self.ppo_config['mini_epochs']
         assert self.batch_size % self.minibatch_size == 0 or full_cfg.test
-        # ---- Scheduler ----
+
+        # ---- LR Scheduler ----
         self.lr_schedule = self.ppo_config['lr_schedule']
         if self.lr_schedule == 'kl':
             self.kl_threshold = self.ppo_config['kl_threshold']
             self.scheduler = AdaptiveScheduler(self.kl_threshold)
         elif self.lr_schedule == 'linear':
             self.scheduler = LinearScheduler(self.init_lr, self.ppo_config['max_agent_steps'])
+
         # --- Training ---
-        self.obs = None
+        self.obs, self.dones = None, None
         self.storage = ExperienceBuffer(
             self.num_actors,
             self.horizon_length,
@@ -95,34 +100,21 @@ class PPO(DAPGMixin, ActorCriticBase):
             self.obs_keys_cpu,
         )
         self.reward_shaper = RewardShaper(**self.ppo_config['reward_shaper'])
-        # ---- Timing
+
+        # --- Timing ---
         self.timer = Timer()
         self.timer.wrap('agent', self, ['train_epoch', 'play_steps'])
         self.timer.wrap('env', self.env, ['step'])
 
+        # --- Multi-GPU ---
         if self.multi_gpu:
             self.model = self.accelerator.prepare(self.model)
             self.optim = self.accelerator.prepare(self.optim)
             # TODO: prepare scheduler
-
             if self.normalize_input:
                 self.obs_rms = self.accelerator.prepare(self.obs_rms)
             if self.normalize_value:
                 self.value_rms = self.accelerator.prepare(self.value_rms)
-
-    def set_eval(self):
-        self.model.eval()
-        if self.normalize_input:
-            self.obs_rms.eval()
-        if self.normalize_value:
-            self.value_rms.eval()
-
-    def set_train(self):
-        self.model.train()
-        if self.normalize_input:
-            self.obs_rms.train()
-        if self.normalize_value:
-            self.value_rms.train()
 
     def model_act(self, obs_dict):
         if self.normalize_input:
@@ -131,6 +123,59 @@ class PPO(DAPGMixin, ActorCriticBase):
         if self.normalize_value:
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
+
+    def play_steps(self):
+        for n in range(self.horizon_length):
+            if not self.env_autoresets:
+                if any(self.dones):
+                    done_indices = torch.where(self.dones)[0].tolist()
+                    obs_reset = self.env.reset_idx(done_indices)
+                    obs_reset = self._convert_obs(obs_reset)
+                    for k, v in obs_reset.items():
+                        self.obs[k][done_indices] = v
+
+            model_out = self.model_act(self.obs)
+            # collect o_t
+            self.storage.update_data('obses', n, self.obs)
+            for k in ['actions', 'neglogp', 'values', 'mu', 'sigma']:
+                self.storage.update_data(k, n, model_out[k])
+            # do env step
+            actions = torch.clamp(model_out['actions'], -1.0, 1.0)
+            obs, r, self.dones, infos = self.env.step(actions)
+            self.obs = self._convert_obs(obs)
+            r, self.dones = torch.tensor(r, device=self.device), torch.tensor(self.dones, device=self.device)
+            rewards = r.reshape(-1, 1)
+
+            # update dones and rewards after env step
+            self.storage.update_data('dones', n, self.dones)
+            shaped_rewards = self.reward_shaper(rewards.clone())
+            if self.value_bootstrap and 'time_outs' in infos:
+                time_outs = torch.tensor(infos['time_outs'], device=self.device)
+                time_outs = time_outs.reshape(-1, 1)
+                shaped_rewards += self.gamma * model_out['values'] * time_outs.float()
+            self.storage.update_data('rewards', n, shaped_rewards)
+
+            done_indices = torch.where(self.dones)[0].tolist()
+            self.metrics.update(self.epoch, self.env, self.obs, rewards.squeeze(-1), done_indices, infos)
+        self.metrics.flush_video_buf(self.epoch)
+
+        model_out = self.model_act(obs)
+        last_values = model_out['values']
+
+        self.storage.compute_return(last_values, self.gamma, self.tau)
+        self.storage.prepare_training()
+
+        values = self.storage.data_dict['values']
+        returns = self.storage.data_dict['returns']
+        if self.normalize_value:
+            self.value_rms.train()
+            self.value_rms.update(values)
+            values = self.value_rms.normalize(values)
+            self.value_rms.update(returns)
+            returns = self.value_rms.normalize(returns)
+            self.value_rms.eval()
+        self.storage.data_dict['values'] = values
+        self.storage.data_dict['returns'] = returns
 
     def train(self):
         obs = self.env.reset()
@@ -315,58 +360,19 @@ class PPO(DAPGMixin, ActorCriticBase):
             obs_dict, r, done, info = self.env.step(mu)
             info['reward'] = r
 
-    def play_steps(self):
-        for n in range(self.horizon_length):
-            if not self.env_autoresets:
-                if any(self.dones):
-                    done_indices = torch.where(self.dones)[0].tolist()
-                    obs_reset = self.env.reset_idx(done_indices)
-                    obs_reset = self._convert_obs(obs_reset)
-                    for k, v in obs_reset.items():
-                        self.obs[k][done_indices] = v
-
-            model_out = self.model_act(self.obs)
-            # collect o_t
-            self.storage.update_data('obses', n, self.obs)
-            for k in ['actions', 'neglogp', 'values', 'mu', 'sigma']:
-                self.storage.update_data(k, n, model_out[k])
-            # do env step
-            actions = torch.clamp(model_out['actions'], -1.0, 1.0)
-            obs, r, self.dones, infos = self.env.step(actions)
-            self.obs = self._convert_obs(obs)
-            r, self.dones = torch.tensor(r, device=self.device), torch.tensor(self.dones, device=self.device)
-            rewards = r.reshape(-1, 1)
-
-            # update dones and rewards after env step
-            self.storage.update_data('dones', n, self.dones)
-            shaped_rewards = self.reward_shaper(rewards.clone())
-            if self.value_bootstrap and 'time_outs' in infos:
-                time_outs = torch.tensor(infos['time_outs'], device=self.device)
-                time_outs = time_outs.reshape(-1, 1)
-                shaped_rewards += self.gamma * model_out['values'] * time_outs.float()
-            self.storage.update_data('rewards', n, shaped_rewards)
-
-            done_indices = torch.where(self.dones)[0].tolist()
-            self.metrics.update(self.epoch, self.env, self.obs, rewards.squeeze(-1), done_indices, infos)
-        self.metrics.flush_video_buf(self.epoch)
-
-        model_out = self.model_act(obs)
-        last_values = model_out['values']
-
-        self.storage.compute_return(last_values, self.gamma, self.tau)
-        self.storage.prepare_training()
-
-        values = self.storage.data_dict['values']
-        returns = self.storage.data_dict['returns']
+    def set_train(self):
+        self.model.train()
+        if self.normalize_input:
+            self.obs_rms.train()
         if self.normalize_value:
             self.value_rms.train()
-            self.value_rms.update(values)
-            values = self.value_rms.normalize(values)
-            self.value_rms.update(returns)
-            returns = self.value_rms.normalize(returns)
+
+    def set_eval(self):
+        self.model.eval()
+        if self.normalize_input:
+            self.obs_rms.eval()
+        if self.normalize_value:
             self.value_rms.eval()
-        self.storage.data_dict['values'] = values
-        self.storage.data_dict['returns'] = returns
 
     def save(self, f):
         ckpt = {

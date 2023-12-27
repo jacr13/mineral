@@ -2,7 +2,6 @@ import collections
 import itertools
 import os
 import re
-import time
 from copy import deepcopy
 
 import numpy as np
@@ -35,7 +34,7 @@ class SAC(ActorCriticBase):
         self.max_agent_steps = int(self.sac_config.max_agent_steps)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        # --- Obs Normalizer ---
+        # --- Normalizers ---
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -102,17 +101,6 @@ class SAC(ActorCriticBase):
             init_alpha = np.log(self.sac_config.init_alpha)
             self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
             self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
-
-    def get_alpha(self, detach=True, scalar=False):
-        if self.sac_config.alpha is None:
-            alpha = self.log_alpha.exp()
-            if detach:
-                alpha = alpha.detach()
-            if scalar:
-                alpha = alpha.item()
-        else:
-            alpha = self.sac_config.alpha
-        return alpha
 
     def get_actions(self, obs=None, z=None, sample=True, logprob=False):
         if z is None:
@@ -253,6 +241,17 @@ class SAC(ActorCriticBase):
             log_dict["train/grad_norm/actor"] = torch.mean(train_result["actor_grad_norm"]).item()
         return {**metrics, **log_dict}
 
+    def get_alpha(self, detach=True, scalar=False):
+        if self.sac_config.alpha is None:
+            alpha = self.log_alpha.exp()
+            if detach:
+                alpha = alpha.detach()
+            if scalar:
+                alpha = alpha.item()
+        else:
+            alpha = self.sac_config.alpha
+        return alpha
+
     def update_critic(self, obs, action, reward, next_obs, done):
         with torch.no_grad():
             if self.normalize_input:
@@ -303,16 +302,6 @@ class SAC(ActorCriticBase):
     def eval(self):
         raise NotImplementedError
 
-    def set_eval(self):
-        if self.normalize_input:
-            self.obs_rms.eval()
-        self.encoder.eval()
-        self.actor.eval()
-        self.critic.eval()
-        self.encoder_target.eval()
-        self.actor_target.eval()
-        self.critic_target.eval()
-
     def set_train(self):
         if self.normalize_input:
             self.obs_rms.train()
@@ -322,6 +311,16 @@ class SAC(ActorCriticBase):
         self.encoder_target.train()
         self.actor_target.train()
         self.critic_target.train()
+
+    def set_eval(self):
+        if self.normalize_input:
+            self.obs_rms.eval()
+        self.encoder.eval()
+        self.actor.eval()
+        self.critic.eval()
+        self.encoder_target.eval()
+        self.actor_target.eval()
+        self.critic_target.eval()
 
     def save(self, f):
         pass

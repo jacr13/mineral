@@ -20,13 +20,7 @@ class BC(ActorCriticBase):
         self.max_epochs = int(self.bc_config.max_epochs)
         super().__init__(env, output_dir, full_cfg, **kwargs)
 
-        encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
-        ModelCls = getattr(models, self.network_config.get('model'))
-        model_kwargs = self.network_config.get('model_kwargs', {})
-        self.model = ModelCls(self.obs_space, self.action_dim, encoder=encoder, encoder_kwargs=encoder_kwargs, **model_kwargs)
-        self.model = self.model.to(self.device)
-        print(self.model, '\n')
-
+        # --- Normalizers ---
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -38,6 +32,15 @@ class BC(ActorCriticBase):
         else:
             self.obs_rms = None
 
+        # --- Model ---
+        encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
+        ModelCls = getattr(models, self.network_config.get('model'))
+        model_kwargs = self.network_config.get('model_kwargs', {})
+        self.model = ModelCls(self.obs_space, self.action_dim, encoder=encoder, encoder_kwargs=encoder_kwargs, **model_kwargs)
+        self.model = self.model.to(self.device)
+        print(self.model, '\n')
+
+        # --- Optim ---
         OptimCls = getattr(torch.optim, self.bc_config.optim_type)
         self.optim = OptimCls(
             self.model.parameters(),
@@ -46,7 +49,6 @@ class BC(ActorCriticBase):
         print(self.optim, '\n')
 
         self.reward_shaper = RewardShaper(**self.bc_config.reward_shaper)
-
         self.loss_weights = self.bc_config.get('loss_weights', {})
 
     def dataloader(self, dataset, split='train'):
@@ -64,6 +66,11 @@ class BC(ActorCriticBase):
         )
         return loader
 
+    def get_actions(self, obs, sample=True):
+        mu, sigma, distr = self.actor(obs)
+        actions = distr.sample() if sample else mu
+        return actions
+
     def actor(self, obs, **kwargs):
         if self.normalize_input:
             # TODO: make this work with (B, T, ...) inputs
@@ -75,6 +82,59 @@ class BC(ActorCriticBase):
         else:
             mu, sigma, distr = model_out
         return mu, sigma, distr
+
+    @torch.no_grad()
+    def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
+        traj_obs = {
+            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
+            for k, v in self.obs_space.items()
+        }
+        traj_actions = torch.empty((self.num_actors, timesteps) + (self.action_dim,), device=self.device)
+        traj_rewards = torch.empty((self.num_actors, timesteps), device=self.device)
+        traj_next_obs = {
+            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
+            for k, v in self.obs_space.items()
+        }
+        traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
+
+        for i in range(timesteps):
+            if not self.env_autoresets:
+                if any(self.dones):
+                    done_indices = torch.where(self.dones)[0].tolist()
+                    obs_reset = self.env.reset_idx(done_indices)
+                    obs_reset = self._convert_obs(obs_reset)
+                    for k, v in obs_reset.items():
+                        self.obs[k][done_indices] = v
+
+            if random:
+                actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
+            else:
+                actions = self.get_actions(self.obs, sample=sample)
+
+            next_obs, rewards, dones, infos = env.step(actions)
+            next_obs = self._convert_obs(next_obs)
+            rewards, self.dones = torch.as_tensor(rewards, device=self.device), torch.as_tensor(dones, device=self.device)
+
+            done_indices = torch.where(self.dones)[0].tolist()
+            self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
+
+            # if self.bc_config.handle_timeout:
+            #     dones = handle_timeout(dones, infos)
+            for k, v in self.obs.items():
+                traj_obs[k][:, i] = v
+            traj_actions[:, i] = actions
+            traj_dones[:, i] = dones
+            traj_rewards[:, i] = rewards
+            for k, v in next_obs.items():
+                traj_next_obs[k][:, i] = v
+            self.obs = next_obs
+
+        self.metrics.flush_video_buf(self.epoch)
+
+        # traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
+        traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
+        data = None
+        return data, timesteps * self.num_actors
 
     def train(self):
         assert self.datasets is not None
@@ -174,64 +234,6 @@ class BC(ActorCriticBase):
         eval_metrics = self.metrics.result(eval_metrics)
         self.writer.add(self.mini_epoch, eval_metrics)
         self.writer.write()
-
-    @torch.no_grad()
-    def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
-        traj_obs = {
-            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
-            for k, v in self.obs_space.items()
-        }
-        traj_actions = torch.empty((self.num_actors, timesteps) + (self.action_dim,), device=self.device)
-        traj_rewards = torch.empty((self.num_actors, timesteps), device=self.device)
-        traj_next_obs = {
-            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
-            for k, v in self.obs_space.items()
-        }
-        traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
-
-        for i in range(timesteps):
-            if not self.env_autoresets:
-                if any(self.dones):
-                    done_indices = torch.where(self.dones)[0].tolist()
-                    obs_reset = self.env.reset_idx(done_indices)
-                    obs_reset = self._convert_obs(obs_reset)
-                    for k, v in obs_reset.items():
-                        self.obs[k][done_indices] = v
-
-            if random:
-                actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
-            else:
-                actions = self.get_actions(self.obs, sample=sample)
-
-            next_obs, rewards, dones, infos = env.step(actions)
-            next_obs = self._convert_obs(next_obs)
-            rewards, self.dones = torch.as_tensor(rewards, device=self.device), torch.as_tensor(dones, device=self.device)
-
-            done_indices = torch.where(self.dones)[0].tolist()
-            self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
-
-            # if self.bc_config.handle_timeout:
-            #     dones = handle_timeout(dones, infos)
-            for k, v in self.obs.items():
-                traj_obs[k][:, i] = v
-            traj_actions[:, i] = actions
-            traj_dones[:, i] = dones
-            traj_rewards[:, i] = rewards
-            for k, v in next_obs.items():
-                traj_next_obs[k][:, i] = v
-            self.obs = next_obs
-
-        self.metrics.flush_video_buf(self.epoch)
-
-        # traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
-        traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
-        data = None
-        return data, timesteps * self.num_actors
-
-    def get_actions(self, obs, sample=True):
-        mu, sigma, distr = self.actor(obs)
-        actions = distr.sample() if sample else mu
-        return actions
 
     def set_train(self):
         self.model.train()
