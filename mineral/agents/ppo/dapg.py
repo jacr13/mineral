@@ -6,6 +6,7 @@ import torch
 class DAPGMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         # ---- DAPG Param ----
         self.dapg_config = self.ppo_config.get('dapg', None)
         if self.dapg_config is not None:
@@ -44,7 +45,7 @@ class DAPGMixin:
         demo_obs_dict, demo_action, demo_reward, demo_done, demo_info = demo_batch
 
         demo_obs_dict = {
-            k: v.to(device='cpu' if re.match(self.obs_keys_cpu, k) else self.device) for k, v in demo_obs_dict.items()
+            k: v.to(device='cpu' if re.match(self.cpu_obs_keys, k) else self.device) for k, v in demo_obs_dict.items()
         }
         demo_action = demo_action.to(self.device)
         demo_reward, demo_done = demo_reward.to(self.device), demo_done.to(self.device)

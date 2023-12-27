@@ -173,7 +173,7 @@ class BC(ActorCriticBase):
 
         obs, action, reward, done, info = batch
 
-        obs = {k: v.to(device='cpu' if re.match(self.obs_keys_cpu, k) else self.device) for k, v in obs.items()}
+        obs = {k: v.to(device='cpu' if re.match(self.cpu_obs_keys, k) else self.device) for k, v in obs.items()}
         action, reward, done = action.to(self.device), reward.to(self.device), done.to(self.device)
 
         B, T = done.shape[:2]

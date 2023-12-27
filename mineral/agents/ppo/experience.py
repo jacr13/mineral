@@ -15,11 +15,11 @@ def transform_op(arr):
 
 
 class ExperienceBuffer(Dataset):
-    def __init__(self, num_envs, horizon_length, batch_size, minibatch_size, obs_space, act_dim, device, obs_keys_cpu):
+    def __init__(self, num_envs, horizon_length, batch_size, minibatch_size, obs_space, act_dim, device, cpu_obs_keys):
         self.device = device
         self.num_envs = num_envs
         self.transitions_per_env = horizon_length
-        self.obs_keys_cpu = obs_keys_cpu
+        self.cpu_obs_keys = cpu_obs_keys
 
         self.data_dict = None
         self.obs_space = obs_space
@@ -46,7 +46,7 @@ class ExperienceBuffer(Dataset):
             buffer = torch.zeros(
                 (self.transitions_per_env, self.num_envs, *v),
                 dtype=torch.float32,
-                device='cpu' if re.match(self.obs_keys_cpu, k) else self.device,
+                device='cpu' if re.match(self.cpu_obs_keys, k) else self.device,
             )
             obs_dict[k] = buffer
         self.storage_dict['obses'] = obs_dict

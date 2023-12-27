@@ -37,7 +37,7 @@ class ActorCriticBase:
         self.env_autoresets = full_cfg.task.get('env_autoresets', True)  # set to False to explicitly call env.reset
 
         # --- Inputs ---
-        self.obs_keys_cpu = re.compile(full_cfg.agent.get('obs_keys_cpu', '$^'))
+        self.cpu_obs_keys = re.compile(full_cfg.agent.get('cpu_obs_keys', '$^'))
         self.obs_rms_keys = re.compile(full_cfg.agent.get('obs_rms_keys', ''))
         self.normalize_input = full_cfg.agent.get('normalize_input', False)
         self.observation_space = self.env.observation_space
@@ -123,7 +123,7 @@ class ActorCriticBase:
         _obs = {}
         for k, v in obs.items():
             if isinstance(v, np.ndarray):
-                _obs[k] = torch.tensor(v, device=self.device if not re.match(self.obs_keys_cpu, k) else 'cpu')
+                _obs[k] = torch.tensor(v, device=self.device if not re.match(self.cpu_obs_keys, k) else 'cpu')
             else:
                 # assert isinstance(v, torch.Tensor)
                 _obs[k] = v

@@ -97,7 +97,7 @@ class PPO(DAPGMixin, ActorCriticBase):
             self.obs_space,
             self.action_dim,
             self.device,
-            self.obs_keys_cpu,
+            self.cpu_obs_keys,
         )
         self.reward_shaper = RewardShaper(**self.ppo_config['reward_shaper'])
 
