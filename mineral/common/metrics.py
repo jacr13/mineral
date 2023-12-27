@@ -16,7 +16,7 @@ class Metrics(nn.Module):
         self.num_actors = num_actors
         self.device = device
 
-        # ---- Logging ----
+        # --- Logging ---
         self.env_render = full_cfg.env_render
         info_keys_cfg = full_cfg.agent.get('info_keys', {})
         self.info_keys_sum = re.compile(info_keys_cfg.get('sum', '$^'))

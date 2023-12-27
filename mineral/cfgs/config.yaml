@@ -27,15 +27,9 @@ experiment: ''
 # if set to positive integer, overrides the default number of environments
 num_envs: ''
 
-# seed - set to -1 to choose random seed
-seed: 42
-# set to True for deterministic performance
-torch_deterministic: False
-
 ## Logging
 # logdir: 'debug'
 logdir: 'workdir/${task.name}'
-
 wandb:
   mode: offline  # online | offline | disabled
   project: project_name
@@ -56,14 +50,19 @@ device_id: 0  # 'cuda:?', -1 for 'cpu'
 sim_device: ???
 # device to run RL
 rl_device: ???
+# which Vulkan graphics device ID to use for rendering
 graphics_device_id: 0
 # disables rendering
 headless: True
 # whether to call env.render(mode='rgb_array')
 env_render: False
+# whether to use multi-gpu training with `huggingface.Accelerate`
+multi_gpu: False
 
-## RL Arguments
+## Run Arguments
 run: 'train'  # train | eval | train_eval
 ckpt: ''  # ckpt file to load
 ckpt_keys: ''  # set to '' to load all ckpt keys
-multi_gpu: False  # set to True when using multi-gpu training with `huggingface.Accelerate`
+
+seed: 42  # set to -1 to choose random seed
+torch_deterministic: False  # force the usage of deterministic algorithms in PyTorch

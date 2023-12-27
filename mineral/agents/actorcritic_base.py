@@ -15,6 +15,7 @@ class ActorCriticBase:
         self.output_dir = output_dir
         self.full_cfg = full_cfg
 
+        # --- Device ---
         self.rank = -1
         self.device = full_cfg.rl_device
         self.multi_gpu = full_cfg.multi_gpu
@@ -26,16 +27,16 @@ class ActorCriticBase:
             self.accelerator = accelerator
             self.device = self.accelerator.device
 
-        # ---- Datasets ----
+        # --- Datasets ---
         self.datasets = datasets
 
-        # ---- Environment ----
+        # --- Environment ---
         self.env = env
         action_space = self.env.action_space
         self.action_dim = action_space.shape[0]
         self.env_autoresets = full_cfg.task.get('env_autoresets', True)  # set to False to explicitly call env.reset
 
-        # ---- Inputs ----
+        # --- Inputs ---
         self.obs_keys_cpu = re.compile(full_cfg.agent.get('obs_keys_cpu', '$^'))
         self.normalize_keys_rms = re.compile(full_cfg.agent.get('normalize_keys_rms', ''))
         self.normalize_input = full_cfg.agent.get('normalize_input', False)
@@ -46,7 +47,7 @@ class ActorCriticBase:
             obs_space = {'obs': self.observation_space.shape}
         self.obs_space = obs_space
 
-        # ---- Logging ----
+        # --- Logging ---
         self.ckpt_dir = os.path.join(self.output_dir, 'ckpt')
         os.makedirs(self.ckpt_dir, exist_ok=True)
         self.tb_dir = os.path.join(self.output_dir, 'tb')
@@ -65,6 +66,7 @@ class ActorCriticBase:
         self.eval_every = full_cfg.agent.get('eval_every', -1)
         self.best_stat = None
 
+        # --- Training ---
         self.epoch = -1
         self.mini_epoch = -1
         self.agent_steps = 0
@@ -117,7 +119,7 @@ class ActorCriticBase:
         if not isinstance(obs, dict):
             obs = {'obs': obs}
 
-        # Copy obs dict since env.step may modify it (ie. IsaacGymEnvs)
+        # NOTE: copying obs dict since env.step may modify it (ie. IsaacGymEnvs)
         _obs = {}
         for k, v in obs.items():
             if isinstance(v, np.ndarray):

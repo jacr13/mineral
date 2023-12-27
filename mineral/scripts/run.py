@@ -97,7 +97,7 @@ def main(config: DictConfig):
     # set numpy formatting for printing only
     set_np_formatting()
 
-    # ---------- Setup Run ----------
+    # --- Setup Run ---
     logdir = config.logdir
     os.makedirs(logdir, exist_ok=True)
 
@@ -149,7 +149,7 @@ def main(config: DictConfig):
         print(f'run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
 
-    # ---------- Run Agent ----------
+    # --- Run Agent ---
     cprint('Making Envs', 'green', attrs=['bold'])
     env = make_envs(config)
     print('-' * 20)
