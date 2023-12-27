@@ -1,10 +1,8 @@
-import functools
 import os
 import pprint
 import sys
 
 import hydra
-import numpy as np
 import wandb
 import yaml
 from hydra.utils import to_absolute_path
@@ -13,65 +11,22 @@ from termcolor import cprint
 
 
 def make_envs(config):
-    return make_isaacgym_envs(config)
+    from .. import envs
+
+    task_suite = config.task.get('suite', 'isaacgymenvs')
+    TaskSuite = getattr(envs, task_suite)
+    return TaskSuite.make_envs(config)
 
 
 def make_datasets(config, env):
-    return None
+    if not hasattr(config.agent, 'datasets'):
+        return None
 
+    from .. import envs
 
-def import_isaacgym():
-    # https://github.com/NVlabs/sim-web-visualizer/blob/main/example/isaacgym/train_isaacgym_remote_server.ipynb
-    import os
-    import sys
-    from ctypes import cdll
-    from pathlib import Path
-
-    is_conda = 'CONDA_PREFIX' in os.environ or 'CONDA_DEFAULT_ENV' in os.environ
-    if is_conda:
-        version_info = sys.version_info
-        if version_info.major == 3 and version_info.minor >= 8:
-            conda_lib_path = (
-                Path(sys.executable).parent.parent / f"lib/libpython{version_info.major}.{version_info.minor}.so.1.0"
-            )
-        else:
-            conda_lib_path = (
-                Path(sys.executable).parent.parent / f"lib/libpython{version_info.major}.{version_info.minor}m.so.1.0"
-            )
-        python_lib = cdll.LoadLibrary(str(conda_lib_path))
-        print(f"Load Python lib {conda_lib_path}")
-
-    import isaacgym
-    import torch
-
-
-def make_isaacgym_envs(config):
-    # ---
-
-    from isaacgymenvs.tasks import isaacgym_task_map
-    from isaacgymenvs.utils.reformat import omegaconf_to_dict
-
-    # `xvfb-run -a -s "-screen 0 256x256x24 -ac +extension GLX +render -noreset" python ...`
-    # set virtual_screen_capture=True and headless=False to get IsaacGym GUI window
-    # if you get `OSError: Pillow was built without XCB support`, then `pip install -U Pillow`
-    # (switch to pip instead of conda package)  # https://stackoverflow.com/a/66682282
-    # TODO: https://github.com/NVlabs/sim-web-visualizer/tree/main/example/isaacgym
-
-    if config.env_render:
-        headless, virtual_screen_capture = False, True
-    else:
-        headless, virtual_screen_capture = config.headless, False
-
-    env = isaacgym_task_map[config.task_name](
-        cfg=omegaconf_to_dict(config.task),
-        sim_device=config.sim_device,
-        rl_device=config.rl_device,
-        graphics_device_id=config.graphics_device_id,
-        headless=headless,
-        virtual_screen_capture=virtual_screen_capture,
-        force_render=False,
-    )
-    return env
+    task_suite = config.task.get('suite', 'isaacgymenvs')
+    TaskSuite = getattr(envs, task_suite)
+    return TaskSuite.make_datasets(config, env)
 
 
 def save_run_metadata(logdir, run_name, run_id, resolved_config):
@@ -196,6 +151,8 @@ if __name__ == '__main__':
         version_base='1.1',
     )(lambda x: c.append(x))()
     config = c[0]
+
+    from ..envs.isaacgym import import_isaacgym
 
     import_isaacgym()  # uncomment for isaacgym (need to import before torch)
 

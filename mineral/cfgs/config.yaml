@@ -21,11 +21,10 @@ hydra:
       simple:
         format: "[%(levelname)s: %(module)s:%(lineno)d %(asctime)s] %(message)s"
 
-# Task name - used to pick the class to load
+## Task
 task_name: ${task.name}
+num_envs: ''  # if set to positive integer, overrides the default number of environments
 experiment: ''
-# if set to positive integer, overrides the default number of environments
-num_envs: ''
 
 ## Logging
 # logdir: 'debug'
