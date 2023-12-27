@@ -13,12 +13,12 @@ from . import models
 
 
 class BC(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg, **kwargs):
+    def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bc_config = full_cfg.agent.bc
         self.num_actors = self.bc_config.num_actors
         self.max_epochs = int(self.bc_config.max_epochs)
-        super().__init__(env, output_dir, full_cfg, **kwargs)
+        super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
         if self.normalize_input:

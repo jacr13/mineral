@@ -16,12 +16,12 @@ from .utils import AdaptiveScheduler, LinearScheduler, adjust_learning_rate_cos
 
 
 class PPO(DAPGMixin, ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg, **kwargs):
+    def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
         self.num_actors = self.ppo_config.num_actors
         self.max_agent_steps = int(self.ppo_config.max_agent_steps)
-        super().__init__(env, output_dir, full_cfg, **kwargs)
+        super().__init__(full_cfg, **kwargs)
 
         # ---- Normalizers ----
         rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)

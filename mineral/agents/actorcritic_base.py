@@ -11,9 +11,9 @@ from ..common.writer import TensorboardWriter, WandbWriter, Writer
 
 
 class ActorCriticBase:
-    def __init__(self, env, output_dir, full_cfg, accelerator=None, datasets=None):
-        self.output_dir = output_dir
+    def __init__(self, full_cfg, logdir=None, accelerator=None, datasets=None, env=None):
         self.full_cfg = full_cfg
+        self.logdir = logdir
 
         # --- Device ---
         self.rank = -1
@@ -48,12 +48,12 @@ class ActorCriticBase:
         self.obs_space = obs_space
 
         # --- Logging ---
-        self.ckpt_dir = os.path.join(self.output_dir, 'ckpt')
+        self.ckpt_dir = os.path.join(self.logdir, 'ckpt')
         os.makedirs(self.ckpt_dir, exist_ok=True)
-        self.tb_dir = os.path.join(self.output_dir, 'tb')
+        self.tb_dir = os.path.join(self.logdir, 'tb')
         os.makedirs(self.tb_dir, exist_ok=True)
 
-        self.metrics = Metrics(full_cfg, self.output_dir, self.num_actors, self.device)
+        self.metrics = Metrics(full_cfg, self.logdir, self.num_actors, self.device)
         resolved_config = OmegaConf.to_container(full_cfg, resolve=True)
         writers = [
             WandbWriter(),

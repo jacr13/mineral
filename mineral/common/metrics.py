@@ -10,9 +10,9 @@ from .tracker import Tracker
 
 
 class Metrics(nn.Module):
-    def __init__(self, full_cfg, output_dir, num_actors, device):
+    def __init__(self, full_cfg, logdir, num_actors, device):
         super().__init__()
-        self.output_dir = output_dir
+        self.logdir = logdir
         self.num_actors = num_actors
         self.device = device
 

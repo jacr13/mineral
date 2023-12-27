@@ -162,7 +162,7 @@ def main(config: DictConfig):
 
     AgentCls = getattr(agents, config.agent.algo)
     print(f'AgentCls: {AgentCls}', '\n')
-    agent = AgentCls(env, logdir, config, accelerator=accelerator, datasets=datasets)
+    agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env)
 
     if config.ckpt:
         print(f'Loading checkpoint: {config.ckpt}')

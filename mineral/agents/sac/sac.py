@@ -27,12 +27,12 @@ class Lambda(nn.Module):
 
 
 class SAC(ActorCriticBase):
-    def __init__(self, env, output_dir, full_cfg, **kwargs):
+    def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.sac_config = full_cfg.agent.sac
         self.num_actors = self.sac_config.num_actors
         self.max_agent_steps = int(self.sac_config.max_agent_steps)
-        super().__init__(env, output_dir, full_cfg, **kwargs)
+        super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
         if self.normalize_input:
