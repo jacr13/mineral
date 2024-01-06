@@ -18,12 +18,12 @@ from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
 from ...common.tracker import Tracker
-from ..actorcritic_base import ActorCriticBase
+from ..agent import Agent
 from . import models
 from .utils import CriticDataset, grad_norm
 
 
-class SHAC(ActorCriticBase):
+class SHAC(Agent):
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.shac_config = full_cfg.agent.shac
@@ -246,25 +246,28 @@ class SHAC(ActorCriticBase):
                     param_targ.data.mul_(alpha)
                     param_targ.data.add_((1.0 - alpha) * param.data)
 
-            # gather metrics
+            # gather train metrics
             results = {**actor_results, **critic_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
-            metrics = {"epoch": self.epoch, "lr": lr, **metrics}
+            metrics.update({"epoch": self.epoch, "lr": lr})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
+            # timing metrics
             timings_total_names = ("train/update_actor", "train/make_critic_dataset", "train/update_critic")
             timings = self.timer.stats(step=self.agent_steps, total_names=timings_total_names, reset=False)
-            metrics = {**metrics, **{f"train_timings/{k}": v for k, v in timings.items()}}
+            timing_metrics = {f"train_timings/{k}": v for k, v in timings.items()}
+            metrics.update(timing_metrics)
 
+            # episode metrics
             if len(self.episode_rewards_hist) > 0:
                 mean_episode_rewards = self.episode_rewards_tracker.mean()
                 mean_episode_lengths = self.episode_lengths_tracker.mean()
                 mean_episode_discounted_rewards = self.episode_discounted_rewards_tracker.mean()
 
                 episode_metrics = {
-                    "train_metrics/episode_rewards": mean_episode_rewards,
-                    "train_metrics/episode_lengths": mean_episode_lengths,
-                    "train_metrics/episode_discounted_rewards": mean_episode_discounted_rewards,
+                    "train_scores/episode_rewards": mean_episode_rewards,
+                    "train_scores/episode_lengths": mean_episode_lengths,
+                    "train_scores/episode_discounted_rewards": mean_episode_discounted_rewards,
                 }
                 metrics.update(episode_metrics)
             else:
@@ -281,7 +284,7 @@ class SHAC(ActorCriticBase):
                 print(
                     f'Epoch: {self.epoch} |',
                     f'Agent Steps: {int(self.agent_steps):,} |',
-                    f'SPS: {timings["lastrate"]:.2f} |',
+                    f'SPS: {timings["lastrate"]:.2f} |',  # actually totalrate since we don't reset the timer
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                     f'Stats:',
                     f'ep_rewards {mean_episode_rewards:.2f},',
@@ -548,7 +551,7 @@ class SHAC(ActorCriticBase):
 
     def eval(self):
         mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors, deterministic=True,
+            num_episodes=self.num_actors, deterministic=True
         )
         print(
             f'mean ep_rewards = {mean_episode_rewards},',
@@ -573,8 +576,8 @@ class SHAC(ActorCriticBase):
         torch.save(ckpt, f)
 
     def load(self, f, ckpt_keys=''):
-        ckpt = torch.load(f, map_location=self.device)
         all_ckpt_keys = ('actor', 'critic', 'critic_target', 'obs_rms', 'ret_rms')
+        ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
                 print(f'Warning: ckpt skipped loading `{k}`')

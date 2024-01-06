@@ -8,11 +8,11 @@ import torch.nn.functional as F
 
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
-from ..actorcritic_base import ActorCriticBase
+from ..agent import Agent
 from . import models
 
 
-class BC(ActorCriticBase):
+class BC(Agent):
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bc_config = full_cfg.agent.bc
@@ -145,13 +145,13 @@ class BC(ActorCriticBase):
 
             for i, batch in enumerate(self.train_dataloader):
                 self.mini_epoch += 1
-                train_result = self.update_model(batch)
-                metrics = {
-                    "epoch": self.epoch,
-                    "mini_epoch": self.mini_epoch,
-                    **train_result,
-                }
-                metrics = {f"train/{k}": v for k, v in metrics.items() if v is not None}
+                results = self.update_model(batch)
+
+                # gather train metrics
+                metrics = {k: torch.stack(v).mean().item() for k, v in results.items()}
+                metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch})
+                metrics = {f"train_stats/{k}": v for k, v in metrics.items() if v is not None}
+
                 self.writer.add(self.mini_epoch, metrics)
                 self.writer.write()
 
@@ -169,7 +169,7 @@ class BC(ActorCriticBase):
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def update_model(self, batch):
-        train_result = collections.defaultdict(list)
+        results = collections.defaultdict(list)
 
         obs, action, reward, done, info = batch
 
@@ -200,15 +200,14 @@ class BC(ActorCriticBase):
             grad_norm = None
         self.optim.step()
 
-        train_result["loss/total"].append(loss)
+        results["loss/total"].append(loss)
         for k, v in losses.items():
             if v is not None:
-                train_result[f"loss/{k}"].append(v)
+                results[f"loss/{k}"].append(v)
         if grad_norm is not None:
-            train_result["grad_norm/all"].append(grad_norm)
+            results["grad_norm/all"].append(grad_norm)
 
-        train_result = {k: torch.stack(v).mean().item() for k, v in train_result.items()}
-        return train_result
+        return results
 
     def eval(self):
         self.set_eval()
@@ -228,8 +227,8 @@ class BC(ActorCriticBase):
             print(f"Evaluated {eval_episodes} / {total_eval_episodes} episodes")
 
         eval_metrics = {
-            "metrics/episode_rewards": self.metrics.episode_rewards.mean(),
-            "metrics/episode_lengths": self.metrics.episode_lengths.mean(),
+            "eval_scores/episode_rewards": self.metrics.episode_rewards.mean(),
+            "eval_scores/episode_lengths": self.metrics.episode_lengths.mean(),
         }
         eval_metrics = self.metrics.result(eval_metrics)
         self.writer.add(self.mini_epoch, eval_metrics)
@@ -254,19 +253,18 @@ class BC(ActorCriticBase):
             'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
         }
         torch.save(ckpt, f)
-        # TODO: accelerator.save
 
     def load(self, f, ckpt_keys=''):
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'model', 'optim', 'obs_rms')
         ckpt = torch.load(f, map_location=self.device)
-        for k in ('epoch', 'mini_epoch', 'model', 'optim', 'obs_rms'):
+        for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
                 print(f'Warning: ckpt skipped loading `{k}`')
                 continue
-            if k == 'obs_rms' and not self.normalize_input:
+            if k == 'obs_rms' and (not self.normalize_input):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):
-                # TODO: accelerator.load
                 getattr(self, k).load_state_dict(ckpt[k])
             else:
                 setattr(self, k, ckpt[k])

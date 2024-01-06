@@ -22,16 +22,12 @@ network:
 
     #   norm_type: null
     #   act_type: ELU
-    # actor_dist_kwargs:
-    #   dist: normal
+    # actor_dist_kwargs: {dist_type: normal}
     # fixed_sigma: True
 
       norm_type: LayerNorm
       act_type: SiLU
-    actor_dist_kwargs:
-      dist: dreamerv3_normal
-      minstd: 0.1
-      maxstd: 1.0
+    actor_dist_kwargs: {dist_type: dreamerv3_normal, minstd: 0.1, maxstd: 1.0}
     fixed_sigma: False
 
 ppo:
@@ -60,7 +56,7 @@ ppo:
   bounds_type: bound
   max_grad_norm: 1.0
   truncate_grads: True
-  horizon_length: 8
+  horizon_len: 8
   minibatch_size: 32768
   mini_epochs: 5
   max_agent_steps: 700e6
