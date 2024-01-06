@@ -1,7 +1,7 @@
+import functools
 import os
 import pprint
 import sys
-import functools
 
 import hydra
 import wandb
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     )(lambda x: c.append(x))()
     config = c[0]
 
-    from ..envs.isaacgym import import_isaacgym
+    from ..envs.isaacgymenvs import import_isaacgym
 
     import_isaacgym()  # uncomment for isaacgym (need to import before torch)
 
