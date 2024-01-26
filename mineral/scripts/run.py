@@ -46,7 +46,7 @@ def main(config: DictConfig):
     else:
         from .utils import set_np_formatting, set_seed
 
-    assert config.seed >= 0  # NOTE: seed = -1 unsupported
+    assert config.seed >= 0  # NOTE: not supporting seed = -1 b/c not using set_seed(rank=...)
     set_seed = functools.partial(set_seed, torch_deterministic=config.torch_deterministic)
     # set numpy formatting for printing only
     set_np_formatting()
@@ -107,7 +107,7 @@ def main(config: DictConfig):
         print(f'run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
 
-    # --- Run Agent ---
+    # --- Make Envs, Datasets, Agent ---
     cprint('Making Envs', 'green', attrs=['bold'])
     env = make_envs(config)
     print('-' * 20)
@@ -126,6 +126,7 @@ def main(config: DictConfig):
         print(f'Loading checkpoint: {config.ckpt}')
         agent.load(config.ckpt, ckpt_keys=config.ckpt_keys)
 
+    # --- Run Agent ---
     print('-' * 20)
     cprint(f'Running: {config.run}', 'green', attrs=['bold'])
     if config.run == 'train':
@@ -141,9 +142,11 @@ def main(config: DictConfig):
     else:
         raise NotImplementedError(config.run)
 
+    # --- Cleanup ---
     if rank == 0:
         # close wandb
         wandb.finish()
+    # env.close()
 
 
 if __name__ == '__main__':
