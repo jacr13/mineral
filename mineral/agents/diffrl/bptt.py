@@ -6,6 +6,7 @@
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 import collections
+import itertools
 import os
 import re
 from copy import deepcopy
@@ -14,6 +15,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from ... import nets
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
@@ -55,6 +57,16 @@ class BPTT(Agent):
         else:
             self.obs_rms = None
 
+        # --- Encoder ---
+        if self.network_config.get("encoder", None) is not None:
+            EncoderCls = getattr(nets, self.network_config.encoder)
+            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+        else:
+            f = lambda x: x['obs']
+            self.encoder = nets.Lambda(f)
+        self.encoder.to(self.device)
+        print('Encoder:', self.encoder)
+
         # --- Model ---
         obs_dim = self.obs_space['obs']
         obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
@@ -69,10 +81,12 @@ class BPTT(Agent):
         # --- Optim ---
         OptimCls = getattr(torch.optim, self.bptt_config.optim_type)
         self.actor_optim = OptimCls(
-            self.actor.parameters(),
+            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
             **self.bptt_config.get("actor_optim_kwargs", {}),
         )
         print('Actor Optim:', self.actor_optim, '\n')
+
+        # TODO: encoder_lr? currently overridden by actor_lr
         self.actor_lr = self.actor_optim.defaults["lr"]
 
         # --- Replay Buffer ---
@@ -98,8 +112,8 @@ class BPTT(Agent):
 
     def get_actions(self, obs, sample=True):
         # NOTE: obs_rms.normalize(...) occurs elsewhere
-        obs = obs['obs']
-        mu, sigma, distr = self.actor(obs)
+        z = self.encoder(obs)
+        mu, sigma, distr = self.actor(z)
         if sample:
             actions = distr.rsample()
         else:
@@ -397,13 +411,14 @@ class BPTT(Agent):
 
     def save(self, f):
         ckpt = {
+            'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
             'obs_rms': self.obs_rms.state_dict() if self.bptt_config.normalize_input else None,
         }
         torch.save(ckpt, f)
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('actor', 'obs_rms')
+        all_ckpt_keys = ('encoder', 'actor', 'obs_rms')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
