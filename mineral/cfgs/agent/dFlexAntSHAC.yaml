@@ -45,6 +45,7 @@ shac:
   critic_method: td-lambda  # td-lambda | one-step
   lambda: 0.95
   target_critic_alpha: 0.2
+  no_target_critic: False
   critic_iterations: 16
 
   normalize_input: True

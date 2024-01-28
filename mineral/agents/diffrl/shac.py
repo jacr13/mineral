@@ -20,7 +20,7 @@ from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
 from . import models
-from .utils import CriticDataset, grad_norm
+from .utils import CriticDataset, grad_norm, soft_update
 
 
 class SHAC(Agent):
@@ -239,12 +239,11 @@ class SHAC(Agent):
             critic_results = self.update_critic(dataset)
             self.timer.end("train/update_critic")
 
-            # update target critic
-            with torch.no_grad():
-                alpha = self.target_critic_alpha
-                for param, param_targ in zip(self.critic.parameters(), self.critic_target.parameters()):
-                    param_targ.data.mul_(alpha)
-                    param_targ.data.add_((1.0 - alpha) * param.data)
+            if not self.shac_config.no_target_critic:
+                # update target critic
+                with torch.no_grad():
+                    alpha = self.target_critic_alpha
+                    soft_update(self.critic, self.critic_target, alpha)
 
             # gather train metrics
             results = {**actor_results, **critic_results}
