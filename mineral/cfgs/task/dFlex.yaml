@@ -7,4 +7,4 @@ env:
 
   stochastic_init: True
   no_grad: False
-env_autoresets: False
+env_autoresets: True

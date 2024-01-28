@@ -31,7 +31,7 @@ shac:
 
   max_agent_steps: 5e6
   horizon_len: 32
-  num_batch: 4
+  num_critic_batches: 4
   max_epochs: 2000
 
   optim_type: Adam
@@ -45,6 +45,7 @@ shac:
   critic_method: td-lambda  # td-lambda | one-step
   lambda: 0.95
   target_critic_alpha: 0.2
+  no_target_critic: False
   critic_iterations: 16
 
   normalize_input: True

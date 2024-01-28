@@ -2,6 +2,12 @@ import numpy as np
 import torch
 
 
+def soft_update(module, module_target, alpha: float):
+    for param, param_targ in zip(module.parameters(), module_target.parameters()):
+        param_targ.data.mul_(alpha)
+        param_targ.data.add_((1.0 - alpha) * param.data)
+
+
 def grad_norm(params):
     grad_norm = 0.0
     for p in params:
