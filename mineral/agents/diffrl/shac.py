@@ -6,6 +6,7 @@
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 
 import collections
+import itertools
 import os
 import re
 from copy import deepcopy
@@ -14,6 +15,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from ... import nets
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
@@ -67,6 +69,16 @@ class SHAC(Agent):
         if self.shac_config.normalize_ret:
             self.ret_rms = normalizers.RunningMeanStd((), **rms_config).to(self.device)
 
+        # --- Encoder ---
+        if self.network_config.get("encoder", None) is not None:
+            EncoderCls = getattr(nets, self.network_config.encoder)
+            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+        else:
+            f = lambda x: x['obs']
+            self.encoder = nets.Lambda(f)
+        self.encoder.to(self.device)
+        print('Encoder:', self.encoder)
+
         # --- Model ---
         obs_dim = self.obs_space['obs']
         obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
@@ -85,21 +97,23 @@ class SHAC(Agent):
         # --- Optim ---
         OptimCls = getattr(torch.optim, self.shac_config.optim_type)
         self.actor_optim = OptimCls(
-            self.actor.parameters(),
+            itertools.chain(self.encoder.parameters(), self.actor.parameters()),
             **self.shac_config.get("actor_optim_kwargs", {}),
         )
         self.critic_optim = OptimCls(
-            self.critic.parameters(),
+            itertools.chain(self.encoder.parameters(), self.critic.parameters()),
             **self.shac_config.get("critic_optim_kwargs", {}),
         )
         print('Actor Optim:', self.actor_optim)
         print('Critic Optim:', self.critic_optim, '\n')
 
+        # TODO: encoder_lr? currently overridden by actor_lr
         self.actor_lr = self.actor_optim.defaults["lr"]
         self.critic_lr = self.critic_optim.defaults["lr"]
 
         # --- Target Networks ---
-        self.critic_target = deepcopy(self.critic)
+        self.encoder_target = deepcopy(self.encoder) if not self.shac_config.no_target_critic else self.encoder
+        self.critic_target = deepcopy(self.critic) if not self.shac_config.no_target_critic else self.critic
 
         # --- Replay Buffer ---
         assert self.num_actors == self.env.num_envs
@@ -142,8 +156,8 @@ class SHAC(Agent):
 
     def get_actions(self, obs, sample=True):
         # NOTE: obs_rms.normalize(...) occurs elsewhere
-        obs = obs['obs']
-        mu, sigma, distr = self.actor(obs)
+        z = self.encoder(obs)
+        mu, sigma, distr = self.actor(z)
         if sample:
             actions = distr.rsample()
         else:
@@ -211,13 +225,14 @@ class SHAC(Agent):
 
             # learning rate schedule
             if self.shac_config.lr_schedule == 'linear':
+                critic_lr = (1e-5 - self.critic_lr) * float(self.epoch / self.max_epochs) + self.critic_lr
+                for param_group in self.critic_optim.param_groups:
+                    param_group['lr'] = critic_lr
+
                 actor_lr = (1e-5 - self.actor_lr) * float(self.epoch / self.max_epochs) + self.actor_lr
                 for param_group in self.actor_optim.param_groups:
                     param_group['lr'] = actor_lr
                 lr = actor_lr
-                critic_lr = (1e-5 - self.critic_lr) * float(self.epoch / self.max_epochs) + self.critic_lr
-                for param_group in self.critic_optim.param_groups:
-                    param_group['lr'] = critic_lr
             elif self.shac_config.lr_schedule == 'constant':
                 lr = self.actor_lr
             else:
@@ -244,6 +259,7 @@ class SHAC(Agent):
                 # update target critic
                 with torch.no_grad():
                     alpha = self.target_critic_alpha
+                    soft_update(self.encoder, self.encoder_target, alpha)
                     soft_update(self.critic, self.critic_target, alpha)
 
             # gather train metrics
@@ -411,7 +427,8 @@ class SHAC(Agent):
                 rew = rew / torch.sqrt(ret_var + 1e-6)
 
             # value bootstrap when episode terminates
-            next_values[i + 1] = self.critic_target(obs['obs']).squeeze(-1)
+            z_target = self.encoder_target(obs)
+            next_values[i + 1] = self.critic_target(z_target).squeeze(-1)
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
                 terminal_obs = extra_info['obs_before_reset']
@@ -438,7 +455,8 @@ class SHAC(Agent):
                         real_obs = {k: v[[id]] for k, v in terminal_obs.items()}
                         if self.obs_rms is not None:
                             real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
-                        next_values[i + 1, id] = self.critic_target(real_obs['obs']).squeeze(-1)
+                        real_z_target = self.encoder_target(real_obs)
+                        next_values[i + 1, id] = self.critic_target(real_z_target).squeeze(-1)
 
             if (next_values[i + 1] > 1e6).sum() > 0 or (next_values[i + 1] < -1e6).sum() > 0:
                 print('next value error')
@@ -528,7 +546,8 @@ class SHAC(Agent):
         return results
 
     def compute_critic_loss(self, obs, target_values):
-        predicted_values = self.critic(obs['obs']).squeeze(-1)
+        z = self.encoder(obs)
+        predicted_values = self.critic(z).squeeze(-1)
         critic_loss = ((predicted_values - target_values) ** 2).mean()
         return critic_loss
 
@@ -567,8 +586,10 @@ class SHAC(Agent):
 
     def save(self, f):
         ckpt = {
+            'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
+            'encoder_target': self.encoder_target.state_dict(),
             'critic_target': self.critic_target.state_dict(),
             'obs_rms': self.obs_rms.state_dict() if self.shac_config.normalize_input else None,
             'ret_rms': self.ret_rms.state_dict() if self.shac_config.normalize_ret else None,
@@ -576,7 +597,7 @@ class SHAC(Agent):
         torch.save(ckpt, f)
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('actor', 'critic', 'critic_target', 'obs_rms', 'ret_rms')
+        all_ckpt_keys = ('encoder', 'actor', 'critic', 'encoder_target', 'critic_target', 'obs_rms', 'ret_rms')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
