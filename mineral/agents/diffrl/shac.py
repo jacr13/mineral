@@ -46,8 +46,9 @@ class SHAC(Agent):
 
         self.horizon_len = self.shac_config.horizon_len
         self.max_epochs = self.shac_config.max_epochs
-        self.num_batch = self.shac_config.get('num_batch', 4)
-        self.batch_size = self.num_envs * self.horizon_len // self.num_batch
+        self.num_critic_batches = self.shac_config.get('num_critic_batches', 4)
+        self.critic_batch_size = self.num_envs * self.horizon_len // self.num_critic_batches
+        print('Critic batch size:', self.critic_batch_size)
 
         # --- Normalizers ---
         rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
@@ -232,7 +233,7 @@ class SHAC(Agent):
             self.timer.start("train/make_critic_dataset")
             with torch.no_grad():
                 self.compute_target_values()
-                dataset = CriticDataset(self.batch_size, self.obs_buf, self.target_values, drop_last=False)
+                dataset = CriticDataset(self.critic_batch_size, self.obs_buf, self.target_values, drop_last=False)
             self.timer.end("train/make_critic_dataset")
 
             self.timer.start("train/update_critic")

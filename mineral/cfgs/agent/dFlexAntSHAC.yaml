@@ -31,7 +31,7 @@ shac:
 
   max_agent_steps: 5e6
   horizon_len: 32
-  num_batch: 4
+  num_critic_batches: 4
   max_epochs: 2000
 
   optim_type: Adam
