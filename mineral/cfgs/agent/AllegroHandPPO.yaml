@@ -11,9 +11,8 @@ metrics_kwargs:
   # info_keys:
   #   scalar: 'consecutive_successes'
 
-normalize_input: True
-
 network:
+  normalize_input: True
   actor_critic: ActorCritic
   actor_critic_kwargs:
     separate_value_mlp: True

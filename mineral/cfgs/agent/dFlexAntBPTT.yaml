@@ -5,6 +5,7 @@ print_every: 1
 ckpt_every: 100
 
 network:
+  normalize_input: True
   encoder: null
 
   actor: Actor
@@ -36,6 +37,4 @@ bptt:
   truncate_grads: True
 
   gamma: 0.99
-
-  normalize_input: True
   normalize_ret: False

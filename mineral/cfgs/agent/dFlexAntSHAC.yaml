@@ -5,6 +5,7 @@ print_every: 1
 ckpt_every: 100
 
 network:
+  normalize_input: True
   encoder: null
 
   actor: Actor
@@ -47,6 +48,4 @@ shac:
   target_critic_alpha: 0.2
   no_target_critic: False
   critic_iterations: 16
-
-  normalize_input: True
   normalize_ret: False

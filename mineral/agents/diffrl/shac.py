@@ -39,6 +39,7 @@ class SHAC(Agent):
         self.max_episode_length = self.env.episode_length
 
         # --- SHAC Parameters ---
+        self.normalize_ret = self.shac_config.normalize_ret
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
         if self.critic_method == 'td-lambda':
@@ -54,7 +55,7 @@ class SHAC(Agent):
 
         # --- Normalizers ---
         rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
-        if self.shac_config.normalize_input:
+        if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
                 if re.match(self.obs_rms_keys, k):
@@ -66,7 +67,7 @@ class SHAC(Agent):
             self.obs_rms = None
 
         self.ret_rms = None
-        if self.shac_config.normalize_ret:
+        if self.normalize_ret:
             self.ret_rms = normalizers.RunningMeanStd((), **rms_config).to(self.device)
 
         # --- Encoder ---
@@ -591,8 +592,8 @@ class SHAC(Agent):
             'critic': self.critic.state_dict(),
             'encoder_target': self.encoder_target.state_dict(),
             'critic_target': self.critic_target.state_dict(),
-            'obs_rms': self.obs_rms.state_dict() if self.shac_config.normalize_input else None,
-            'ret_rms': self.ret_rms.state_dict() if self.shac_config.normalize_ret else None,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
         }
         torch.save(ckpt, f)
 
@@ -603,9 +604,9 @@ class SHAC(Agent):
             if not re.match(ckpt_keys, k):
                 print(f'Warning: ckpt skipped loading `{k}`')
                 continue
-            if k == 'obs_rms' and (not self.shac_config.normalize_input):
+            if k == 'obs_rms' and (not self.normalize_input):
                 continue
-            if k == 'ret_rms' and (not self.shac_config.normalize_ret):
+            if k == 'ret_rms' and (not self.normalize_ret):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):

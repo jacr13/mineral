@@ -14,6 +14,9 @@ class Agent:
         self.full_cfg = full_cfg
         self.logdir = logdir
 
+        assert getattr(self, 'network_config', False)
+        assert getattr(self, 'num_actors', False)
+
         # --- Device ---
         self.rank = -1
         self.device = full_cfg.rl_device
@@ -36,9 +39,9 @@ class Agent:
         self.env_autoresets = full_cfg.task.get('env_autoresets', True)  # set to False to explicitly call env.reset
 
         # --- Inputs ---
-        self.cpu_obs_keys = re.compile(full_cfg.agent.get('cpu_obs_keys', '$^'))
-        self.obs_rms_keys = re.compile(full_cfg.agent.get('obs_rms_keys', ''))
-        self.normalize_input = full_cfg.agent.get('normalize_input', False)
+        self.normalize_input = self.network_config.get('normalize_input', False)
+        self.obs_rms_keys = re.compile(self.network_config.get('obs_rms_keys', ''))
+        self.cpu_obs_keys = re.compile(self.network_config.get('cpu_obs_keys', '$^'))
         self.observation_space = self.env.observation_space
         try:
             obs_space = {k: v.shape for k, v in self.observation_space.spaces.items()}

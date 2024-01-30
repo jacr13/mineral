@@ -9,9 +9,8 @@ metrics_kwargs:
   save_video_consecutive: 0
   tracker_len: 100
 
-normalize_input: True
-
 network:
+  normalize_input: True
   actor_critic: ActorCritic
   actor_critic_kwargs:
     separate_value_mlp: True

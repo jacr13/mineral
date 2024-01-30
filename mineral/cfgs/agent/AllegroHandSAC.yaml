@@ -6,9 +6,8 @@ metrics_kwargs:
   save_video_consecutive: 0
   tracker_len: 100
 
-normalize_input: True
-
 network:
+  normalize_input: True
   encoder: null
 
   actor: Actor
@@ -27,6 +26,7 @@ network:
   critic_kwargs:
     n_critics: 2
     mlp_kwargs:
+      units: [512, 256, 128]
       norm_type: LayerNorm
       act_type: SiLU
     weight_init: orthogonal
