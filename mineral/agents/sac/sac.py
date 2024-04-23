@@ -313,7 +313,46 @@ class SAC(Agent):
         self.critic_target.eval()
 
     def save(self, f):
-        pass
+        ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'encoder': self.encoder.state_dict(),
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'encoder_target': self.encoder_target.state_dict(),
+            'actor_target': self.actor_target.state_dict() if not self.sac_config.no_tgt_actor else None,
+            'critic_target': self.critic_target.state_dict(),
+            'log_alpha': self.log_alpha.data if self.sac_config.alpha is None else None,
+        }
+        torch.save(ckpt, f)
 
-    def load(self, f):
-        pass
+    def load(self, f, ckpt_keys=''):
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += (
+            ('obs_rms',)
+            + ('encoder', 'actor', 'critic')
+            + ('encoder_target', 'actor_target', 'critic_target')
+            + ('log_alpha',)
+        )
+        ckpt = torch.load(f, map_location=self.device)
+        for k in all_ckpt_keys:
+            if not re.match(ckpt_keys, k):
+                print(f'Warning: ckpt skipped loading `{k}`')
+                continue
+            if k == 'obs_rms' and (not self.normalize_input):
+                continue
+            if k == 'actor_target' and (self.sac_config.no_tgt_actor):
+                continue
+            if k == 'log_alpha' and (not self.sac_config.alpha is None):
+                continue
+
+            if k == 'log_alpha':
+                self.log_alpha.data = ckpt[k]
+                continue
+
+            if hasattr(getattr(self, k), 'load_state_dict'):
+                getattr(self, k).load_state_dict(ckpt[k])
+            else:
+                setattr(self, k, ckpt[k])
