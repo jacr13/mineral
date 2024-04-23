@@ -77,7 +77,7 @@ class PPO(DAPGMixin, Agent):
         self.batch_size = self.horizon_len * self.num_actors
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs = self.ppo_config['mini_epochs']
-        assert self.batch_size % self.minibatch_size == 0 or full_cfg.test
+        assert self.batch_size % self.minibatch_size == 0 or 'train' not in self.full_cfg.run
 
         # ---- LR Scheduler ----
         self.lr_schedule = self.ppo_config['lr_schedule']
@@ -105,8 +105,9 @@ class PPO(DAPGMixin, Agent):
 
         # --- Timing ---
         self.timer = Timer()
-        self.timer.wrap('agent', self, ['train_epoch', 'play_steps'])
+        self.timer.wrap('agent', self, ['play_steps', 'train_epoch'])
         self.timer.wrap('env', self.env, ['step'])
+        self.timer_total_names = ('agent.play_steps', 'agent.train_epoch')
 
         # --- Multi-GPU ---
         if self.multi_gpu:
@@ -118,11 +119,11 @@ class PPO(DAPGMixin, Agent):
             if self.normalize_value:
                 self.value_rms = self.accelerator.prepare(self.value_rms)
 
-    def model_act(self, obs_dict):
+    def model_act(self, obs_dict, sample=True, **kwargs):
         if self.normalize_input:
             obs_dict = {k: self.obs_rms[k].normalize(v) for k, v in obs_dict.items()}
-        model_out = self.model.act(obs_dict)
-        if self.normalize_value:
+        model_out = self.model.act(obs_dict, sample=sample, **kwargs)
+        if self.normalize_value and sample:
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
 
@@ -205,8 +206,7 @@ class PPO(DAPGMixin, Agent):
                 metrics = {f'train_stats/{k}': v for k, v in metrics.items()}
 
                 # timing metrics
-                timings_total_names = ('agent.play_steps', 'agent.train_epoch')
-                timings = self.timer.stats(step=self.agent_steps, total_names=timings_total_names)
+                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
                 timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
                 metrics.update(timing_metrics)
 
@@ -383,7 +383,8 @@ class PPO(DAPGMixin, Agent):
         # TODO: accelerator.save
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps', 'model', 'optim', 'obs_rms', 'value_rms')
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('model', 'optim', 'obs_rms', 'value_rms')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
