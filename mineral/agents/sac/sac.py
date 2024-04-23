@@ -9,21 +9,13 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ... import nets
 from ...buffers import NStepReplay, ReplayBuffer
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
 from ..agent import Agent
 from ..ddpg import models
 from ..ddpg.utils import soft_update
-
-
-class Lambda(nn.Module):
-    def __init__(self, fn):
-        super().__init__()
-        self.fn = fn
-
-    def forward(self, x):
-        return self.fn(x)
 
 
 class SAC(Agent):
@@ -48,10 +40,11 @@ class SAC(Agent):
 
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
-            EncoderCls = getattr(models, self.network_config.encoder)
-            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+            EncoderCls = getattr(nets, self.network_config.encoder)
+            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}))
         else:
-            self.encoder = Lambda(lambda x: x["obs"])
+            f = lambda x: x['obs']
+            self.encoder = nets.Lambda(f)
         self.encoder.to(self.device)
         print('Encoder:', self.encoder)
 
