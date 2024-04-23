@@ -220,6 +220,18 @@ class SAC(Agent):
 
             self._checkpoint_save(metrics["train_scores/episode_rewards"])
 
+            if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
+                print(
+                    f'Epoch: {self.epoch} |',
+                    f'Agent Steps: {int(self.agent_steps):,} |',
+                    f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
+                    f'Stats:',
+                    f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
+                    f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
+                    f'last_sps {timings["lastrate"]:.2f},',
+                    f'SPS {timings["totalrate"]:.2f} |',
+                )
+
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def update_net(self, memory):
