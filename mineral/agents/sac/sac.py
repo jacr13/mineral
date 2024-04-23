@@ -226,7 +226,7 @@ class SAC(Agent):
         results = collections.defaultdict(list)
         for i in range(self.sac_config.mini_epochs):
             self.mini_epoch += 1
-            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size)
+            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size, device=self.device)
 
             critic_loss, critic_grad_norm = self.update_critic(obs, action, reward, next_obs, done)
             results["loss/critic"].append(critic_loss)
