@@ -82,10 +82,12 @@ class PPO(DAPGMixin, Agent):
         # ---- LR Scheduler ----
         self.lr_schedule = self.ppo_config['lr_schedule']
         if self.lr_schedule == 'kl':
+            min_lr, max_lr = self.ppo_config.get('min_lr', 1e-6), self.ppo_config.get('max_lr', 1e-2)
             self.kl_threshold = self.ppo_config['kl_threshold']
-            self.scheduler = AdaptiveScheduler(self.kl_threshold)
+            self.scheduler = AdaptiveScheduler(self.kl_threshold, min_lr, max_lr)
         elif self.lr_schedule == 'linear':
-            self.scheduler = LinearScheduler(self.init_lr, self.ppo_config['max_agent_steps'])
+            min_lr = self.ppo_config.get('min_lr', 1e-6)
+            self.scheduler = LinearScheduler(self.init_lr, min_lr, self.ppo_config['max_agent_steps'])
 
         # --- Training ---
         self.obs, self.dones = None, None
