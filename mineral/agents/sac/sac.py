@@ -13,6 +13,7 @@ from ... import nets
 from ...buffers import NStepReplay, ReplayBuffer
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
+from ...common.timer import Timer
 from ..agent import Agent
 from ..ddpg import models
 from ..ddpg.utils import soft_update
@@ -94,6 +95,13 @@ class SAC(Agent):
             init_alpha = np.log(self.sac_config.init_alpha)
             self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
             self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
+
+        # --- Timing ---
+        self.timer = Timer()
+        self.timer.wrap("agent", self, ["explore_env", "update_net"])
+        self.timer.wrap("memory", self.memory, ["add_to_buffer"])
+        self.timer.wrap("env", self.env, ["step"])
+        self.timer_total_names = ("agent.explore_env", "memory.add_to_buffer", "agent.update_net")
 
     def get_actions(self, obs=None, z=None, sample=True, logprob=False):
         if z is None:
@@ -192,6 +200,11 @@ class SAC(Agent):
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch, "alpha": self.get_alpha(scalar=True)})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
+
+            # timing metrics
+            timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
+            timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
+            metrics.update(timing_metrics)
 
             # episode metrics
             episode_metrics = {
