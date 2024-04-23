@@ -150,6 +150,7 @@ class SAC(Agent):
 
             if self.sac_config.handle_timeout:
                 dones = self._handle_timeout(dones, infos)
+
             for k, v in self.obs.items():
                 traj_obs[k][:, i] = v
             traj_actions[:, i] = actions
@@ -157,9 +158,9 @@ class SAC(Agent):
             traj_rewards[:, i] = rewards
             for k, v in next_obs.items():
                 traj_next_obs[k][:, i] = v
-            self.obs = next_obs
+            self.obs = next_obs  # update obs
 
-        self.metrics.flush_video_buf(self.epoch)
+        self.metrics.flush_video(self.epoch)
 
         traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
         traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
@@ -187,21 +188,24 @@ class SAC(Agent):
             self.set_train()
             results = self.update_net(self.memory)
 
-            # gather train metrics
+            # train metrics
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch, "alpha": self.get_alpha(scalar=True)})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
             # episode metrics
             episode_metrics = {
-                "train_scores/episode_rewards": self.metrics.episode_rewards.mean(),
-                "train_scores/episode_lengths": self.metrics.episode_lengths.mean(),
+                "train_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "train_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                "train_scores/num_episodes": self.metrics.num_episodes,
+                **self.metrics.result(prefix="train"),
             }
             metrics.update(episode_metrics)
-            metrics = self.metrics.result(metrics)
 
             self.writer.add(self.agent_steps, metrics)
             self.writer.write()
+
+            self._checkpoint_save(metrics["train_scores/episode_rewards"])
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

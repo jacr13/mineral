@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -11,11 +12,11 @@ from ..common.writer import TensorboardWriter, WandbWriter, Writer
 
 class Agent:
     def __init__(self, full_cfg, logdir=None, accelerator=None, datasets=None, env=None):
-        self.full_cfg = full_cfg
-        self.logdir = logdir
-
         assert getattr(self, 'network_config', False)
         assert getattr(self, 'num_actors', False)
+
+        self.full_cfg = full_cfg
+        self.logdir = logdir
 
         # --- Device ---
         self.rank = -1
@@ -50,8 +51,10 @@ class Agent:
         self.obs_space = obs_space
 
         # --- Metrics ---
-        metrics_kwargs = full_cfg.agent.get('metrics_kwargs', {})
-        self.metrics = Metrics(self.num_actors, self.device, full_cfg.env_render, **metrics_kwargs)
+        self.tracker_len = full_cfg.agent.get('tracker_len', 100)
+        self.metrics_kwargs = full_cfg.agent.get('metrics_kwargs', {})
+        self.env_render = full_cfg.env_render
+        self.metrics = self._create_metrics(self.tracker_len, self.metrics_kwargs)
 
         # --- Logging ---
         self.ckpt_dir = os.path.join(self.logdir, 'ckpt')
@@ -100,6 +103,23 @@ class Agent:
 
     def load(self, f):
         raise NotImplementedError
+
+    def _create_metrics(self, tracker_len, metrics_kwargs):
+        current_rewards = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)
+        current_lengths = torch.zeros(self.num_actors, dtype=int, device=self.device)
+        current_scores = {'rewards': current_rewards, 'lengths': current_lengths}
+        metrics = Metrics(current_scores, tracker_len, **metrics_kwargs, env_render=self.env_render)
+        return metrics
+
+    @contextmanager
+    def _as_metrics(self, new_metrics):
+        r"""Temporarily swaps Agent.metrics to new_metrics, useful for evaluation."""
+        old_metrics = self.metrics
+        self.metrics = new_metrics
+        try:
+            yield
+        finally:
+            self.metrics = old_metrics
 
     def _checkpoint_save(self, stat, stat_name='rewards', higher_better=True):
         if self.ckpt_every > 0 and (self.epoch + 1) % self.ckpt_every == 0:
