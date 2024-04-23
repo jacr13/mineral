@@ -66,7 +66,14 @@ class Actor(nn.Module):
 
 
 class EnsembleQ(nn.Module):
-    def __init__(self, state_dim, action_dim, n_critics=2, mlp_kwargs={}, weight_init=None):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        n_critics=2,
+        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
+        weight_init=None,
+    ):
         super().__init__()
         self.n_critics = n_critics
         critics = []
@@ -112,7 +119,7 @@ class DistributionalEnsembleQ(nn.Module):
         v_max=10,
         num_atoms=51,
         n_critics=2,
-        mlp_kwargs={},
+        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
         weight_init=None,
     ):
         super().__init__()
