@@ -121,9 +121,9 @@ class Agent:
         finally:
             self.metrics = old_metrics
 
-    def _checkpoint_save(self, stat, stat_name='rewards', higher_better=True):
+    def _checkpoint_save(self, stat, stat_name='rewards', higher_better=True, sep=''):
         if self.ckpt_every > 0 and (self.epoch + 1) % self.ckpt_every == 0:
-            ckpt_name = f'epoch={self.epoch}_steps={self.agent_steps}_{stat_name}={stat:.2f}'
+            ckpt_name = f'epochs{sep}{self.epoch + 1}_steps{sep}{int(self.agent_steps / 1000)}k_{stat_name}{sep}{stat:.2f}'
             self.save(os.path.join(self.ckpt_dir, ckpt_name + '.pth'))
             latest_ckpt_path = os.path.join(self.ckpt_dir, 'latest.pth')
             if os.path.exists(latest_ckpt_path):
@@ -132,14 +132,14 @@ class Agent:
 
         better = (stat > self.best_stat if higher_better else stat < self.best_stat) if self.best_stat is not None else True
         if better:
-            print(f'saving current best_{stat_name}={stat:.2f}')
+            print(f'saving current best_{stat_name}{sep}{stat:.2f}')
             if self.best_stat is not None:
                 # remove previous best file
-                prev_best_ckpt = os.path.join(self.ckpt_dir, f'best_{stat_name}={self.best_stat:.2f}.pth')
+                prev_best_ckpt = os.path.join(self.ckpt_dir, f'best_{stat_name}{sep}{self.best_stat:.2f}.pth')
                 if os.path.exists(prev_best_ckpt):
                     os.remove(prev_best_ckpt)
             self.best_stat = stat
-            self.save(os.path.join(self.ckpt_dir, f'best_{stat_name}={self.best_stat:.2f}.pth'))
+            self.save(os.path.join(self.ckpt_dir, f'best_{stat_name}{sep}{self.best_stat:.2f}.pth'))
 
     def _convert_obs(self, obs):
         if not isinstance(obs, dict):
