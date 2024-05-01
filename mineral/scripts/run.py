@@ -129,18 +129,22 @@ def main(config: DictConfig):
     # --- Run Agent ---
     print('-' * 20)
     cprint(f'Running: {config.run}', 'green', attrs=['bold'])
-    if config.run == 'train':
-        agent.train()
-    elif config.run == 'eval':
-        set_seed(config.seed + rank + 1)
-        agent.eval()
-    elif config.run == 'train_eval':
-        agent.train()
-        agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
-        set_seed(config.seed + rank + 1)
-        agent.eval()
-    else:
-        raise NotImplementedError(config.run)
+
+    try:
+        if config.run == 'train':
+            agent.train()
+        elif config.run == 'eval':
+            set_seed(config.seed + rank + 1)
+            agent.eval()
+        elif config.run == 'train_eval':
+            agent.train()
+            agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
+            set_seed(config.seed + rank + 1)
+            agent.eval()
+        else:
+            raise NotImplementedError(config.run)
+    except KeyboardInterrupt as e:
+        pass
 
     # --- Cleanup ---
     if rank == 0:
