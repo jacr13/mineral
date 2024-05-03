@@ -164,7 +164,7 @@ class PPO(DAPGMixin, Agent):
             self.metrics.update(self.epoch, self.env, self.obs, rewards.squeeze(-1), done_indices, infos)
         self.metrics.flush_video(self.epoch)
 
-        model_out = self.model_act(obs)
+        model_out = self.model_act(self.obs)
         last_values = model_out['values']
 
         self.storage.compute_return(last_values, self.gamma, self.tau)
