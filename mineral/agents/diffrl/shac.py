@@ -522,6 +522,7 @@ class SHAC(Agent):
         results = collections.defaultdict(list)
         for j in range(self.critic_iterations):
             total_critic_loss = 0.0
+            critic_grad_norms = []
             B = len(dataset)
 
             for i in range(B):
@@ -537,12 +538,14 @@ class SHAC(Agent):
                     params.grad.nan_to_num_(0.0, 0.0, 0.0)
 
                 if self.shac_config.truncate_grads:
-                    nn.utils.clip_grad_norm_(self.critic.parameters(), self.shac_config.max_grad_norm)
+                    critic_grad_norm = nn.utils.clip_grad_norm_(self.critic.parameters(), self.shac_config.max_grad_norm)
+                    critic_grad_norms.append(critic_grad_norm)
 
                 self.critic_optim.step()
                 total_critic_loss += critic_loss
             value_loss = (total_critic_loss / B).detach()
             results["value_loss"].append(value_loss)
+            results["grad_norm_critic"].append(torch.mean(torch.stack(critic_grad_norms)))
 
         #     print(f'value iter {j+1}/{self.critic_iterations}, value_loss= {value_loss.item():7.6f}', end='\r')
         # print()
