@@ -357,12 +357,9 @@ class SAC(Agent):
 
     def load(self, f, ckpt_keys=''):
         all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
-        all_ckpt_keys += (
-            ('obs_rms',)
-            + ('encoder', 'actor', 'critic')
-            + ('encoder_target', 'actor_target', 'critic_target')
-            + ('log_alpha',)
-        )
+        all_ckpt_keys += ('obs_rms', 'encoder', 'actor', 'critic')
+        all_ckpt_keys += ('encoder_target', 'actor_target', 'critic_target')
+        all_ckpt_keys += ('log_alpha',)
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):

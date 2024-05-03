@@ -41,7 +41,7 @@ class SHAC(Agent):
         self.max_episode_length = self.env.episode_length
 
         # --- SHAC Parameters ---
-        self.normalize_ret = self.shac_config.normalize_ret
+        self.normalize_ret = self.shac_config.get('normalize_ret', False)
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
         if self.critic_method == 'td-lambda':
@@ -589,18 +589,24 @@ class SHAC(Agent):
 
     def save(self, f):
         ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
             'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
-            'encoder_target': self.encoder_target.state_dict(),
-            'critic_target': self.critic_target.state_dict(),
-            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
-            'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
+            'encoder_target': self.encoder_target.state_dict() if not self.shac_config.no_target_critic else None,
+            'critic_target': self.critic_target.state_dict() if not self.shac_config.no_target_critic else None,
         }
         torch.save(ckpt, f)
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('encoder', 'actor', 'critic', 'encoder_target', 'critic_target', 'obs_rms', 'ret_rms')
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('obs_rms', 'encoder', 'actor', 'critic')
+        all_ckpt_keys += ('ret_rms',)
+        all_ckpt_keys += ('encoder_target', 'critic_target')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
@@ -609,6 +615,10 @@ class SHAC(Agent):
             if k == 'obs_rms' and (not self.normalize_input):
                 continue
             if k == 'ret_rms' and (not self.normalize_ret):
+                continue
+            if k == 'encoder_target' and (self.shac_config.no_target_critic):
+                continue
+            if k == 'critic_target' and (self.shac_config.no_target_critic):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):
