@@ -51,7 +51,7 @@ class BPTT(Agent):
 
         # --- Normalizers ---
         rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
-        if self.bptt_config.normalize_input:
+        if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
                 if re.match(self.obs_rms_keys, k):
@@ -418,7 +418,7 @@ class BPTT(Agent):
         ckpt = {
             'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
-            'obs_rms': self.obs_rms.state_dict() if self.bptt_config.normalize_input else None,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
         }
         torch.save(ckpt, f)
 
@@ -429,7 +429,7 @@ class BPTT(Agent):
             if not re.match(ckpt_keys, k):
                 print(f'Warning: ckpt skipped loading `{k}`')
                 continue
-            if k == 'obs_rms' and (not self.bptt_config.normalize_input):
+            if k == 'obs_rms' and (not self.normalize_input):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):
