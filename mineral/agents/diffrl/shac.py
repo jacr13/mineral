@@ -50,7 +50,7 @@ class SHAC(Agent):
         self.target_critic_alpha = self.shac_config.get('target_critic_alpha', 0.4)
 
         self.horizon_len = self.shac_config.horizon_len
-        self.max_epochs = self.shac_config.max_epochs
+        self.max_epochs = self.shac_config.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
         self.num_critic_batches = self.shac_config.get('num_critic_batches', 4)
         self.critic_batch_size = self.num_envs * self.horizon_len // self.num_critic_batches
         print('Critic batch size:', self.critic_batch_size)
@@ -223,11 +223,14 @@ class SHAC(Agent):
         # initializations
         self.initialize_env()
 
-        while self.epoch < self.max_epochs:
+        while self.agent_steps < self.max_agent_steps:
+            if self.max_epochs > 0 and self.epoch >= self.max_epochs:
+                break
             self.epoch += 1
 
             # learning rate schedule
             if self.shac_config.lr_schedule == 'linear':
+                assert self.max_epochs > 0
                 critic_lr = (1e-5 - self.critic_lr) * float(self.epoch / self.max_epochs) + self.critic_lr
                 for param_group in self.critic_optim.param_groups:
                     param_group['lr'] = critic_lr

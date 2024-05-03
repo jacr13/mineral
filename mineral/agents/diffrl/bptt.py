@@ -183,7 +183,9 @@ class BPTT(Agent):
         # initializations
         self.initialize_env()
 
-        while self.epoch < self.max_epochs:
+        while self.agent_steps < self.max_agent_steps:
+            if self.max_epochs > 0 and self.epoch >= self.max_epochs:
+                break
             self.epoch += 1
 
             # learning rate schedule
