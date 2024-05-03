@@ -8,7 +8,7 @@ A minimal robot learning library that aggregates reliable implementations for:
 
 - SAC ([`pql`](https://github.com/Improbable-AI/pql), [`pytorch-sac-ae`](https://github.com/denisyarats/pytorch_sac_ae)) #rl
 
-- SHAC ([`DiffRL`](https://github.com/NVlabs/DiffRL)) #rl, #diffsim
+- SHAC, BPTT/APG ([`DiffRL`](https://github.com/NVlabs/DiffRL)) #rl, #diffsim
 
 - BC #il
 
