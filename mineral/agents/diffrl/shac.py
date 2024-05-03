@@ -26,6 +26,8 @@ from .utils import CriticDataset, grad_norm, soft_update
 
 
 class SHAC(Agent):
+    r"""Short-Horizon Actor-Critic."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.shac_config = full_cfg.agent.shac

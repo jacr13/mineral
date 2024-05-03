@@ -13,6 +13,8 @@ from . import models
 
 
 class BC(Agent):
+    r"""Behavioral Cloning."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bc_config = full_cfg.agent.bc

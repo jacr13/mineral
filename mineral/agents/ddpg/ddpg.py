@@ -18,6 +18,8 @@ from .utils import distl_projection, soft_update
 
 
 class DDPG(Agent):
+    r"""Deep Deterministic Policy Gradients."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ddpg_config = full_cfg.agent.ddpg

@@ -20,6 +20,8 @@ from ..ddpg.utils import soft_update
 
 
 class SAC(Agent):
+    r"""Soft Actor-Critic."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.sac_config = full_cfg.agent.sac

@@ -26,6 +26,11 @@ from .utils import grad_norm
 
 
 class BPTT(Agent):
+    r"""Backpropagation Through Time.
+
+    Also called Analytic Policy Gradient (APG) by Brax.
+    """
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bptt_config = full_cfg.agent.bptt

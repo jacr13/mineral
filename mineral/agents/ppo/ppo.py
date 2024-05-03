@@ -16,6 +16,8 @@ from .utils import AdaptiveScheduler, LinearScheduler, adjust_learning_rate_cos
 
 
 class PPO(DAPGMixin, Agent):
+    r"""Proximal Policy Optimization."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
@@ -23,7 +25,7 @@ class PPO(DAPGMixin, Agent):
         self.max_agent_steps = int(self.ppo_config.max_agent_steps)
         super().__init__(full_cfg, **kwargs)
 
-        # ---- Normalizers ----
+        # --- Normalizers ---
         rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)
         if self.normalize_input:
             self.obs_rms = {}
@@ -39,7 +41,7 @@ class PPO(DAPGMixin, Agent):
 
         self.value_rms = normalizers.RunningMeanStd((1,), **rms_config).to(self.device)
 
-        # ---- Model ----
+        # --- Model ---
         encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
         ModelCls = getattr(models, self.network_config.get('actor_critic', 'ActorCritic'))
         model_kwargs = self.network_config.get('actor_critic_kwargs', {})
@@ -47,7 +49,7 @@ class PPO(DAPGMixin, Agent):
         self.model.to(self.device)
         print(self.model, '\n')
 
-        # ---- Optim ----
+        # --- Optim ---
         optim_kwargs = self.ppo_config.get('optim_kwargs', {})
         learning_rate = optim_kwargs.get('lr', 3e-4)
         self.init_lr = float(learning_rate)
@@ -56,7 +58,7 @@ class PPO(DAPGMixin, Agent):
         self.optim = OptimCls(self.model.parameters(), **optim_kwargs)
         print(self.optim, '\n')
 
-        # ---- PPO Train Params ----
+        # --- PPO Train Params ---
         self.e_clip = self.ppo_config['e_clip']
         self.use_smooth_clamp = self.ppo_config['use_smooth_clamp']
         self.clip_value_loss = self.ppo_config['clip_value_loss']
@@ -72,14 +74,14 @@ class PPO(DAPGMixin, Agent):
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_value = self.ppo_config['normalize_value']
 
-        # ---- PPO Collect Params ----
+        # --- PPO Collect Params ---
         self.horizon_len = self.ppo_config['horizon_len']
         self.batch_size = self.horizon_len * self.num_actors
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs = self.ppo_config['mini_epochs']
         assert self.batch_size % self.minibatch_size == 0 or 'train' not in self.full_cfg.run
 
-        # ---- LR Scheduler ----
+        # --- LR Scheduler ---
         self.lr_schedule = self.ppo_config['lr_schedule']
         if self.lr_schedule == 'kl':
             min_lr, max_lr = self.ppo_config.get('min_lr', 1e-6), self.ppo_config.get('max_lr', 1e-2)

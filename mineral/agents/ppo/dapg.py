@@ -4,6 +4,8 @@ import torch
 
 
 class DAPGMixin:
+    r"""Demo Augmented Policy Gradient."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
