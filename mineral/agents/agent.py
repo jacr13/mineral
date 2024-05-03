@@ -156,7 +156,7 @@ class Agent:
         return _obs
 
     @staticmethod
-    def _handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated')):
+    def _handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated', 'truncated')):
         timeout_envs = None
         for timeout_key in timeout_keys:
             if timeout_key in info:
