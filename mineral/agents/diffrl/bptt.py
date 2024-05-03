@@ -128,7 +128,7 @@ class BPTT(Agent):
         return actions
 
     @torch.no_grad()
-    def evaluate_policy(self, num_episodes, deterministic=False):
+    def evaluate_policy(self, num_episodes, sample=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
         episode_discounted_rewards_hist = []
@@ -145,7 +145,7 @@ class BPTT(Agent):
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=sample)
             obs, rew, done, _ = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -307,7 +307,7 @@ class BPTT(Agent):
         self.actor_optim.step(actor_closure)
         return results
 
-    def compute_actor_loss(self, deterministic=False):
+    def compute_actor_loss(self):
         rew_acc = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
@@ -331,7 +331,7 @@ class BPTT(Agent):
         actor_loss = torch.tensor(0.0, dtype=torch.float32, device=self.device)
         for i in range(self.horizon_len):
             # take env step
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=True)
             obs, rew, done, extra_info = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -401,8 +401,7 @@ class BPTT(Agent):
 
     def eval(self):
         mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors,
-            deterministic=True,
+            num_episodes=self.num_actors, sample=True
         )
         print(
             f'mean ep_rewards = {mean_episode_rewards},',
