@@ -202,7 +202,7 @@ class BPTT(Agent):
             actor_results = self.update_actor()
             self.timer.end("train/update_actor")
 
-            # gather train metrics
+            # train metrics
             results = {**actor_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "lr": lr})
@@ -286,7 +286,7 @@ class BPTT(Agent):
                     nn.utils.clip_grad_norm_(self.actor.parameters(), self.bptt_config.max_grad_norm)
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
-                if torch.isnan(grad_norm_before_clip):
+                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
                     print('NaN gradient')
                     raise ValueError
                     # # JIE

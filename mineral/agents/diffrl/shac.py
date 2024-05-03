@@ -265,7 +265,7 @@ class SHAC(Agent):
                     soft_update(self.encoder, self.encoder_target, alpha)
                     soft_update(self.critic, self.critic_target, alpha)
 
-            # gather train metrics
+            # train metrics
             results = {**actor_results, **critic_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "lr": lr})
@@ -307,7 +307,7 @@ class SHAC(Agent):
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                     f'Stats:',
                     f'ep_rewards {mean_episode_rewards:.2f},',
-                    f'ep_lenths {mean_episode_lengths:.2f},',
+                    f'ep_lengths {mean_episode_lengths:.2f},',
                     f'ep_discounted_rewards {mean_episode_discounted_rewards:.2f},',
                     f'value_loss {metrics["train_stats/value_loss"]:.4f},',
                     f'grad_norm_before_clip {metrics["train_stats/grad_norm_before_clip"]:.2f},',
@@ -350,7 +350,7 @@ class SHAC(Agent):
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
                 # sanity check
-                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1000000.0:
+                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
                     print('NaN gradient')
                     raise ValueError
 
