@@ -2,6 +2,25 @@ import numpy as np
 import torch
 
 
+def adaptive_scheduler(current_lr, kl_dist, kl_threshold=0.008, min_lr=1e-6, max_lr=1e-2):
+    lr = current_lr
+    if kl_dist > (2.0 * kl_threshold):
+        lr = max(current_lr / 1.5, min_lr)
+    if kl_dist < (0.5 * kl_threshold):
+        lr = min(current_lr * 1.5, max_lr)
+    return lr
+
+
+def policy_kl(p0_mu, p0_sigma, p1_mu, p1_sigma):
+    c1 = torch.log(p1_sigma / p0_sigma + 1e-5)
+    c2 = (p0_sigma**2 + (p1_mu - p0_mu) ** 2) / (2.0 * (p1_sigma**2 + 1e-5))
+    c3 = -1.0 / 2.0
+    kl = c1 + c2 + c3
+    kl = kl.sum(dim=-1)  # returning mean between all steps of sum between all actions
+    # return kl.mean()
+    return kl
+
+
 def soft_update(module, module_target, alpha: float):
     for param, param_targ in zip(module.parameters(), module_target.parameters()):
         param_targ.data.mul_(alpha)
@@ -18,7 +37,8 @@ def grad_norm(params):
 
 class CriticDataset:
     def __init__(self, batch_size, obs, target_values, shuffle=False, drop_last=False):
-        self.obs = {k: v.view(-1, v.shape[-1]) for k, v in obs.items()}
+        # (T, B, ...) -> (T * B, ...)
+        self.obs = {k: v.view(-1, *v.shape[2:]) for k, v in obs.items()}
         self.target_values = target_values.view(-1)
         self.N = self.target_values.shape[0]
         self.batch_size = batch_size
@@ -33,7 +53,7 @@ class CriticDataset:
 
     def shuffle(self):
         index = np.random.permutation(self.N)
-        self.obs = {k: v[index, :] for k, v in self.obs.items()}
+        self.obs = {k: v[index, ...] for k, v in self.obs.items()}
         self.target_values = self.target_values[index]
 
     def __len__(self):
@@ -43,6 +63,6 @@ class CriticDataset:
         start_idx = index * self.batch_size
         end_idx = min((index + 1) * self.batch_size, self.N)
 
-        obs = {k: v[start_idx:end_idx, :] for k, v in self.obs.items()}
+        obs = {k: v[start_idx:end_idx, ...] for k, v in self.obs.items()}
         target_values = self.target_values[start_idx:end_idx]
         return obs, target_values
