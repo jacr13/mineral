@@ -53,6 +53,8 @@ class Actor(nn.Module):
             nn.init.constant_(self.sigma, self.init_sigma)
 
     def forward(self, x):
+        if isinstance(x, dict):
+            x = x["z"]
         x = self.actor_mlp(x)
         mu = self.mu(x)
         if self.fixed_sigma:
@@ -81,5 +83,7 @@ class Critic(nn.Module):
         weight_init_(self, self.weight_init)
 
     def forward(self, x):
+        if isinstance(x, dict):
+            x = x["z"]
         x = self.critic_mlp(x)
         return x
