@@ -2,6 +2,15 @@ import numpy as np
 import torch
 
 
+def adaptive_scheduler(current_lr, kl_dist, kl_threshold=0.008, min_lr=1e-6, max_lr=1e-2):
+    lr = current_lr
+    if kl_dist > (2.0 * kl_threshold):
+        lr = max(current_lr / 1.5, min_lr)
+    if kl_dist < (0.5 * kl_threshold):
+        lr = min(current_lr * 1.5, max_lr)
+    return lr
+
+
 def policy_kl(p0_mu, p0_sigma, p1_mu, p1_sigma):
     c1 = torch.log(p1_sigma / p0_sigma + 1e-5)
     c2 = (p0_sigma**2 + (p1_mu - p0_mu) ** 2) / (2.0 * (p1_sigma**2 + 1e-5))
