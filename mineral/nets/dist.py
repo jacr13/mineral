@@ -41,6 +41,12 @@ class Dist(nn.Module):
             distr = D.Normal(mu, std, validate_args=self.validate_args)
             sigma = std
 
+        elif self.dist_type == 'dreamerv3_squashed_normal':
+            lo, hi = self.minstd, self.maxstd
+            std = (hi - lo) * torch.sigmoid(logstd + 2.0) + lo
+            distr = SquashedNormal(mu, std, validate_args=self.validate_args)
+            sigma = std
+
         else:
             raise NotImplementedError(self.dist_type)
 
