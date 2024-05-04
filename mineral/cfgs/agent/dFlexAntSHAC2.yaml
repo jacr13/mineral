@@ -57,5 +57,6 @@ shac:
   # kl_threshold: 0.008
   normalize_value: True
   actor_loss_normval: True
-  max_grad_norm: 1.0
+  # max_grad_norm: 1.0
+  max_grad_norm: 0.5  # decrease since using value_rms (so loss magnitudes and grad norms are smaller)
   truncate_grads: True
