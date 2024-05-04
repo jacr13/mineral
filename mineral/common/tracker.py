@@ -10,8 +10,8 @@ class Tracker:
         self.max_len = max_len
         self.reset()
 
-    def __repr__(self):
-        return self.window.__repr__()
+    def reset(self):
+        self.window = deque([0 for _ in range(self.max_len)], maxlen=self.max_len)
 
     def update(self, value):
         if isinstance(value, np.ndarray) or isinstance(value, torch.Tensor):
@@ -33,5 +33,5 @@ class Tracker:
     def min(self):
         return np.min(self.window)
 
-    def reset(self):
-        self.window = deque([0 for _ in range(self.max_len)], maxlen=self.max_len)
+    def __repr__(self):
+        return self.window.__repr__()

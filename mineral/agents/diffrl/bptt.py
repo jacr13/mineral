@@ -26,6 +26,11 @@ from .utils import grad_norm
 
 
 class BPTT(Agent):
+    r"""Backpropagation Through Time.
+
+    Also called Analytic Policy Gradient (APG) by Brax.
+    """
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bptt_config = full_cfg.agent.bptt
@@ -42,11 +47,11 @@ class BPTT(Agent):
         self.gamma = self.bptt_config.get('gamma', 0.99)
 
         self.horizon_len = self.bptt_config.horizon_len
-        self.max_epochs = self.bptt_config.max_epochs
+        self.max_epochs = self.bptt.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
 
         # --- Normalizers ---
         rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
-        if self.bptt_config.normalize_input:
+        if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
                 if re.match(self.obs_rms_keys, k):
@@ -123,7 +128,7 @@ class BPTT(Agent):
         return actions
 
     @torch.no_grad()
-    def evaluate_policy(self, num_episodes, deterministic=False):
+    def evaluate_policy(self, num_episodes, sample=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
         episode_discounted_rewards_hist = []
@@ -140,7 +145,7 @@ class BPTT(Agent):
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=sample)
             obs, rew, done, _ = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -178,7 +183,9 @@ class BPTT(Agent):
         # initializations
         self.initialize_env()
 
-        while self.epoch < self.max_epochs:
+        while self.agent_steps < self.max_agent_steps:
+            if self.max_epochs > 0 and self.epoch >= self.max_epochs:
+                break
             self.epoch += 1
 
             # learning rate schedule
@@ -197,7 +204,7 @@ class BPTT(Agent):
             actor_results = self.update_actor()
             self.timer.end("train/update_actor")
 
-            # gather train metrics
+            # train metrics
             results = {**actor_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "lr": lr})
@@ -281,7 +288,7 @@ class BPTT(Agent):
                     nn.utils.clip_grad_norm_(self.actor.parameters(), self.bptt_config.max_grad_norm)
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
-                if torch.isnan(grad_norm_before_clip):
+                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
                     print('NaN gradient')
                     raise ValueError
                     # # JIE
@@ -300,7 +307,7 @@ class BPTT(Agent):
         self.actor_optim.step(actor_closure)
         return results
 
-    def compute_actor_loss(self, deterministic=False):
+    def compute_actor_loss(self):
         rew_acc = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
@@ -324,7 +331,7 @@ class BPTT(Agent):
         actor_loss = torch.tensor(0.0, dtype=torch.float32, device=self.device)
         for i in range(self.horizon_len):
             # take env step
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=True)
             obs, rew, done, extra_info = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -394,8 +401,7 @@ class BPTT(Agent):
 
     def eval(self):
         mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors,
-            deterministic=True,
+            num_episodes=self.num_actors, sample=True
         )
         print(
             f'mean ep_rewards = {mean_episode_rewards},',
@@ -413,7 +419,7 @@ class BPTT(Agent):
         ckpt = {
             'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
-            'obs_rms': self.obs_rms.state_dict() if self.bptt_config.normalize_input else None,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
         }
         torch.save(ckpt, f)
 
@@ -424,7 +430,7 @@ class BPTT(Agent):
             if not re.match(ckpt_keys, k):
                 print(f'Warning: ckpt skipped loading `{k}`')
                 continue
-            if k == 'obs_rms' and (not self.bptt_config.normalize_input):
+            if k == 'obs_rms' and (not self.normalize_input):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):

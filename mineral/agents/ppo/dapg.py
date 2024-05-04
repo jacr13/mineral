@@ -4,16 +4,19 @@ import torch
 
 
 class DAPGMixin:
+    r"""Demo Augmented Policy Gradient."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # ---- DAPG Param ----
+        # --- DAPG ---
         self.dapg_config = self.ppo_config.get('dapg', None)
         if self.dapg_config is not None:
             self.dapg_damping = self.dapg_config.get('damping', 0.995)
             self.init_dapg_lambda = self.dapg_config.get('lambda', 0.1)
             self.dapg_lambda = self.init_dapg_lambda
 
+        # initialized in demos_sample_batch()
         self.demo_dataloader = None
         self.demo_iter = None
 
@@ -32,7 +35,7 @@ class DAPGMixin:
         )
         return loader
 
-    def update_dapg(self):
+    def demos_sample_batch(self):
         assert self.dapg_config is not None
         try:
             demo_batch = next(self.demo_iter)
@@ -41,6 +44,11 @@ class DAPGMixin:
                 self.demo_dataloader = self.dataloader(self.datasets['train'])
             self.demo_iter = iter(self.demo_dataloader)
             demo_batch = next(self.demo_iter)
+        return demo_batch
+
+    def update_dapg(self):
+        assert self.dapg_config is not None
+        demo_batch = self.demos_sample_batch()
 
         demo_obs_dict, demo_action, demo_reward, demo_done, demo_info = demo_batch
 

@@ -22,7 +22,7 @@ class ActorCritic(nn.Module):
         self,
         obs_space,
         action_dim,
-        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
+        mlp_kwargs=dict(units=[512, 256, 128], act_type='ELU'),
         separate_value_mlp=True,
         fixed_sigma=True,
         actor_dist_kwargs=dict(dist_type='normal'),

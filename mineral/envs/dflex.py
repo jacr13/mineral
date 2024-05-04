@@ -34,7 +34,6 @@ def make_envs(config):
         num_envs=num_envs,
         device=config.sim_device,
         seed=config.seed,
-        render=config.env_render,
         **env_kwargs,
     )
 

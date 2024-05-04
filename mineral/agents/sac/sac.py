@@ -9,24 +9,19 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ... import nets
 from ...buffers import NStepReplay, ReplayBuffer
 from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
+from ...common.timer import Timer
 from ..agent import Agent
 from ..ddpg import models
 from ..ddpg.utils import soft_update
 
 
-class Lambda(nn.Module):
-    def __init__(self, fn):
-        super().__init__()
-        self.fn = fn
-
-    def forward(self, x):
-        return self.fn(x)
-
-
 class SAC(Agent):
+    r"""Soft Actor-Critic."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.sac_config = full_cfg.agent.sac
@@ -48,10 +43,11 @@ class SAC(Agent):
 
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
-            EncoderCls = getattr(models, self.network_config.encoder)
-            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+            EncoderCls = getattr(nets, self.network_config.encoder)
+            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}))
         else:
-            self.encoder = Lambda(lambda x: x["obs"])
+            f = lambda x: x['obs']
+            self.encoder = nets.Lambda(f)
         self.encoder.to(self.device)
         print('Encoder:', self.encoder)
 
@@ -101,6 +97,13 @@ class SAC(Agent):
             init_alpha = np.log(self.sac_config.init_alpha)
             self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
             self.alpha_optim = OptimCls([self.log_alpha], **self.sac_config.get("alpha_optim_kwargs", {}))
+
+        # --- Timing ---
+        self.timer = Timer()
+        self.timer.wrap("agent", self, ["explore_env", "update_net"])
+        self.timer.wrap("memory", self.memory, ["add_to_buffer"])
+        self.timer.wrap("env", self.env, ["step"])
+        self.timer_total_names = ("agent.explore_env", "memory.add_to_buffer", "agent.update_net")
 
     def get_actions(self, obs=None, z=None, sample=True, logprob=False):
         if z is None:
@@ -157,6 +160,7 @@ class SAC(Agent):
 
             if self.sac_config.handle_timeout:
                 dones = self._handle_timeout(dones, infos)
+
             for k, v in self.obs.items():
                 traj_obs[k][:, i] = v
             traj_actions[:, i] = actions
@@ -164,9 +168,9 @@ class SAC(Agent):
             traj_rewards[:, i] = rewards
             for k, v in next_obs.items():
                 traj_next_obs[k][:, i] = v
-            self.obs = next_obs
+            self.obs = next_obs  # update obs
 
-        self.metrics.flush_video_buf(self.epoch)
+        self.metrics.flush_video(self.epoch)
 
         traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
         traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
@@ -194,21 +198,41 @@ class SAC(Agent):
             self.set_train()
             results = self.update_net(self.memory)
 
-            # gather train metrics
+            # train metrics
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch, "alpha": self.get_alpha(scalar=True)})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
+            # timing metrics
+            timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
+            timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
+            metrics.update(timing_metrics)
+
             # episode metrics
             episode_metrics = {
-                "train_scores/episode_rewards": self.metrics.episode_rewards.mean(),
-                "train_scores/episode_lengths": self.metrics.episode_lengths.mean(),
+                "train_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "train_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                "train_scores/num_episodes": self.metrics.num_episodes,
+                **self.metrics.result(prefix="train"),
             }
             metrics.update(episode_metrics)
-            metrics = self.metrics.result(metrics)
 
             self.writer.add(self.agent_steps, metrics)
             self.writer.write()
+
+            self._checkpoint_save(metrics["train_scores/episode_rewards"])
+
+            if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
+                print(
+                    f'Epoch: {self.epoch} |',
+                    f'Agent Steps: {int(self.agent_steps):,} |',
+                    f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
+                    f'Stats:',
+                    f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
+                    f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
+                    f'last_sps {timings["lastrate"]:.2f},',
+                    f'SPS {timings["totalrate"]:.2f} |',
+                )
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
@@ -216,7 +240,7 @@ class SAC(Agent):
         results = collections.defaultdict(list)
         for i in range(self.sac_config.mini_epochs):
             self.mini_epoch += 1
-            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size)
+            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size, device=self.device)
 
             critic_loss, critic_grad_norm = self.update_critic(obs, action, reward, next_obs, done)
             results["loss/critic"].append(critic_loss)
@@ -316,7 +340,43 @@ class SAC(Agent):
         self.critic_target.eval()
 
     def save(self, f):
-        pass
+        ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'encoder': self.encoder.state_dict(),
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'encoder_target': self.encoder_target.state_dict(),
+            'actor_target': self.actor_target.state_dict() if not self.sac_config.no_tgt_actor else None,
+            'critic_target': self.critic_target.state_dict(),
+            'log_alpha': self.log_alpha.data if self.sac_config.alpha is None else None,
+        }
+        torch.save(ckpt, f)
 
-    def load(self, f):
-        pass
+    def load(self, f, ckpt_keys=''):
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('obs_rms', 'encoder', 'actor', 'critic')
+        all_ckpt_keys += ('encoder_target', 'actor_target', 'critic_target')
+        all_ckpt_keys += ('log_alpha',)
+        ckpt = torch.load(f, map_location=self.device)
+        for k in all_ckpt_keys:
+            if not re.match(ckpt_keys, k):
+                print(f'Warning: ckpt skipped loading `{k}`')
+                continue
+            if k == 'obs_rms' and (not self.normalize_input):
+                continue
+            if k == 'actor_target' and (self.sac_config.no_tgt_actor):
+                continue
+            if k == 'log_alpha' and (not self.sac_config.alpha is None):
+                continue
+
+            if k == 'log_alpha':
+                self.log_alpha.data = ckpt[k]
+                continue
+
+            if hasattr(getattr(self, k), 'load_state_dict'):
+                getattr(self, k).load_state_dict(ckpt[k])
+            else:
+                setattr(self, k, ckpt[k])

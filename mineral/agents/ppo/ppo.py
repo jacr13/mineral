@@ -16,6 +16,8 @@ from .utils import AdaptiveScheduler, LinearScheduler, adjust_learning_rate_cos
 
 
 class PPO(DAPGMixin, Agent):
+    r"""Proximal Policy Optimization."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.ppo_config = full_cfg.agent.ppo
@@ -23,7 +25,7 @@ class PPO(DAPGMixin, Agent):
         self.max_agent_steps = int(self.ppo_config.max_agent_steps)
         super().__init__(full_cfg, **kwargs)
 
-        # ---- Normalizers ----
+        # --- Normalizers ---
         rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)
         if self.normalize_input:
             self.obs_rms = {}
@@ -39,7 +41,7 @@ class PPO(DAPGMixin, Agent):
 
         self.value_rms = normalizers.RunningMeanStd((1,), **rms_config).to(self.device)
 
-        # ---- Model ----
+        # --- Model ---
         encoder, encoder_kwargs = self.network_config.get('encoder', None), self.network_config.get('encoder_kwargs', None)
         ModelCls = getattr(models, self.network_config.get('actor_critic', 'ActorCritic'))
         model_kwargs = self.network_config.get('actor_critic_kwargs', {})
@@ -47,7 +49,7 @@ class PPO(DAPGMixin, Agent):
         self.model.to(self.device)
         print(self.model, '\n')
 
-        # ---- Optim ----
+        # --- Optim ---
         optim_kwargs = self.ppo_config.get('optim_kwargs', {})
         learning_rate = optim_kwargs.get('lr', 3e-4)
         self.init_lr = float(learning_rate)
@@ -56,7 +58,7 @@ class PPO(DAPGMixin, Agent):
         self.optim = OptimCls(self.model.parameters(), **optim_kwargs)
         print(self.optim, '\n')
 
-        # ---- PPO Train Params ----
+        # --- PPO Train Params ---
         self.e_clip = self.ppo_config['e_clip']
         self.use_smooth_clamp = self.ppo_config['use_smooth_clamp']
         self.clip_value_loss = self.ppo_config['clip_value_loss']
@@ -72,20 +74,22 @@ class PPO(DAPGMixin, Agent):
         self.normalize_advantage = self.ppo_config['normalize_advantage']
         self.normalize_value = self.ppo_config['normalize_value']
 
-        # ---- PPO Collect Params ----
+        # --- PPO Collect Params ---
         self.horizon_len = self.ppo_config['horizon_len']
         self.batch_size = self.horizon_len * self.num_actors
         self.minibatch_size = self.ppo_config['minibatch_size']
         self.mini_epochs = self.ppo_config['mini_epochs']
-        assert self.batch_size % self.minibatch_size == 0 or full_cfg.test
+        assert self.batch_size % self.minibatch_size == 0 or 'train' not in self.full_cfg.run
 
-        # ---- LR Scheduler ----
+        # --- LR Scheduler ---
         self.lr_schedule = self.ppo_config['lr_schedule']
         if self.lr_schedule == 'kl':
+            min_lr, max_lr = self.ppo_config.get('min_lr', 1e-6), self.ppo_config.get('max_lr', 1e-2)
             self.kl_threshold = self.ppo_config['kl_threshold']
-            self.scheduler = AdaptiveScheduler(self.kl_threshold)
+            self.scheduler = AdaptiveScheduler(self.kl_threshold, min_lr, max_lr)
         elif self.lr_schedule == 'linear':
-            self.scheduler = LinearScheduler(self.init_lr, self.ppo_config['max_agent_steps'])
+            min_lr = self.ppo_config.get('min_lr', 1e-6)
+            self.scheduler = LinearScheduler(self.init_lr, min_lr, self.ppo_config['max_agent_steps'])
 
         # --- Training ---
         self.obs, self.dones = None, None
@@ -103,8 +107,9 @@ class PPO(DAPGMixin, Agent):
 
         # --- Timing ---
         self.timer = Timer()
-        self.timer.wrap('agent', self, ['train_epoch', 'play_steps'])
+        self.timer.wrap('agent', self, ['play_steps', 'train_epoch'])
         self.timer.wrap('env', self.env, ['step'])
+        self.timer_total_names = ('agent.play_steps', 'agent.train_epoch')
 
         # --- Multi-GPU ---
         if self.multi_gpu:
@@ -116,11 +121,11 @@ class PPO(DAPGMixin, Agent):
             if self.normalize_value:
                 self.value_rms = self.accelerator.prepare(self.value_rms)
 
-    def model_act(self, obs_dict):
+    def model_act(self, obs_dict, sample=True, **kwargs):
         if self.normalize_input:
             obs_dict = {k: self.obs_rms[k].normalize(v) for k, v in obs_dict.items()}
-        model_out = self.model.act(obs_dict)
-        if self.normalize_value:
+        model_out = self.model.act(obs_dict, sample=sample, **kwargs)
+        if self.normalize_value and sample:
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
 
@@ -157,9 +162,9 @@ class PPO(DAPGMixin, Agent):
 
             done_indices = torch.where(self.dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards.squeeze(-1), done_indices, infos)
-        self.metrics.flush_video_buf(self.epoch)
+        self.metrics.flush_video(self.epoch)
 
-        model_out = self.model_act(obs)
+        model_out = self.model_act(self.obs)
         last_values = model_out['values']
 
         self.storage.compute_return(last_values, self.gamma, self.tau)
@@ -194,27 +199,27 @@ class PPO(DAPGMixin, Agent):
             self.storage.data_dict = None
 
             if not self.multi_gpu or (self.multi_gpu and self.rank == 0):
-                # gather train metrics
+                # train metrics
                 metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
-                metrics.update({k: torch.mean(torch.cat(results[k])).item() for k in ["mu", "sigma"]})  # distributions
+                metrics.update({k: torch.mean(torch.cat(results[k]), 0).cpu().numpy() for k in ['mu', 'sigma']})  # distr
                 metrics.update(
                     {'epoch': self.epoch, 'mini_epoch': self.mini_epoch, 'last_lr': self.last_lr, 'e_clip': self.e_clip}
                 )
-                metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
+                metrics = {f'train_stats/{k}': v for k, v in metrics.items()}
 
                 # timing metrics
-                timings_total_names = ('agent.play_steps', 'agent.train_epoch')
-                timings = self.timer.stats(step=self.agent_steps, total_names=timings_total_names)
+                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
                 timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
                 metrics.update(timing_metrics)
 
                 # episode metrics
                 episode_metrics = {
-                    'train_scores/episode_rewards': self.metrics.episode_rewards.mean(),
-                    'train_scores/episode_lengths': self.metrics.episode_lengths.mean(),
+                    'train_scores/episode_rewards': self.metrics.episode_trackers['rewards'].mean(),
+                    'train_scores/episode_lengths': self.metrics.episode_trackers['lengths'].mean(),
+                    'train_scores/num_episodes': self.metrics.num_episodes,
+                    **self.metrics.result(prefix='train'),
                 }
                 metrics.update(episode_metrics)
-                metrics = self.metrics.result(metrics)
 
                 self.writer.add(self.agent_steps, metrics)
                 self.writer.write()
@@ -225,13 +230,14 @@ class PPO(DAPGMixin, Agent):
                     print(
                         f'Epoch: {self.epoch} |',
                         f'Agent Steps: {int(self.agent_steps):,} |',
-                        f'SPS: {timings["totalrate"]:.2f} |',
                         f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                         f'Stats:',
-                        f'last_sps {timings["lastrate"]:.2f},'
-                        f'collectEnv_time {timings["agent.play_steps/total"] / 60:.1f} min,',
-                        f'trainRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
-                        f'\b\b |',
+                        f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
+                        f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
+                        f'last_sps {timings["lastrate"]:.2f},',
+                        f'ExploreEnv_time {timings["agent.play_steps/total"] / 60:.1f} min,',
+                        f'UpdateRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
+                        f'SPS {timings["totalrate"]:.2f} |',
                     )
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
@@ -379,7 +385,8 @@ class PPO(DAPGMixin, Agent):
         # TODO: accelerator.save
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps', 'model', 'optim', 'obs_rms', 'value_rms')
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('model', 'optim', 'obs_rms', 'value_rms')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):

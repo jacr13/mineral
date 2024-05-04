@@ -26,6 +26,8 @@ from .utils import CriticDataset, grad_norm, soft_update
 
 
 class SHAC(Agent):
+    r"""Short-Horizon Actor-Critic."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.shac_config = full_cfg.agent.shac
@@ -39,7 +41,7 @@ class SHAC(Agent):
         self.max_episode_length = self.env.episode_length
 
         # --- SHAC Parameters ---
-        self.normalize_ret = self.shac_config.normalize_ret
+        self.normalize_ret = self.shac_config.get('normalize_ret', False)
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
         if self.critic_method == 'td-lambda':
@@ -48,7 +50,7 @@ class SHAC(Agent):
         self.target_critic_alpha = self.shac_config.get('target_critic_alpha', 0.4)
 
         self.horizon_len = self.shac_config.horizon_len
-        self.max_epochs = self.shac_config.max_epochs
+        self.max_epochs = self.shac_config.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
         self.num_critic_batches = self.shac_config.get('num_critic_batches', 4)
         self.critic_batch_size = self.num_envs * self.horizon_len // self.num_critic_batches
         print('Critic batch size:', self.critic_batch_size)
@@ -168,7 +170,7 @@ class SHAC(Agent):
         return actions
 
     @torch.no_grad()
-    def evaluate_policy(self, num_episodes, deterministic=False):
+    def evaluate_policy(self, num_episodes, sample=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
         episode_discounted_rewards_hist = []
@@ -185,7 +187,7 @@ class SHAC(Agent):
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=sample)
             obs, rew, done, _ = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -221,11 +223,14 @@ class SHAC(Agent):
         # initializations
         self.initialize_env()
 
-        while self.epoch < self.max_epochs:
+        while self.agent_steps < self.max_agent_steps:
+            if self.max_epochs > 0 and self.epoch >= self.max_epochs:
+                break
             self.epoch += 1
 
             # learning rate schedule
             if self.shac_config.lr_schedule == 'linear':
+                assert self.max_epochs > 0
                 critic_lr = (1e-5 - self.critic_lr) * float(self.epoch / self.max_epochs) + self.critic_lr
                 for param_group in self.critic_optim.param_groups:
                     param_group['lr'] = critic_lr
@@ -263,7 +268,7 @@ class SHAC(Agent):
                     soft_update(self.encoder, self.encoder_target, alpha)
                     soft_update(self.critic, self.critic_target, alpha)
 
-            # gather train metrics
+            # train metrics
             results = {**actor_results, **critic_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
             metrics.update({"epoch": self.epoch, "lr": lr})
@@ -305,7 +310,7 @@ class SHAC(Agent):
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                     f'Stats:',
                     f'ep_rewards {mean_episode_rewards:.2f},',
-                    f'ep_lenths {mean_episode_lengths:.2f},',
+                    f'ep_lengths {mean_episode_lengths:.2f},',
                     f'ep_discounted_rewards {mean_episode_discounted_rewards:.2f},',
                     f'value_loss {metrics["train_stats/value_loss"]:.4f},',
                     f'grad_norm_before_clip {metrics["train_stats/grad_norm_before_clip"]:.2f},',
@@ -348,7 +353,7 @@ class SHAC(Agent):
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
                 # sanity check
-                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1000000.0:
+                if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
                     print('NaN gradient')
                     raise ValueError
 
@@ -361,7 +366,7 @@ class SHAC(Agent):
         self.actor_optim.step(actor_closure)
         return results
 
-    def compute_actor_loss(self, deterministic=False):
+    def compute_actor_loss(self):
         rew_acc = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
         next_values = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
@@ -395,7 +400,7 @@ class SHAC(Agent):
                     self.obs_buf[k][i] = v.clone()
 
             # take env step
-            actions = self.get_actions(obs, sample=not deterministic)
+            actions = self.get_actions(obs, sample=True)
             obs, rew, done, extra_info = self.env.step(actions)
             obs = self._convert_obs(obs)
 
@@ -520,6 +525,7 @@ class SHAC(Agent):
         results = collections.defaultdict(list)
         for j in range(self.critic_iterations):
             total_critic_loss = 0.0
+            critic_grad_norms = []
             B = len(dataset)
 
             for i in range(B):
@@ -535,12 +541,14 @@ class SHAC(Agent):
                     params.grad.nan_to_num_(0.0, 0.0, 0.0)
 
                 if self.shac_config.truncate_grads:
-                    nn.utils.clip_grad_norm_(self.critic.parameters(), self.shac_config.max_grad_norm)
+                    critic_grad_norm = nn.utils.clip_grad_norm_(self.critic.parameters(), self.shac_config.max_grad_norm)
+                    critic_grad_norms.append(critic_grad_norm)
 
                 self.critic_optim.step()
                 total_critic_loss += critic_loss
             value_loss = (total_critic_loss / B).detach()
             results["value_loss"].append(value_loss)
+            results["grad_norm_critic"].append(torch.mean(torch.stack(critic_grad_norms)))
 
         #     print(f'value iter {j+1}/{self.critic_iterations}, value_loss= {value_loss.item():7.6f}', end='\r')
         # print()
@@ -571,7 +579,7 @@ class SHAC(Agent):
 
     def eval(self):
         mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors, deterministic=True
+            num_episodes=self.num_actors, sample=True
         )
         print(
             f'mean ep_rewards = {mean_episode_rewards},',
@@ -587,18 +595,24 @@ class SHAC(Agent):
 
     def save(self, f):
         ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
             'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
-            'encoder_target': self.encoder_target.state_dict(),
-            'critic_target': self.critic_target.state_dict(),
-            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
-            'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
+            'encoder_target': self.encoder_target.state_dict() if not self.shac_config.no_target_critic else None,
+            'critic_target': self.critic_target.state_dict() if not self.shac_config.no_target_critic else None,
         }
         torch.save(ckpt, f)
 
     def load(self, f, ckpt_keys=''):
-        all_ckpt_keys = ('encoder', 'actor', 'critic', 'encoder_target', 'critic_target', 'obs_rms', 'ret_rms')
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('obs_rms', 'encoder', 'actor', 'critic')
+        all_ckpt_keys += ('ret_rms',)
+        all_ckpt_keys += ('encoder_target', 'critic_target')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
             if not re.match(ckpt_keys, k):
@@ -607,6 +621,10 @@ class SHAC(Agent):
             if k == 'obs_rms' and (not self.normalize_input):
                 continue
             if k == 'ret_rms' and (not self.normalize_ret):
+                continue
+            if k == 'encoder_target' and (self.shac_config.no_target_critic):
+                continue
+            if k == 'critic_target' and (self.shac_config.no_target_critic):
                 continue
 
             if hasattr(getattr(self, k), 'load_state_dict'):

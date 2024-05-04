@@ -5,10 +5,10 @@ import torch.nn as nn
 
 
 class AdaptiveScheduler:
-    def __init__(self, kl_threshold=0.008):
+    def __init__(self, kl_threshold=0.008, min_lr=1e-6, max_lr=1e-2):
         super().__init__()
-        self.min_lr = 1e-6
-        self.max_lr = 1e-2
+        self.min_lr = min_lr
+        self.max_lr = max_lr
         self.kl_threshold = kl_threshold
 
     def update(self, current_lr, kl_dist):
@@ -21,10 +21,10 @@ class AdaptiveScheduler:
 
 
 class LinearScheduler:
-    def __init__(self, start_lr, max_steps=1000000):
+    def __init__(self, start_lr, min_lr=1e-6, max_steps=1000000):
         super().__init__()
         self.start_lr = start_lr
-        self.min_lr = 1e-06
+        self.min_lr = min_lr
         self.max_steps = max_steps
 
     def update(self, steps):

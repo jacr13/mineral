@@ -13,6 +13,8 @@ from . import models
 
 
 class BC(Agent):
+    r"""Behavioral Cloning."""
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.bc_config = full_cfg.agent.bc
@@ -129,7 +131,7 @@ class BC(Agent):
                 traj_next_obs[k][:, i] = v
             self.obs = next_obs
 
-        self.metrics.flush_video_buf(self.epoch)
+        self.metrics.flush_video(self.epoch)
 
         # traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
         traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
@@ -147,7 +149,7 @@ class BC(Agent):
                 self.mini_epoch += 1
                 results = self.update_model(batch)
 
-                # gather train metrics
+                # train metrics
                 metrics = {k: torch.stack(v).mean().item() for k, v in results.items()}
                 metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch})
                 metrics = {f"train_stats/{k}": v for k, v in metrics.items() if v is not None}
@@ -211,28 +213,32 @@ class BC(Agent):
 
     def eval(self):
         self.set_eval()
+
         obs = self.env.reset()
         self.obs = self._convert_obs(obs)
         self.dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
 
-        self.metrics.episode_rewards.reset()
-        self.metrics.episode_lengths.reset()
+        total_eval_episodes = self.num_actors
+        eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
+        with self._as_metrics(eval_metrics):
+            while self.metrics.num_episodes < total_eval_episodes:
+                # TODO: assumes envs do not terminate early
+                max_steps = self.env.max_episode_length
+                trajectory, steps = self.explore_env(self.env, max_steps, random=False, sample=False)
+                print(f"Evaluated {self.metrics.num_episodes} / {total_eval_episodes} episodes")
 
-        max_steps = self.env.max_episode_length
-        eval_episodes, total_eval_episodes = 0, self.metrics.tracker_len
-        while eval_episodes < total_eval_episodes:
-            # TODO: assumes envs do not terminate early
-            trajectory, steps = self.explore_env(self.env, max_steps, random=False, sample=False)
-            eval_episodes += self.num_actors
-            print(f"Evaluated {eval_episodes} / {total_eval_episodes} episodes")
+            metrics = {
+                "eval_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "eval_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                **self.metrics.result(prefix="eval"),
+            }
+            print("rewards:", self.metrics.episode_trackers["rewards"].window)
+            print("lengths:", self.metrics.episode_trackers["lengths"].window)
+            print(metrics)
 
-        eval_metrics = {
-            "eval_scores/episode_rewards": self.metrics.episode_rewards.mean(),
-            "eval_scores/episode_lengths": self.metrics.episode_lengths.mean(),
-        }
-        eval_metrics = self.metrics.result(eval_metrics)
-        self.writer.add(self.mini_epoch, eval_metrics)
-        self.writer.write()
+            self.writer.add(self.mini_epoch, metrics)
+            self.writer.write()
 
     def set_train(self):
         self.model.train()
