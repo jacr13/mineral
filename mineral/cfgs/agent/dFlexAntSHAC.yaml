@@ -14,6 +14,7 @@ network:
       units: [128, 64, 32]
       norm_type: LayerNorm
       act_type: ELU
+  tanh_clamp: True
 
   critic: Critic
   critic_kwargs:
@@ -30,22 +31,22 @@ shac:
     fn: scale
     scale: 1.0
 
+  max_epochs: 2000
   max_agent_steps: 5e6
   horizon_len: 32
   num_critic_batches: 4
-  max_epochs: 2000
+
+  gamma: 0.99
+  critic_method: td-lambda  # td-lambda | one-step
+  lambda: 0.95
+  critic_iterations: 16
+  normalize_ret: False
 
   optim_type: Adam
   actor_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
   critic_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
   lr_schedule: linear  # linear | constant
-  max_grad_norm: 1.0
-  truncate_grads: True
-
-  gamma: 0.99
-  critic_method: td-lambda  # td-lambda | one-step
-  lambda: 0.95
   target_critic_alpha: 0.2
   no_target_critic: False
-  critic_iterations: 16
-  normalize_ret: False
+  max_grad_norm: 1.0
+  truncate_grads: True
