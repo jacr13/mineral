@@ -41,6 +41,7 @@ class SHAC(Agent):
         self.max_episode_length = self.env.episode_length
 
         # --- SHAC Parameters ---
+        self.tanh_clamp = self.network_config.get('tanh_clamp', False)
         self.normalize_ret = self.shac_config.get('normalize_ret', False)
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
@@ -168,8 +169,9 @@ class SHAC(Agent):
         else:
             actions = mu
 
-        # clamp actions
-        actions = torch.tanh(actions)
+        if self.tanh_clamp:
+            # clamp actions
+            actions = torch.tanh(actions)
 
         if dist:
             return actions, mu, sigma, distr
