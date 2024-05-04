@@ -22,7 +22,7 @@ from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
 from . import models
-from .utils import CriticDataset, grad_norm, policy_kl, soft_update
+from .utils import CriticDataset, adaptive_scheduler, grad_norm, policy_kl, soft_update
 
 
 class SHAC(Agent):
@@ -113,6 +113,9 @@ class SHAC(Agent):
         # TODO: encoder_lr? currently overridden by actor_lr
         self.actor_lr = self.actor_optim.defaults["lr"]
         self.critic_lr = self.critic_optim.defaults["lr"]
+        # kl scheduler
+        self.last_lr = self.actor_lr
+        self.kl_threshold = self.shac_config.get('kl_threshold', 0.008)
 
         # --- Target Networks ---
         self.encoder_target = deepcopy(self.encoder) if not self.shac_config.no_target_critic else self.encoder
@@ -245,6 +248,16 @@ class SHAC(Agent):
                 lr = actor_lr
             elif self.shac_config.lr_schedule == 'constant':
                 lr = self.actor_lr
+            elif self.shac_config.lr_schedule == 'kl':
+                if self.avg_kl is not None:
+                    actor_lr = adaptive_scheduler(self.last_lr, self.avg_kl.item(), kl_threshold=self.kl_threshold)
+                    critic_lr = actor_lr
+                    self.last_lr = actor_lr
+                    for param_group in self.critic_optim.param_groups:
+                        param_group['lr'] = critic_lr
+                    for param_group in self.actor_optim.param_groups:
+                        param_group['lr'] = actor_lr
+                lr = self.last_lr
             else:
                 raise NotImplementedError(self.shac_config.lr_schedule)
 
