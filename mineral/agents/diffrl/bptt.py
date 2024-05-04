@@ -47,7 +47,7 @@ class BPTT(Agent):
         self.gamma = self.bptt_config.get('gamma', 0.99)
 
         self.horizon_len = self.bptt_config.horizon_len
-        self.max_epochs = self.bptt.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
+        self.max_epochs = self.bptt_config.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
 
         # --- Normalizers ---
         rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
