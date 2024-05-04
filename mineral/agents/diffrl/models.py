@@ -90,11 +90,16 @@ class Critic(nn.Module):
         # if self.weight_init == "orthogonal":
         #     nn.init.orthogonal_(self.critic_mlp.mlp[-1].weight, gain=1.0)
 
-    def forward(self, x):
+    def forward(self, x, return_type=None):
         if isinstance(x, dict):
             x = x["z"]
         x = self.critic_mlp(x)
-        return x
+        if return_type == "all":
+            return [x]
+        elif return_type == "min_and_avg":
+            return x, x.clone()
+        else:
+            return x
 
 
 class EnsembleCritic(nn.Module):
@@ -124,9 +129,15 @@ class EnsembleCritic(nn.Module):
             if self.weight_init == "orthogonal":
                 nn.init.orthogonal_(critic.mlp[-1].weight, gain=1.0)
 
-    def forward(self, x):
+    def forward(self, x, return_type="min"):
         if isinstance(x, dict):
             x = x["z"]
         Vs = [critic(x) for critic in self.critics]
-        Vs = torch.min(torch.stack(Vs), dim=0).values
+        if return_type == "min":
+            Vs = torch.min(torch.stack(Vs), dim=0).values
+        elif return_type == "min_and_avg":
+            Vs = torch.stack(Vs)
+            Vs_min = torch.min(Vs, dim=0).values
+            Vs_avg = torch.mean(Vs, dim=0)
+            return Vs_min, Vs_avg
         return Vs

@@ -15,6 +15,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ... import nets
 from ...common import normalizers
@@ -46,6 +47,7 @@ class SHAC(Agent):
         self.normalize_ret = self.shac_config.get('normalize_ret', False)
         self.normalize_value = self.shac_config.get('normalize_value', False)
         self.actor_loss_normval = self.shac_config.get('actor_loss_normval', False)
+        self.actor_loss_avgcritics = self.shac_config.get('actor_loss_avgcritics', True)
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
         if self.critic_method == 'td-lambda':
@@ -170,6 +172,7 @@ class SHAC(Agent):
         self.rew_buf = torch.zeros((T, B), dtype=torch.float32, device=self.device)
         self.done_mask = torch.zeros((T, B), dtype=torch.float32, device=self.device)
         self.next_values = torch.zeros((T, B), dtype=torch.float32, device=self.device)
+        self.avg_next_values = torch.zeros((T, B), dtype=torch.float32, device=self.device)
         self.target_values = torch.zeros((T, B), dtype=torch.float32, device=self.device)
         self.ret = torch.zeros((B), dtype=torch.float32, device=self.device)
 
@@ -416,6 +419,7 @@ class SHAC(Agent):
         rew_acc = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
         next_values = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
+        avg_next_values = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
 
         with torch.no_grad():
             if self.obs_rms is not None:
@@ -492,10 +496,13 @@ class SHAC(Agent):
 
             # value bootstrap when episode terminates
             z_target = self.encoder_target(obs)
-            pred_val = self.critic_target(z_target).squeeze(-1)
+            pred_val, avg_pred_val = self.critic_target(z_target, return_type="min_and_avg")
+            pred_val, avg_pred_val = pred_val.squeeze(-1), avg_pred_val.squeeze(-1)
             if self.value_rms is not None:
                 pred_val = self.value_rms.unnormalize(pred_val)
+                avg_pred_val = self.value_rms.unnormalize(avg_pred_val)
             next_values[i + 1] = pred_val
+            avg_next_values[i + 1] = avg_pred_val
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
@@ -516,32 +523,41 @@ class SHAC(Agent):
                             break
                     if nan:
                         next_values[i + 1, id] = 0.0
+                        avg_next_values[i + 1, id] = 0.0
                     elif self.episode_lengths[id] < self.max_episode_length:  # early termination
                         next_values[i + 1, id] = 0.0
+                        avg_next_values[i + 1, id] = 0.0
                     else:  # otherwise, use terminal value critic to estimate the long-term performance
                         real_obs = {k: v[id.reshape(1)] for k, v in terminal_obs.items()}
                         if self.obs_rms is not None:
                             real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
                         real_z_target = self.encoder_target(real_obs)
-                        real_next_values = self.critic_target(real_z_target).squeeze(-1)
+                        real_next_values, avg_real_next_values = self.critic_target(real_z_target, return_type="min_and_avg")
+                        real_next_values, avg_real_next_values = real_next_values.squeeze(-1), avg_real_next_values.squeeze(-1)
                         if self.value_rms is not None:
                             real_next_values = self.value_rms.unnormalize(real_next_values)
+                            avg_real_next_values = self.value_rms.unnormalize(avg_real_next_values)
                         next_values[i + 1, id] = real_next_values
+                        avg_next_values[i + 1, id] = avg_real_next_values
 
             if (next_values[i + 1] > 1e6).sum() > 0 or (next_values[i + 1] < -1e6).sum() > 0:
                 print('next value error')
                 raise ValueError
+            if (avg_next_values[i + 1] > 1e6).sum() > 0 or (avg_next_values[i + 1] < -1e6).sum() > 0:
+                print('avg next value error')
+                raise ValueError
 
             # compute actor loss
             rew_acc[i + 1, :] = rew_acc[i, :] + gamma * rew
+            next_vs = avg_next_values if self.actor_loss_avgcritics else next_values
             if i < self.horizon_len - 1:
-                a_loss = rew_acc[i + 1, done_env_ids] + self.gamma * gamma[done_env_ids] * next_values[i + 1, done_env_ids]
+                a_loss = rew_acc[i + 1, done_env_ids] + self.gamma * gamma[done_env_ids] * next_vs[i + 1, done_env_ids]
                 if self.value_rms is not None and self.actor_loss_normval:
                     a_loss = self.value_rms.normalize(a_loss)
                 actor_loss = actor_loss + -a_loss.sum()
             else:
                 # terminate all envs at the end of optimization iteration
-                a_loss = rew_acc[i + 1, :] + self.gamma * gamma * next_values[i + 1, :]
+                a_loss = rew_acc[i + 1, :] + self.gamma * gamma * next_vs[i + 1, :]
                 if self.value_rms is not None and self.actor_loss_normval:
                     a_loss = self.value_rms.normalize(a_loss)
                 actor_loss = actor_loss + -a_loss.sum()
@@ -560,7 +576,8 @@ class SHAC(Agent):
                     self.done_mask[i] = done.clone().to(dtype=torch.float32)
                 else:
                     self.done_mask[i, :] = 1.0
-                self.next_values[i] = next_values[i + 1].clone()
+                self.next_values[i] = next_values[i + 1].clone()  # this is min of critics ensemble
+                self.avg_next_values[i] = avg_next_values[i + 1].clone()
 
             # collect episode metrics
             with torch.no_grad():
@@ -588,7 +605,8 @@ class SHAC(Agent):
         if self.value_rms is not None:
             # update value rms
             with torch.no_grad():
-                self.value_rms.update(self.next_values.view(-1, 1))
+                # self.value_rms.update(self.next_values.view(-1, 1))
+                self.value_rms.update(self.avg_next_values.view(-1, 1))
 
         actor_loss /= self.horizon_len * self.num_envs
         if self.ret_rms is not None:
@@ -630,10 +648,10 @@ class SHAC(Agent):
         # print()
         return results
 
-    def compute_critic_loss(self, obs, target_values):
+    def compute_critic_loss(self, obs, target_v):
         z = self.encoder(obs)
-        predicted_values = self.critic(z).squeeze(-1)
-        critic_loss = ((predicted_values - target_values) ** 2).mean()
+        pred_vs = self.critic(z, return_type='all')
+        critic_loss = torch.mean(torch.stack([F.mse_loss(pred_v.squeeze(-1), target_v) for pred_v in pred_vs]))
         return critic_loss
 
     @torch.no_grad()
