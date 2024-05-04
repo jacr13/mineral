@@ -43,6 +43,8 @@ class SHAC(Agent):
         # --- SHAC Parameters ---
         self.tanh_clamp = self.network_config.get('tanh_clamp', False)
         self.normalize_ret = self.shac_config.get('normalize_ret', False)
+        self.normalize_value = self.shac_config.get('normalize_value', False)
+        self.actor_loss_normval = self.shac_config.get('actor_loss_normval', False)
         self.gamma = self.shac_config.get('gamma', 0.99)
         self.critic_method = self.shac_config.get('critic_method', 'one-step')  # ['one-step', 'td-lambda']
         if self.critic_method == 'td-lambda':
@@ -72,6 +74,12 @@ class SHAC(Agent):
         self.ret_rms = None
         if self.normalize_ret:
             self.ret_rms = normalizers.RunningMeanStd((), **rms_config).to(self.device)
+
+        self.value_rms = None
+        if self.normalize_value:
+            assert self.shac_config.no_target_critic
+            rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)
+            self.value_rms = normalizers.RunningMeanStd((1,), **rms_config).to(self.device)
 
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
@@ -273,6 +281,8 @@ class SHAC(Agent):
             self.timer.start("train/make_critic_dataset")
             with torch.no_grad():
                 self.compute_target_values()
+                if self.value_rms is not None:
+                    self.target_values = self.value_rms.normalize(self.target_values)
                 dataset = CriticDataset(self.critic_batch_size, self.obs_buf, self.target_values, drop_last=False)
             self.timer.end("train/make_critic_dataset")
 
@@ -408,6 +418,9 @@ class SHAC(Agent):
                 # TODO: not using mean centering of ret_rms?
                 ret_var = self.ret_rms.running_var.clone()
 
+            # if self.value_rms is not None:
+            #     value_var = self.value_rms.running_var.clone()
+
         # initialize trajectory to cut off gradients between episodes.
         obs = self.env.initialize_trajectory()
         obs = self._convert_obs(obs)
@@ -472,7 +485,11 @@ class SHAC(Agent):
 
             # value bootstrap when episode terminates
             z_target = self.encoder_target(obs)
-            next_values[i + 1] = self.critic_target(z_target).squeeze(-1)
+            pred_val = self.critic_target(z_target).squeeze(-1)
+            if self.value_rms is not None:
+                pred_val = self.value_rms.unnormalize(pred_val)
+            next_values[i + 1] = pred_val
+
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
                 terminal_obs = extra_info['obs_before_reset']
@@ -500,7 +517,10 @@ class SHAC(Agent):
                         if self.obs_rms is not None:
                             real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
                         real_z_target = self.encoder_target(real_obs)
-                        next_values[i + 1, id] = self.critic_target(real_z_target).squeeze(-1)
+                        real_next_values = self.critic_target(real_z_target).squeeze(-1)
+                        if self.value_rms is not None:
+                            real_next_values = self.value_rms.unnormalize(real_next_values)
+                        next_values[i + 1, id] = real_next_values
 
             if (next_values[i + 1] > 1e6).sum() > 0 or (next_values[i + 1] < -1e6).sum() > 0:
                 print('next value error')
@@ -509,12 +529,16 @@ class SHAC(Agent):
             # compute actor loss
             rew_acc[i + 1, :] = rew_acc[i, :] + gamma * rew
             if i < self.horizon_len - 1:
-                a_loss = -rew_acc[i + 1, done_env_ids] - self.gamma * gamma[done_env_ids] * next_values[i + 1, done_env_ids]
-                actor_loss = actor_loss + a_loss.sum()
+                a_loss = rew_acc[i + 1, done_env_ids] + self.gamma * gamma[done_env_ids] * next_values[i + 1, done_env_ids]
+                if self.value_rms is not None and self.actor_loss_normval:
+                    a_loss = self.value_rms.normalize(a_loss)
+                actor_loss = actor_loss + -a_loss.sum()
             else:
                 # terminate all envs at the end of optimization iteration
-                a_loss = -rew_acc[i + 1, :] - self.gamma * gamma * next_values[i + 1, :]
-                actor_loss = actor_loss + a_loss.sum()
+                a_loss = rew_acc[i + 1, :] + self.gamma * gamma * next_values[i + 1, :]
+                if self.value_rms is not None and self.actor_loss_normval:
+                    a_loss = self.value_rms.normalize(a_loss)
+                actor_loss = actor_loss + -a_loss.sum()
 
             # compute gamma for next step
             gamma = gamma * self.gamma
@@ -554,9 +578,16 @@ class SHAC(Agent):
 
         self.agent_steps += self.horizon_len * self.num_envs
 
+        if self.value_rms is not None:
+            # update value rms
+            with torch.no_grad():
+                self.value_rms.update(self.next_values.view(-1, 1))
+
         actor_loss /= self.horizon_len * self.num_envs
         if self.ret_rms is not None:
             actor_loss = actor_loss * torch.sqrt(ret_var + 1e-6)
+        # if self.value_rms is not None:
+        #     actor_loss = actor_loss * torch.sqrt(value_var + 1e-6)
         return actor_loss
 
     def update_critic(self, dataset):
@@ -638,6 +669,7 @@ class SHAC(Agent):
             'agent_steps': self.agent_steps,
             'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
             'ret_rms': self.ret_rms.state_dict() if self.normalize_ret else None,
+            'value_rms': self.value_rms.state_dict() if self.normalize_value else None,
             'encoder': self.encoder.state_dict(),
             'actor': self.actor.state_dict(),
             'critic': self.critic.state_dict(),
@@ -650,6 +682,7 @@ class SHAC(Agent):
         all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
         all_ckpt_keys += ('obs_rms', 'encoder', 'actor', 'critic')
         all_ckpt_keys += ('ret_rms',)
+        all_ckpt_keys += ('value_rms',)
         all_ckpt_keys += ('encoder_target', 'critic_target')
         ckpt = torch.load(f, map_location=self.device)
         for k in all_ckpt_keys:
@@ -659,6 +692,8 @@ class SHAC(Agent):
             if k == 'obs_rms' and (not self.normalize_input):
                 continue
             if k == 'ret_rms' and (not self.normalize_ret):
+                continue
+            if k == 'value_rms' and (not self.normalize_value):
                 continue
             if k == 'encoder_target' and (self.shac_config.no_target_critic):
                 continue
