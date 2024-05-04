@@ -22,7 +22,7 @@ from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
 from . import models
-from .utils import CriticDataset, grad_norm, soft_update
+from .utils import CriticDataset, grad_norm, policy_kl, soft_update
 
 
 class SHAC(Agent):
@@ -152,12 +152,11 @@ class SHAC(Agent):
         self.ret = torch.zeros((B), dtype=torch.float32, device=self.device)
 
         # for kl divergence computing
-        self.old_mus = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
-        self.old_sigmas = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
         self.mus = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
         self.sigmas = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
+        self.avg_kl = None
 
-    def get_actions(self, obs, sample=True):
+    def get_actions(self, obs, sample=True, dist=False):
         # NOTE: obs_rms.normalize(...) occurs elsewhere
         z = self.encoder(obs)
         mu, sigma, distr = self.actor(z)
@@ -165,9 +164,14 @@ class SHAC(Agent):
             actions = distr.rsample()
         else:
             actions = mu
+
         # clamp actions
         actions = torch.tanh(actions)
-        return actions
+
+        if dist:
+            return actions, mu, sigma, distr
+        else:
+            return actions
 
     @torch.no_grad()
     def evaluate_policy(self, num_episodes, sample=False):
@@ -364,6 +368,16 @@ class SHAC(Agent):
             return actor_loss
 
         self.actor_optim.step(actor_closure)
+
+        if self.shac_config.lr_schedule == 'kl':
+            with torch.no_grad():
+                old_mu, old_sigma = self.mus.view(-1, self.num_actions), self.sigmas.view(-1, self.num_actions)
+                _, mu, sigma, _ = self.get_actions(self.obs_buf, sample=False, dist=True)
+                mu, sigma = mu.view(-1, self.num_actions), sigma.view(-1, self.num_actions)
+                kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
+                self.avg_kl = kl_dist.mean()
+                results["avg_kl"].append(self.avg_kl)
+
         return results
 
     def compute_actor_loss(self):
@@ -391,6 +405,12 @@ class SHAC(Agent):
             # normalize the current obs
             obs = {k: obs_rms[k].normalize(v) for k, v in obs.items()}
 
+        # zero out mus and sigmas just in case
+        if self.epoch > 0:
+            with torch.no_grad():
+                self.mus.zero_()
+                self.sigmas.zero_()
+
         # collect trajectories and compute actor loss
         actor_loss = torch.tensor(0.0, dtype=torch.float32, device=self.device)
         for i in range(self.horizon_len):
@@ -400,7 +420,10 @@ class SHAC(Agent):
                     self.obs_buf[k][i] = v.clone()
 
             # take env step
-            actions = self.get_actions(obs, sample=True)
+            actions, mu, sigma, distr = self.get_actions(obs, sample=True, dist=True)
+            with torch.no_grad():
+                self.mus[i, ...] = mu.clone()
+                self.sigmas[i, ...] = sigma.clone()
             obs, rew, done, extra_info = self.env.step(actions)
             obs = self._convert_obs(obs)
 
