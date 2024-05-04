@@ -142,7 +142,7 @@ class SHAC(Agent):
 
         # --- Episode Metrics ---
         self.episode_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
-        self.episode_lengths = torch.zeros(self.num_envs, dtype=int)
+        self.episode_lengths = torch.zeros(self.num_envs, dtype=int, device=self.device)
         self.episode_discounted_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         self.episode_gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
@@ -510,13 +510,12 @@ class SHAC(Agent):
                             print(f'nan value: {k}')
                             nan = True
                             break
-
                     if nan:
                         next_values[i + 1, id] = 0.0
                     elif self.episode_lengths[id] < self.max_episode_length:  # early termination
                         next_values[i + 1, id] = 0.0
                     else:  # otherwise, use terminal value critic to estimate the long-term performance
-                        real_obs = {k: v[[id]] for k, v in terminal_obs.items()}
+                        real_obs = {k: v[id.reshape(1)] for k, v in terminal_obs.items()}
                         if self.obs_rms is not None:
                             real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
                         real_z_target = self.encoder_target(real_obs)
