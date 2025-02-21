@@ -2,6 +2,7 @@ from collections import deque
 from collections.abc import Sequence
 
 import numpy as np
+import scipy.stats
 import torch
 
 
@@ -32,6 +33,17 @@ class Tracker:
 
     def min(self):
         return np.min(self.window)
+
+    def median(self):
+        return np.median(self.window)
+
+    def sum(self):
+        return np.sum(self.window)
+
+    def iqm(self):
+        # trim_mean = lambda arr, p: np.mean(sorted(arr)[int(len(arr)*p):-int(len(arr)*p) or None])
+        # return trim_mean(self.window, 0.25)
+        return scipy.stats.trim_mean(self.window, proportiontocut=0.25)
 
     def __repr__(self):
         return self.window.__repr__()
