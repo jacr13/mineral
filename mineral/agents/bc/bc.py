@@ -23,11 +23,12 @@ class BC(Agent):
         super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
+        rms_config = dict()
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
                 if re.match(self.obs_rms_keys, k):
-                    self.obs_rms[k] = normalizers.RunningMeanStd(v)
+                    self.obs_rms[k] = normalizers.RunningMeanStd(v, **rms_config)
                 else:
                     self.obs_rms[k] = normalizers.Identity()
             self.obs_rms = nn.ModuleDict(self.obs_rms).to(self.device)
