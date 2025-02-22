@@ -64,14 +64,17 @@ class RunningMeanStd(nn.Module):
 
     def normalize(self, x):
         x = (x - self.running_mean.float()) / torch.sqrt(self.running_var.float() + self.eps)
-        if self.with_clamp:
-            x = torch.clamp(x, min=self.clamp_range[0], max=self.clamp_range[1])
+        x = self.clamp(x)
         return x
 
     def unnormalize(self, x):
+        x = self.clamp(x)
+        x = torch.sqrt(self.running_var.float() + self.eps) * x + self.running_mean.float()
+        return x
+
+    def clamp(self, x):
         if self.with_clamp:
             x = torch.clamp(x, min=self.clamp_range[0], max=self.clamp_range[1])
-        x = torch.sqrt(self.running_var.float() + self.eps) * x + self.running_mean.float()
         return x
 
     def __repr__(self):
