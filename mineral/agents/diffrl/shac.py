@@ -41,7 +41,7 @@ class SHAC(Agent):
         self.max_episode_length = self.env.episode_length
 
         # --- SHAC Parameters ---
-        self.tanh_clamp = self.network_config.get('tanh_clamp', False)
+        self.tanh_clamp = self.network_config.get('tanh_clamp', False)  # on actions, if not done in actor dist
         self.normalize_ret = self.shac_config.get('normalize_ret', False)
         self.normalize_value = self.shac_config.get('normalize_value', False)
         self.actor_loss_normval = self.shac_config.get('actor_loss_normval', False)
@@ -59,7 +59,12 @@ class SHAC(Agent):
         print('Critic batch size:', self.critic_batch_size)
 
         # --- Normalizers ---
-        rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
+        if self.tanh_clamp:  # legacy
+            # unbiased=False -> correction=0
+            # https://github.com/NVlabs/DiffRL/blob/a4c0dd1696d3c3b885ce85a3cb64370b580cb913/utils/running_mean_std.py#L34
+            rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float32)
+        else:
+            rms_config = dict(eps=1e-5, initial_count=1, dtype=torch.float64)
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
