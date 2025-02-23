@@ -57,5 +57,22 @@ class SquashedNormal(D.TransformedDistribution):
             mu = tr(mu)
         return mu
 
-    def entropy(self):
-        return self.base_dist.entropy()
+    # def entropy(self):
+    #     return self.base_dist.entropy()
+
+    def entropy(self, N=1):  # https://github.com/facebookresearch/online-dt/blob/c376fa113ba34bcd422da44598e8c2433c06a590/decision_transformer/models/decision_transformer.py#L81
+        # sample from the distribution and then compute
+        # the empirical entropy:
+        x = self.rsample((N,))
+        log_p = self.log_prob(x)
+
+        # log_p: (batch_size, context_len, action_dim),
+        # return -log_p.mean(axis=0).sum(axis=2)
+        return -log_p.mean(axis=0)  # sum done elsewhere
+
+    # def log_likelihood(self, x):
+    #     # log_prob(x): (batch_size, context_len, action_dim)
+    #     # sum up along the action dimensions
+    #     # Return tensor shape: (batch_size, context_len)
+    #     # return self.log_prob(x).sum(axis=2)
+    #     return self.log_prob(x)  # sum done elsewhere
