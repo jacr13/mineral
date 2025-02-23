@@ -7,6 +7,7 @@
 
 import collections
 import itertools
+import json
 import os
 import re
 from copy import deepcopy
@@ -159,6 +160,7 @@ class SHAC(Agent):
         self.episode_rewards_tracker = Tracker(tracker_len)
         self.episode_lengths_tracker = Tracker(tracker_len)
         self.episode_discounted_rewards_tracker = Tracker(tracker_len)
+        self.num_episodes = torch.tensor(0, dtype=int)
 
         # --- Timing ---
         self.timer = Timer()
@@ -234,11 +236,7 @@ class SHAC(Agent):
                     episode_gamma[done_env_id] = 1.0
                     episodes += 1
 
-        mean_episode_rewards = np.mean(np.array(episode_rewards_hist))
-        mean_episode_lengths = np.mean(np.array(episode_lengths_hist))
-        mean_episode_discounted_rewards = np.mean(np.array(episode_discounted_rewards_hist))
-
-        return mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards
+        return episode_rewards_hist, episode_lengths_hist, episode_discounted_rewards_hist
 
     def initialize_env(self):
         self.env.clear_grad()
@@ -324,6 +322,7 @@ class SHAC(Agent):
                 mean_episode_discounted_rewards = self.episode_discounted_rewards_tracker.mean()
 
                 episode_metrics = {
+                    "train_scores/num_episodes": self.num_episodes.item(),
                     "train_scores/episode_rewards": mean_episode_rewards,
                     "train_scores/episode_lengths": mean_episode_lengths,
                     "train_scores/episode_discounted_rewards": mean_episode_discounted_rewards,
@@ -570,6 +569,7 @@ class SHAC(Agent):
                     self.episode_rewards_tracker.update(self.episode_rewards[done_env_ids])
                     self.episode_lengths_tracker.update(self.episode_lengths[done_env_ids])
                     self.episode_discounted_rewards_tracker.update(self.episode_discounted_rewards[done_env_ids])
+                    self.num_episodes += len(done_env_ids)
 
                     for done_env_id in done_env_ids:
                         if self.episode_rewards[done_env_id] > 1e6 or self.episode_rewards[done_env_id] < -1e6:
@@ -654,14 +654,31 @@ class SHAC(Agent):
             raise NotImplementedError(self.critic_method)
 
     def eval(self):
-        mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors, sample=True
+        episode_rewards, episode_lengths, episode_discounted_rewards = self.evaluate_policy(
+            num_episodes=self.num_actors * 2, sample=True
         )
-        print(
-            f'mean ep_rewards = {mean_episode_rewards},',
-            f'mean ep_lengths = {mean_episode_lengths}',
-            f'mean ep_discounted_rewards = {mean_episode_discounted_rewards},',
-        )
+
+        metrics = {
+            "eval_scores/num_episodes": len(episode_rewards),
+            "eval_scores/episode_rewards": np.mean(np.array(episode_rewards)),
+            "eval_scores/episode_lengths": np.mean(np.array(episode_lengths)),
+            "eval_scores/episode_discounted_rewards": np.mean(np.array(episode_discounted_rewards)),
+        }
+        print(metrics)
+
+        self.writer.add(self.agent_steps, metrics)
+        self.writer.write()
+
+        scores = {
+            "epoch": self.epoch,
+            "mini_epoch": self.mini_epoch,
+            "agent_steps": self.agent_steps,
+            "eval_scores/num_episodes": len(episode_rewards),
+            "eval_scores/episode_rewards": episode_rewards,
+            "eval_scores/episode_lengths": episode_lengths,
+            "eval_scores/episode_discounted_rewards": episode_discounted_rewards,
+        }
+        json.dump(scores, open(os.path.join(self.logdir, "scores.json"), "w"), indent=4)
 
     def set_train(self):
         pass
