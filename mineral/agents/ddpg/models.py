@@ -48,6 +48,8 @@ class Actor(nn.Module):
             raise NotImplementedError(self.weight_init)
 
     def forward(self, x, std=None):
+        if isinstance(x, dict):
+            x = x["z"]
         x = self.actor_mlp(x)
         mu = self.mu(x)
         if self.tanh_policy:  # DDPG
@@ -98,6 +100,8 @@ class EnsembleQ(nn.Module):
                 raise NotImplementedError(self.weight_init)
 
     def forward(self, state, action):
+        if isinstance(state, dict):
+            state = state["z"]
         input_x = torch.cat((state, action), dim=1)
         Qs = [critic(input_x) for critic in self.critics]
         return Qs
@@ -147,6 +151,8 @@ class DistributionalEnsembleQ(nn.Module):
             raise NotImplementedError(self.weight_init)
 
     def forward(self, state, action):
+        if isinstance(state, dict):
+            state = state["z"]
         input_x = torch.cat((state, action), dim=1)
         Qs = [critic(input_x) for critic in self.critics]
         return Qs

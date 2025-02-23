@@ -46,7 +46,7 @@ class SAC(Agent):
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
             EncoderCls = getattr(nets, self.network_config.encoder)
-            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}))
+            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}), weight_init_fn=weight_init_)
         else:
             f = lambda x: x['obs']
             self.encoder = nets.Lambda(f)
@@ -54,8 +54,11 @@ class SAC(Agent):
         print('Encoder:', self.encoder)
 
         # --- Model ---
-        obs_dim = self.obs_space['obs']
-        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
+        if self.network_config.get("encoder", None) is not None:
+            obs_dim = self.encoder.out_dim
+        else:
+            obs_dim = self.obs_space['obs']
+            obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
 
         ActorCls = getattr(models, self.network_config.actor)
         CriticCls = getattr(models, self.network_config.critic)

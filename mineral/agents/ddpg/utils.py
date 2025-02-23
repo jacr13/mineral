@@ -31,6 +31,17 @@ def distl_projection(next_dist, reward, done, gamma, v_min=-10, v_max=10, num_at
     return proj_dist
 
 
+def weight_init_(module, weight_init):
+    if weight_init == None:
+        pass
+    elif weight_init == "orthogonal":  # drqv2
+        module.apply(weight_init_orthogonal_)
+    elif weight_init == "uniform":  # original DDPG paper
+        module.apply(weight_init_uniform_)
+    else:
+        raise NotImplementedError(weight_init)
+
+
 def weight_init_orthogonal_(m):
     if isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data)
