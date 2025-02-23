@@ -78,6 +78,7 @@ class PointNet(nn.Module):
         stn_kwargs=dict(conv_units=[64, 128, 1024], mlp_units=[1024, 512, 256]),
         fstn_kwargs={},
         feature_transform=False,
+        pool="max",
         norm_type="BatchNorm1d",
         act_type="ReLU",
         plain_last=False,  # different than orig impl. that has bn but no relu in the last layer
@@ -87,6 +88,7 @@ class PointNet(nn.Module):
         self.global_feature_dim = global_feature_dim
         self.feature_transform = feature_transform
         self.feature_units = feature_units
+        self.pool = pool
 
         if local_feature_dim is not None:
             raise ValueError
@@ -124,6 +126,11 @@ class PointNet(nn.Module):
         x = self.feature_l1(x)
         x = x.view(B, N, -1)
 
-        global_x, _ = torch.max(x, 1)
+        if self.pool == "max":
+            global_x, _ = torch.max(x, 1)
+        elif self.pool == "avg":
+            global_x = torch.mean(x, 1)
+        else:
+            raise ValueError(self.pool)
         # local_x = torch.cat([global_x.unsqueeze(1).repeat(1, local_x.shape[1], 1), local_x], dim=-1)
         return global_x, local_x
