@@ -17,7 +17,7 @@ from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
 from ..agent import Agent
 from ..ddpg import models
-from ..ddpg.utils import soft_update
+from ..ddpg.utils import soft_update, weight_init_
 
 
 class SAC(Agent):
@@ -97,7 +97,10 @@ class SAC(Agent):
         self.reward_shaper = RewardShaper(**self.sac_config.reward_shaper)
 
         # --- SAC Entropy ---
-        self.target_entropy = -self.action_dim
+        target_entropy_scalar = self.sac_config.get("target_entropy_scalar", 1.0)
+        self.target_entropy = -self.action_dim * target_entropy_scalar
+        # RLPD divides by 2, https://github.com/ikostrikov/rlpd/blob/c90fd4baf28c9c9ef40a81460a2e395092844f88/rlpd/agents/sac/sac_learner.py#L78-L79
+        print('Target Entropy Scalar:', target_entropy_scalar, 'Target Entropy:', self.target_entropy)
         if self.sac_config.alpha is None:
             init_alpha = np.log(self.sac_config.init_alpha)
             self.log_alpha = nn.Parameter(torch.tensor(init_alpha, device=self.device, dtype=torch.float32))
@@ -209,7 +212,7 @@ class SAC(Agent):
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
             # timing metrics
-            timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
+            timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names, reset=False)
             timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
             metrics.update(timing_metrics)
 
@@ -229,7 +232,7 @@ class SAC(Agent):
 
             if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                 print(
-                    f'Epoch: {self.epoch} |',
+                    f'Epochs: {self.epoch + 1} |',
                     f'Agent Steps: {int(self.agent_steps):,} |',
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                     f'Stats:',
@@ -238,6 +241,9 @@ class SAC(Agent):
                     f'last_sps {timings["lastrate"]:.2f},',
                     f'SPS {timings["totalrate"]:.2f} |',
                 )
+
+        timings = self.timer.stats(step=self.agent_steps)
+        print(timings)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
@@ -280,7 +286,10 @@ class SAC(Agent):
                 next_obs = {k: self.obs_rms[k].normalize(v) for k, v in next_obs.items()}
             next_z = self.encoder_target(next_obs)
             next_actions, _, log_prob = self.get_actions(z=next_z, logprob=True)
-            target_Q = self.critic_target.get_q_min(next_z, next_actions) - self.get_alpha() * log_prob
+            target_Q = self.critic_target.get_q_min(next_z, next_actions)
+            if self.sac_config.backup_entropy:
+                # https://github.com/ikostrikov/jaxrl/blob/4a9abaff1c915b00ca73d35a30faf16b165e52ec/jaxrl/agents/sac/critic.py#L29
+                target_Q -= self.get_alpha() * log_prob
             target_Q = reward + (1 - done) * (self.sac_config.gamma**self.sac_config.nstep) * target_Q
 
         if self.normalize_input:

@@ -130,6 +130,7 @@ class PPO(DAPGMixin, Agent):
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
 
+    @torch.no_grad()
     def play_steps(self):
         for n in range(self.horizon_len):
             if not self.env_autoresets:
@@ -209,7 +210,7 @@ class PPO(DAPGMixin, Agent):
                 metrics = {f'train_stats/{k}': v for k, v in metrics.items()}
 
                 # timing metrics
-                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
+                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names, reset=False)
                 timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
                 metrics.update(timing_metrics)
 
@@ -229,7 +230,7 @@ class PPO(DAPGMixin, Agent):
 
                 if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                     print(
-                        f'Epoch: {self.epoch} |',
+                        f'Epochs: {self.epoch + 1} |',
                         f'Agent Steps: {int(self.agent_steps):,} |',
                         f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                         f'Stats:',
@@ -240,6 +241,9 @@ class PPO(DAPGMixin, Agent):
                         f'UpdateRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
                         f'SPS {timings["totalrate"]:.2f} |',
                     )
+
+        timings = self.timer.stats(step=self.agent_steps)
+        print(timings)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
