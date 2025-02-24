@@ -42,9 +42,7 @@ class SHAC(Agent):
         self.num_actions = self.env.num_actions
         self.max_episode_length = self.env.max_episode_length
 
-        # --- SHAC Parameters ---
-        self.tanh_clamp = self.network_config.get('tanh_clamp', False)  # on actions, if not done in actor dist
-        self.actor_loss_avgcritics = self.shac_config.get('actor_loss_avgcritics', False)
+        # --- SAPO Parameters ---
         self.with_logprobs = self.shac_config.get('with_logprobs', False)
         self.with_autoent = self.shac_config.get('with_autoent', False)
         self.entropy_coef = self.shac_config.get('entropy_coef', None)
@@ -55,6 +53,10 @@ class SHAC(Agent):
         self.entropy_in_return = self.shac_config.get('entropy_in_return', False)
         self.entropy_in_targets = self.shac_config.get('entropy_in_targets', False)
         self.no_actor_entropy = self.shac_config.get('no_actor_entropy', False)
+
+        # --- SHAC Parameters ---
+        self.tanh_clamp = self.network_config.get('tanh_clamp', False)  # on actions, if not done in actor dist
+        self.actor_loss_avgcritics = self.shac_config.get('actor_loss_avgcritics', False)
         self.critic_lrschedule = self.shac_config.get('critic_lrschedule', True)
         self.actor_detach_z = self.shac_config.get('actor_detach_z', False)
 
