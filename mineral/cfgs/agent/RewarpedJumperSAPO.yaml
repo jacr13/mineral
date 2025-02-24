@@ -1,5 +1,5 @@
 defaults:
-  - dFlexAntSHAC2
+  - DFlexAntSAPO
   - PointNet
   - _self_
 

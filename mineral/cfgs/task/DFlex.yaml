@@ -1,5 +1,5 @@
 suite: dflex
-name: dFlex
+name: DFlex
 
 env:
   numEnvs: ${resolve_default:64,${...num_envs}}

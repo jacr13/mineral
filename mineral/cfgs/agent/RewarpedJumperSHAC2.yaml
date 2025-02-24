@@ -1,5 +1,5 @@
 defaults:
-  - dFlexAntSHAC
+  - DFlexAntSHAC2
   - PointNet
   - _self_
 
@@ -7,11 +7,6 @@ network:
   encoder_kwargs:
     weight_init_pcd: orthogonalg1
     weight_init_mlp: orthogonalg1
-
-    mlp_kwargs:
-      act_type: ELU
-    pcd_kwargs:
-      act_type: ELU
 
   actor_kwargs:
     weight_init_last_layers: False
