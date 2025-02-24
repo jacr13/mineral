@@ -12,6 +12,8 @@ A minimal robot learning library that aggregates reliable implementations for:
 
 - SHAC, Short Horizon Actor Critic ([`DiffRL`](https://github.com/NVlabs/DiffRL)) #rl, #diffsim
 
+- SAPO, Soft Analytic Policy Optimization (`ours`) #rl, #diffsim
+
 - BC, Behavioral Cloning #il
 
 - DAPG, Demo Augmented Policy Gradient ([`maniskill2-learn`](https://github.com/haosulab/ManiSkill2-Learn)) #il, #rl, #off2on

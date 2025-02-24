@@ -1,5 +1,5 @@
 defaults:
-  - dFlexAntSH3
+  - dFlexAntSAPO
   - PointNet
   - _self_
 
