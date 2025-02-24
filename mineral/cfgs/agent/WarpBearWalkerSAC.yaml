@@ -1,0 +1,15 @@
+defaults:
+  - dFlexAntSAC
+  - PointNet
+  - _self_
+
+network:
+  encoder_kwargs:
+    weight_init_pcd: orthogonal
+    weight_init_mlp: orthogonal
+
+sac:
+  max_agent_steps: 6.2e6
+  # max_agent_steps: 4.1e6
+  # max_agent_steps: 2.05e6
+  batch_size: 1024

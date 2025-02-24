@@ -1,0 +1,44 @@
+network:
+  normalize_input: True
+  obs_rms_keys: ${.encoder_kwargs.mlp_keys}
+
+  encoder: MultiEncoder
+  encoder_kwargs:
+    mlp_kwargs:
+      units: [128]
+      norm_type: LayerNorm
+      act_type: SiLU
+
+    mlp_keys: '$^'
+    pcd_keys: '^particle_q$'
+    pcd_inputs_kwargs:
+      x_keys: null
+      pos_keys: ${..pcd_keys}
+
+    # pcd: PointNet
+    # pcd_kwargs:
+    #   global_feature_dim: 128
+    #   stn_kwargs:
+    #     conv_units: [64, 128]
+    #     mlp_units: [128, 64]
+    #   # norm_type: null
+    #   # act_type: ReLU
+    #   norm_type: LayerNorm
+    #   act_type: SiLU
+    #   pool: avg
+    #   plain_last: False
+
+    pcd: DP3PointNet
+    pcd_kwargs:
+      # global_feature_dim: 1024
+      # block_channels: [64, 128, 256, 512]
+      global_feature_dim: 64
+      block_channels: [64, 128, 256]
+      pool: avg
+      # pool: max
+      # act_type: ReLU
+      norm_type: LayerNorm
+      act_type: SiLU
+      plain_last: False
+      # remove_last_act: True
+      remove_last_act: False

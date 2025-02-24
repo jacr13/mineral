@@ -7,27 +7,27 @@ ckpt_every: 100
 network:
   normalize_input: True
   encoder: null
+  encoder_kwargs: null
 
   actor: Actor
   actor_kwargs:
+    weight_init: orthogonalg1
     mlp_kwargs:
-      units: [512, 256, 128]
+      units: [128, 64, 32]
       norm_type: LayerNorm
       act_type: SiLU
-    # dist_kwargs: {dist_type: squashed_normal, validate_args: False}
-    dist_kwargs: {dist_type: dreamerv3_squashed_normal, minstd: 0.1, maxstd: 1.0}
+    dist_kwargs: {dist_type: squashed_normal, minlogstd: -5.0, maxlogstd: 2.0}
     fixed_sigma: False
-  #   dist_kwargs: {dist_type: dreamerv3_normal, minstd: 0.1, maxstd: 1.0, validate_args: False}
-  #   fixed_sigma: False
-  # tanh_clamp: True
+  tanh_clamp: False
 
   critic: EnsembleCritic
   critic_kwargs:
-    n_critics: 2
+    weight_init: orthogonalg1
     mlp_kwargs:
-      units: [512, 256, 128]
+      units: [64, 64]
       norm_type: LayerNorm
       act_type: SiLU
+    n_critics: 2
 
 shac:
   multi_gpu: ${...multi_gpu}
@@ -38,7 +38,7 @@ shac:
     scale: 1.0
 
   max_epochs: 2000
-  max_agent_steps: 5e6
+  max_agent_steps: 4.1e6
   horizon_len: 32
   num_critic_batches: 4
 
@@ -49,14 +49,12 @@ shac:
   normalize_ret: False
 
   optim_type: AdamW
-  actor_optim_kwargs: {lr: 5e-4, betas: [0.7, 0.95]}
+  actor_optim_kwargs: {lr: 2e-3, betas: [0.7, 0.95]}
   critic_optim_kwargs: {lr: 5e-4, betas: [0.7, 0.95]}
-  no_target_critic: True
-  lr_schedule: constant  # linear | constant
-  # lr_schedule: kl
-  # kl_threshold: 0.008
-  normalize_value: True
-  actor_loss_normval: True
-  # max_grad_norm: 1.0
-  max_grad_norm: 0.5  # decrease since using value_rms (so loss magnitudes and grad norms are smaller)
+  lr_schedule: linear  # linear | constant
+  target_critic_alpha: null
+  max_grad_norm: 0.5
   truncate_grads: True
+
+  no_target_critic: True
+  actor_loss_avgcritics: True

@@ -1,0 +1,18 @@
+defaults:
+  - dFlexAntSHAC2
+  - _self_
+
+shac:
+  with_autoent: True
+  with_logprobs: True
+  target_entropy_scalar: 0.5
+  use_distr_ent: True
+  init_alpha: 1.0
+  alpha_optim_kwargs: {lr: 5e-3, betas: [0.7, 0.95]}
+
+  scale_by_target_entropy: True
+  unscale_entropy_alpha: True
+  offset_by_target_entropy: True
+
+  entropy_in_return: True
+  entropy_in_targets: True
