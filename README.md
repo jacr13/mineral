@@ -1,6 +1,6 @@
 # mineral
 
-A minimal robot learning library that aggregates reliable implementations for:
+A minimal(ish) reinforcement learning library that aggregates reliable implementations for:
 
 - PPO, Proximal Policy Optimization ([`minimal-stable-PPO`](https://github.com/ToruOwO/minimal-stable-PPO), [`rl_games`](https://github.com/Denys88/rl_games)) #rl
 
@@ -28,3 +28,21 @@ A minimal robot learning library that aggregates reliable implementations for:
 | #off2on | offline-to-online |
 | #diffsim | differentiable simulation |
 | #mpc | model predictive control |
+
+# Setup
+
+```bash
+conda create -n mineral python=3.10
+conda activate mineral
+
+pip install "torch>=2" torchvision
+pip install git+https://github.com/etaoxing/mineral
+
+# Rewarped
+# see https://github.com/rewarped/rewarped
+
+# DFlex
+pip install git+https://github.com/rewarped/DiffRL
+# make sure to run this so DFlex kernels are built
+python -m dflex.examples.test_env --env AntEnv --num-envs 4 --render
+```

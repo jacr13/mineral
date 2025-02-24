@@ -24,10 +24,11 @@ def make_envs(config):
     }
     env_name = env_kwargs.pop('env_name')
 
-    DIFFRL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../third_party/DiffRL'))
-    sys.path.append(DIFFRL_PATH)
+    # DIFFRL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../third_party/DiffRL'))
+    # sys.path.append(DIFFRL_PATH)
+    # import envs as DFlexEnvs
 
-    import envs as DFlexEnvs
+    import dflex.envs as DFlexEnvs
 
     env_fn = getattr(DFlexEnvs, env_name)
     env = env_fn(
