@@ -9,7 +9,7 @@ class RewardShaper:
 
     def __call__(self, rewards):
         if self.fn == 'scale':
-            rewards *= self.scale
+            rewards = rewards * self.scale
         else:
             raise NotImplementedError(self.fn)
         return rewards

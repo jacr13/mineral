@@ -14,6 +14,7 @@ network:
       units: [128, 64, 32]
       norm_type: LayerNorm
       act_type: ELU
+  tanh_clamp: True
 
 bptt:
   multi_gpu: ${...multi_gpu}
@@ -25,12 +26,13 @@ bptt:
 
   max_agent_steps: 5e6
   horizon_len: 32
+  # horizon_len: 128
   max_epochs: 2000
 
   optim_type: Adam
   actor_optim_kwargs:
-    # lr: 2e-3
-    lr: 4e-3
+    lr: 2e-3
+    # lr: 4e-3
     betas: [0.7, 0.95]
   lr_schedule: linear  # linear | constant
   max_grad_norm: 1.0

@@ -4,6 +4,7 @@ import pprint
 import sys
 
 import hydra
+import numpy as np
 import wandb
 import yaml
 from hydra.utils import to_absolute_path
@@ -46,14 +47,21 @@ def main(config: DictConfig):
     else:
         from .utils import set_np_formatting, set_seed
 
-    assert config.seed >= 0  # NOTE: not supporting seed = -1 b/c not using set_seed(rank=...)
-    set_seed = functools.partial(set_seed, torch_deterministic=config.torch_deterministic)
     # set numpy formatting for printing only
     set_np_formatting()
 
     from .utils import limit_threads
 
     limit_threads(1)
+
+    import torch
+
+    if not torch.cuda.is_available():
+        config.device_id = -1
+
+    assert config.seed >= 0
+    set_seed = functools.partial(set_seed, torch_deterministic=config.torch_deterministic)
+    set_seed(0)
 
     # --- Setup Run ---
     logdir = config.logdir
@@ -75,8 +83,6 @@ def main(config: DictConfig):
         config.sim_device = f'cuda:{rank}'
         config.rl_device = f'cuda:{rank}'
         config.graphics_device_id = rank
-        # sets seed. if seed is -1 will pick a random one
-        config.seed = set_seed(config.seed + rank)
 
         # if rank != 0:
         #     f = open(os.path.join(config.logdir, 'log_{rank}.txt', 'w'))
@@ -89,7 +95,6 @@ def main(config: DictConfig):
         config.sim_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.rl_device = f'cuda:{config.device_id}' if config.device_id >= 0 else 'cpu'
         config.graphics_device_id = config.device_id if config.device_id >= 0 else 0
-        config.seed = set_seed(config.seed + rank)
 
     resolved_config = OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
     print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')
@@ -98,14 +103,30 @@ def main(config: DictConfig):
         os.environ['WANDB_START_METHOD'] = 'thread'
         # connect to wandb
         wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
+
+        if wandb_config.get('group', None) is not None:
+            run_group = wandb_config['group']
+        else:
+            run_group = logdir.split('/')[-2]
+            wandb_config['group'] = run_group
+
         wandb_run = wandb.init(
             **wandb_config,
             dir=logdir,
             config=resolved_config,
         )
         run_name, run_id = wandb_run.name, wandb_run.id
-        print(f'run_name: {run_name}, run_id: {run_id}')
+        print(f'run_group: {run_group}, run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
+
+    # generate random seeds (deterministically given config.seed)
+    # should be same across workers since each worker should add its global rank
+    to_seed = ['setup', 'train', 'eval', 'env_train', 'env_eval']
+    rng = np.random.RandomState(config.seed)
+    seeds = rng.randint(0, int(1e6), len(to_seed))
+    seeds = {k: int(seeds[i]) for i, k in enumerate(to_seed)}
+    cprint(f'Base Seed: {config.seed}, Seeds: {seeds}', 'green', attrs=['bold'])
+    set_seed(seeds['setup'] + rank)
 
     # --- Make Envs, Datasets, Agent ---
     cprint('Making Envs', 'green', attrs=['bold'])
@@ -132,21 +153,33 @@ def main(config: DictConfig):
 
     try:
         if config.run == 'train':
+            set_seed(seeds['train'] + rank)
             agent.train()
         elif config.run == 'eval':
-            set_seed(config.seed + rank + 1)
+            set_seed(seeds['eval'] + rank)
             agent.eval()
         elif config.run == 'train_eval':
+            set_seed(seeds['train'] + rank)
             agent.train()
+
             agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
-            set_seed(config.seed + rank + 1)
+
+            set_seed(seeds['eval'] + rank)
             agent.eval()
         else:
             raise NotImplementedError(config.run)
-    except KeyboardInterrupt as e:
-        pass
+    except (KeyboardInterrupt, Exception) as e:
+        # raise e
+
+        import traceback
+
+        traceback.print_exc()
+        print(f'Exception: {e}')
 
     # --- Cleanup ---
+    if hasattr(env, 'renderer') and config.task.env.render:
+        env.renderer.save()
+
     if rank == 0:
         # close wandb
         wandb.finish()

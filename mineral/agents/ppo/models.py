@@ -5,7 +5,7 @@ import torch.nn as nn
 from ...nets import MLP, Dist, MultiEncoder
 
 
-def weight_init(m):
+def weight_init_orthogonal_(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv1d):
         fan_out = m.kernel_size[0] * m.out_channels
         m.weight.data.normal_(mean=0.0, std=np.sqrt(2.0 / fan_out))
@@ -17,15 +17,26 @@ def weight_init(m):
             nn.init.zeros_(m.bias)
 
 
+def weight_init_(module, weight_init):
+    if weight_init == None:
+        pass
+    elif weight_init == "orthogonal":
+        module.apply(weight_init_orthogonal_)
+    else:
+        raise NotImplementedError(weight_init)
+
+
 class ActorCritic(nn.Module):
     def __init__(
         self,
         obs_space,
         action_dim,
         mlp_kwargs=dict(units=[512, 256, 128], act_type='ELU'),
+        critic_mlp_kwargs=None,
         separate_value_mlp=True,
         fixed_sigma=True,
         actor_dist_kwargs=dict(dist_type='normal'),
+        weight_init="orthogonal",
         encoder=None,
         encoder_kwargs=None,
     ):
@@ -38,14 +49,19 @@ class ActorCritic(nn.Module):
             self.encoder = nn.Identity()
             mlp_in_dim = obs_space['obs'][0]
         else:
-            self.encoder = MultiEncoder(obs_space, encoder_kwargs)
+            self.encoder = MultiEncoder(obs_space, encoder_kwargs, weight_init_fn=weight_init_)
             mlp_in_dim = self.encoder.out_dim
 
         self.actor_mlp = MLP(mlp_in_dim, **mlp_kwargs)
         if self.separate_value_mlp:
+            if critic_mlp_kwargs is not None:
+                mlp_kwargs = {**mlp_kwargs, **critic_mlp_kwargs}
             self.value_mlp = MLP(mlp_in_dim, **mlp_kwargs)
-        out_size = self.actor_mlp.out_dim
+
+        out_size = self.value_mlp.out_dim if self.separate_value_mlp else self.actor_mlp.out_dim
         self.value = nn.Linear(out_size, 1)
+
+        out_size = self.actor_mlp.out_dim
         self.mu = nn.Linear(out_size, action_dim)
         if self.fixed_sigma:
             self.sigma = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32), requires_grad=True)
@@ -53,14 +69,16 @@ class ActorCritic(nn.Module):
             self.sigma = nn.Linear(out_size, action_dim)
         self.dist = Dist(**actor_dist_kwargs)
 
+        self.weight_init = weight_init
         self.reset_parameters()
 
     def reset_parameters(self):
-        self.actor_mlp.apply(weight_init)
+        assert self.weight_init == "orthogonal"
+        self.actor_mlp.apply(weight_init_orthogonal_)
         if self.separate_value_mlp:
-            self.value_mlp.apply(weight_init)
-        self.value.apply(weight_init)
-        self.mu.apply(weight_init)
+            self.value_mlp.apply(weight_init_orthogonal_)
+        self.value.apply(weight_init_orthogonal_)
+        self.mu.apply(weight_init_orthogonal_)
 
         # value output layer with scale 1
         # policy output layer with scale 0.01
@@ -121,12 +139,13 @@ class ActorCritic(nn.Module):
         x = self.actor_mlp(z)
         mu = self.mu(x)
 
-        if self.separate_value_mlp:
-            x = self.value_mlp(z)
-        value = self.value(x)
-
         if self.fixed_sigma:
             sigma = self.sigma
         else:
             sigma = self.sigma(x)
+
+        if self.separate_value_mlp:
+            x = self.value_mlp(z)
+        value = self.value(x)
+
         return mu, mu * 0 + sigma, value

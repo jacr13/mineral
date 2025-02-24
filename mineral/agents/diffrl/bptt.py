@@ -7,6 +7,7 @@
 
 import collections
 import itertools
+import json
 import os
 import re
 from copy import deepcopy
@@ -65,7 +66,7 @@ class BPTT(Agent):
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
             EncoderCls = getattr(nets, self.network_config.encoder)
-            self.encoder = EncoderCls(**self.network_config.get("encoder_kwargs", {}))
+            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}), weight_init_fn=models.weight_init_)
         else:
             f = lambda x: x['obs']
             self.encoder = nets.Lambda(f)
@@ -73,10 +74,13 @@ class BPTT(Agent):
         print('Encoder:', self.encoder)
 
         # --- Model ---
-        obs_dim = self.obs_space['obs']
-        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
-        assert obs_dim == self.env.num_obs
-        assert self.action_dim == self.env.num_actions
+        if self.network_config.get("encoder", None) is not None:
+            obs_dim = self.encoder.out_dim
+        else:
+            obs_dim = self.obs_space['obs']
+            obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
+            assert obs_dim == self.env.num_obs
+            assert self.action_dim == self.env.num_actions
 
         ActorCls = getattr(models, self.network_config.actor)
         self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
@@ -111,6 +115,7 @@ class BPTT(Agent):
         self.episode_rewards_tracker = Tracker(tracker_len)
         self.episode_lengths_tracker = Tracker(tracker_len)
         self.episode_discounted_rewards_tracker = Tracker(tracker_len)
+        self.num_episodes = torch.tensor(0, dtype=int)
 
         # --- Timing ---
         self.timer = Timer()
@@ -169,14 +174,14 @@ class BPTT(Agent):
                     episode_gamma[done_env_id] = 1.0
                     episodes += 1
 
-        mean_episode_rewards = np.mean(np.array(episode_rewards_hist))
-        mean_episode_lengths = np.mean(np.array(episode_lengths_hist))
-        mean_episode_discounted_rewards = np.mean(np.array(episode_discounted_rewards_hist))
-
-        return mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards
+        return episode_rewards_hist, episode_lengths_hist, episode_discounted_rewards_hist
 
     def initialize_env(self):
-        self.env.clear_grad()
+        try:
+            self.env.clear_grad()
+        except Exception as e:
+            print(e)
+            print("Skipping clear_grad")
         self.env.reset()
 
     def train(self):
@@ -184,9 +189,9 @@ class BPTT(Agent):
         self.initialize_env()
 
         while self.agent_steps < self.max_agent_steps:
+            self.epoch += 1
             if self.max_epochs > 0 and self.epoch >= self.max_epochs:
                 break
-            self.epoch += 1
 
             # learning rate schedule
             if self.bptt_config.lr_schedule == 'linear':
@@ -201,6 +206,7 @@ class BPTT(Agent):
 
             # train actor
             self.timer.start("train/update_actor")
+            self.set_train()
             actor_results = self.update_actor()
             self.timer.end("train/update_actor")
 
@@ -211,7 +217,7 @@ class BPTT(Agent):
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
             # timing metrics
-            timings_total_names = ("train/update_actor", "train/make_critic_dataset", "train/update_critic")
+            timings_total_names = ("train/update_actor",)
             timings = self.timer.stats(step=self.agent_steps, total_names=timings_total_names, reset=False)
             timing_metrics = {f"train_timings/{k}": v for k, v in timings.items()}
             metrics.update(timing_metrics)
@@ -223,6 +229,7 @@ class BPTT(Agent):
                 mean_episode_discounted_rewards = self.episode_discounted_rewards_tracker.mean()
 
                 episode_metrics = {
+                    "train_scores/num_episodes": self.num_episodes.item(),
                     "train_scores/episode_rewards": mean_episode_rewards,
                     "train_scores/episode_lengths": mean_episode_lengths,
                     "train_scores/episode_discounted_rewards": mean_episode_discounted_rewards,
@@ -240,7 +247,7 @@ class BPTT(Agent):
 
             if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                 print(
-                    f'Epoch: {self.epoch} |',
+                    f'Epochs: {self.epoch + 1} |',
                     f'Agent Steps: {int(self.agent_steps):,} |',
                     f'SPS: {timings["lastrate"]:.2f} |',  # actually totalrate since we don't reset the timer
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
@@ -289,16 +296,11 @@ class BPTT(Agent):
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
                 if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
-                    print('NaN gradient')
-                    raise ValueError
-                    # # JIE
-                    # print('here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NaN gradient')
-                    # import IPython
-                    # IPython.embed()
-                    # for params in self.actor.parameters():
-                    #     params.grad.zero_()
+                    print('NaN gradient', grad_norm_before_clip)
+                    # raise ValueError
+                    raise KeyboardInterrupt
 
-            results["actor_loss"].append(actor_loss)
+            results["actor_loss"].append(actor_loss.detach())
             results["grad_norm_before_clip"].append(grad_norm_before_clip)
             results["grad_norm_after_clip"].append(grad_norm_after_clip)
             self.timer.end("train/actor_closure/actor_loss")
@@ -381,6 +383,7 @@ class BPTT(Agent):
                     self.episode_rewards_tracker.update(self.episode_rewards[done_env_ids])
                     self.episode_lengths_tracker.update(self.episode_lengths[done_env_ids])
                     self.episode_discounted_rewards_tracker.update(self.episode_discounted_rewards[done_env_ids])
+                    self.num_episodes += len(done_env_ids)
 
                     for done_env_id in done_env_ids:
                         if self.episode_rewards[done_env_id] > 1e6 or self.episode_rewards[done_env_id] < -1e6:
@@ -400,20 +403,40 @@ class BPTT(Agent):
         return actor_loss
 
     def eval(self):
-        mean_episode_rewards, mean_episode_lengths, mean_episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors, sample=True
+        self.set_eval()
+        episode_rewards, episode_lengths, episode_discounted_rewards = self.evaluate_policy(
+            num_episodes=self.num_actors * 2, sample=True
         )
-        print(
-            f'mean ep_rewards = {mean_episode_rewards},',
-            f'mean ep_lengths = {mean_episode_lengths}',
-            f'mean ep_discounted_rewards = {mean_episode_discounted_rewards},',
-        )
+
+        metrics = {
+            "eval_scores/num_episodes": len(episode_rewards),
+            "eval_scores/episode_rewards": np.mean(np.array(episode_rewards)),
+            "eval_scores/episode_lengths": np.mean(np.array(episode_lengths)),
+            "eval_scores/episode_discounted_rewards": np.mean(np.array(episode_discounted_rewards)),
+        }
+        print(metrics)
+
+        self.writer.add(self.agent_steps, metrics)
+        self.writer.write()
+
+        scores = {
+            "epoch": self.epoch,
+            "mini_epoch": self.mini_epoch,
+            "agent_steps": self.agent_steps,
+            "eval_scores/num_episodes": len(episode_rewards),
+            "eval_scores/episode_rewards": episode_rewards,
+            "eval_scores/episode_lengths": episode_lengths,
+            "eval_scores/episode_discounted_rewards": episode_discounted_rewards,
+        }
+        json.dump(scores, open(os.path.join(self.logdir, "scores.json"), "w"), indent=4)
 
     def set_train(self):
-        pass
+        self.encoder.train()
+        self.actor.train()
 
     def set_eval(self):
-        pass
+        self.encoder.eval()
+        self.actor.eval()
 
     def save(self, f):
         ckpt = {

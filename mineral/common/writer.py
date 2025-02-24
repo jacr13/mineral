@@ -49,11 +49,15 @@ class TensorboardWriter(AsyncOutput):
         flat_config = flatten_dict(config)
         try:
             import pandas as pd
+            import tabulate
 
             d = pd.DataFrame.from_dict(flat_config, orient='index')
             self.writer.add_text('cfg', d.to_markdown(), 0)
         except ImportError:
-            self.writer.add_hparams(flat_config, {})
+            # BUG: seems to create an extra subdir / event file
+            # https://github.com/pytorch/pytorch/issues/32651
+            # self.writer.add_hparams(flat_config, {})
+            pass
 
     def _write(self, summaries):
         for step, name, value in summaries:

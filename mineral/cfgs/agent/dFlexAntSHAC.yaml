@@ -32,7 +32,7 @@ shac:
     scale: 1.0
 
   max_epochs: 2000
-  max_agent_steps: 5e6
+  max_agent_steps: 4.1e6
   horizon_len: 32
   num_critic_batches: 4
 

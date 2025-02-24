@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.distributions as D
 import torch.nn as nn
@@ -17,6 +18,10 @@ class Dist(nn.Module):
     ):
         super().__init__()
         self.dist_type = dist_type
+        if minlogstd is not None:
+            minstd = np.exp(minlogstd)
+        if maxlogstd is not None:
+            maxstd = np.exp(maxlogstd)
         self.minstd = minstd
         self.maxstd = maxstd
         self.minlogstd = minlogstd
@@ -53,4 +58,11 @@ class Dist(nn.Module):
         return mu, sigma, distr
 
     def __repr__(self):
-        return f'Dist(dist_type={self.dist_type})'
+        if self.dist_type == 'normal':
+            std_str = ''
+        else:
+            if self.minlogstd is not None or self.maxlogstd is not None:
+                std_str = f'minlogstd={self.minlogstd}, maxlogstd={self.maxlogstd}'
+            else:
+                std_str = f'minstd={self.minstd}, maxstd={self.maxstd}'
+        return f'Dist(dist_type={self.dist_type}, {std_str})'

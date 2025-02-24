@@ -1,4 +1,5 @@
 import collections
+import json
 import os
 import re
 
@@ -129,6 +130,7 @@ class PPO(DAPGMixin, Agent):
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
 
+    @torch.no_grad()
     def play_steps(self):
         for n in range(self.horizon_len):
             if not self.env_autoresets:
@@ -208,7 +210,7 @@ class PPO(DAPGMixin, Agent):
                 metrics = {f'train_stats/{k}': v for k, v in metrics.items()}
 
                 # timing metrics
-                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names)
+                timings = self.timer.stats(step=self.agent_steps, total_names=self.timer_total_names, reset=False)
                 timing_metrics = {f'train_timings/{k}': v for k, v in timings.items()}
                 metrics.update(timing_metrics)
 
@@ -228,7 +230,7 @@ class PPO(DAPGMixin, Agent):
 
                 if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                     print(
-                        f'Epoch: {self.epoch} |',
+                        f'Epochs: {self.epoch + 1} |',
                         f'Agent Steps: {int(self.agent_steps):,} |',
                         f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                         f'Stats:',
@@ -239,6 +241,9 @@ class PPO(DAPGMixin, Agent):
                         f'UpdateRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
                         f'SPS {timings["totalrate"]:.2f} |',
                     )
+
+        timings = self.timer.stats(step=self.agent_steps)
+        print(timings)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
@@ -348,14 +353,61 @@ class PPO(DAPGMixin, Agent):
 
     def eval(self):
         self.set_eval()
-        obs_dict = self.env.reset()
-        while True:
-            if self.normalize_input:
-                obs_dict = {k: self.obs_rms[k].normalize(v) for k, v in obs_dict.items()}
-            mu = self.model.act(obs_dict, sample=False)
-            mu = torch.clamp(mu, -1.0, 1.0)
-            obs_dict, r, done, info = self.env.step(mu)
-            info['reward'] = r
+
+        obs = self.env.reset()
+        obs = self._convert_obs(obs)
+        dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
+
+        total_eval_episodes = self.num_actors * 2
+        eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
+        with self._as_metrics(eval_metrics), torch.no_grad():
+            while self.metrics.num_episodes < total_eval_episodes:
+                for n in range(self.horizon_len):
+                    if not self.env_autoresets:
+                        raise NotImplementedError
+
+                    model_out = self.model_act(obs, sample=True)
+                    # do env step
+                    actions = torch.clamp(model_out['actions'], -1.0, 1.0)
+                    obs, r, dones, infos = self.env.step(actions)
+                    obs = self._convert_obs(obs)
+                    r, dones = (
+                        torch.tensor(r, device=self.device),
+                        torch.tensor(dones, device=self.device),
+                    )
+                    rewards = r.reshape(-1, 1)
+
+                    done_indices = torch.where(dones)[0].tolist()
+                    self.metrics.update(
+                        self.epoch,
+                        self.env,
+                        obs,
+                        rewards.squeeze(-1),
+                        done_indices,
+                        infos,
+                    )
+                self.metrics.flush_video(self.epoch)
+
+            metrics = {
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                "eval_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "eval_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                **self.metrics.result(prefix="eval"),
+            }
+            print(metrics)
+
+            self.writer.add(self.agent_steps, metrics)
+            self.writer.write()
+
+            scores = {
+                "epoch": self.epoch,
+                "mini_epoch": self.mini_epoch,
+                "agent_steps": self.agent_steps,
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                "eval_scores/episode_rewards": list(self.metrics.episode_trackers["rewards"].window),
+                "eval_scores/episode_lengths": list(self.metrics.episode_trackers["lengths"].window),
+            }
+            json.dump(scores, open(os.path.join(self.logdir, "scores.json"), "w"), indent=4)
 
     def set_train(self):
         self.model.train()

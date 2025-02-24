@@ -1,0 +1,24 @@
+defaults:
+  - dFlexAntSHAC2
+  - PointNet
+  - _self_
+
+network:
+  encoder_kwargs:
+    weight_init_pcd: orthogonalg1
+    weight_init_mlp: orthogonalg1
+
+  actor_kwargs:
+    weight_init_last_layers: False
+
+shac:
+  max_epochs: 6000
+  max_agent_steps: 6.2e6
+  # max_epochs: 4000
+  # max_agent_steps: 4.1e6
+  # max_epochs: 2000
+  # max_agent_steps: 2.05e6
+
+  actor_detach_encoder: False
+  critic_detach_encoder: False
+  share_encoder: False

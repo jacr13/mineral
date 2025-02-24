@@ -1,0 +1,66 @@
+seed: ${..seed}
+algo: PPO
+
+print_every: 10
+ckpt_every: 1000
+
+tracker_len: 100
+metrics_kwargs:
+  save_video_every: 0
+  save_video_consecutive: 0
+
+network:
+  normalize_input: True
+
+  actor_critic: ActorCritic
+  actor_critic_kwargs:
+    separate_value_mlp: True
+    mlp_kwargs:
+      units: [512, 256, 128]
+      norm_type: LayerNorm
+      act_type: SiLU
+
+    # fixed_sigma: True
+    # actor_dist_kwargs: {dist_type: normal}
+
+    fixed_sigma: False
+    actor_dist_kwargs: {dist_type: dreamerv3_normal, minstd: 0.1, maxstd: 1.0}
+
+    # # this is unstable
+    # fixed_sigma: False
+    # dist_kwargs: {dist_type: squashed_normal, minlogstd: -5.0, maxlogstd: 2.0}
+
+ppo:
+  multi_gpu: ${...multi_gpu}
+  num_actors: ${...task.env.numEnvs}
+
+  reward_shaper:
+    fn: scale
+    scale: 1.0
+
+  max_agent_steps: 4.1e6
+  horizon_len: 32
+  minibatch_size: 2048
+
+  normalize_value: True
+  value_bootstrap: True
+  clip_value_loss: False
+  normalize_advantage: True
+  gamma: 0.99
+  tau: 0.95
+  entropy_coef: 0.0
+  e_clip: 0.2
+  use_smooth_clamp: False
+  critic_coef: 4
+  bounds_loss_coef: 0.0001
+  bounds_type: bound
+  mini_epochs: 5
+
+  optim_type: AdamW
+  optim_kwargs:
+    lr: 5e-4
+    eps: 1e-5
+  lr_schedule: kl  # 'fixed' | 'linear' | 'kl' | 'cos'
+  kl_threshold: 0.008
+  max_grad_norm: 0.5  # decreased from 1.0 b/c of SiLU & AdamW
+  truncate_grads: True

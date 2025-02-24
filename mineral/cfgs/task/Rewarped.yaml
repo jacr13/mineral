@@ -1,11 +1,12 @@
-suite: dflex
-name: dFlex
+suite: rewarped
+name: Rewarped
 
 env:
   numEnvs: ${resolve_default:64,${...num_envs}}
-  env_name: ant  # ant | cartpole | cheetah | hopper | humanoid | snu_humanoid
+  env_suite: dflex
+  env_name: Ant
 
-  stochastic_init: True
+  randomize: True
   no_grad: False
   render: False
   no_env_offset: True

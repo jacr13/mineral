@@ -31,8 +31,8 @@ experiment: ''
 logdir: 'workdir/${task.name}'
 wandb:
   mode: offline  # online | offline | disabled
-  project: project_name
-  group: group_name
+  project: null
+  group: null
   resume: allow
   # save_code: True
 

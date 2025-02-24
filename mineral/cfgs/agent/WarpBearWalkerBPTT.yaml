@@ -1,0 +1,25 @@
+defaults:
+  - dFlexAntBPTT
+  - PointNet
+  - _self_
+
+network:
+  encoder_kwargs:
+    weight_init_pcd: orthogonalg1
+    weight_init_mlp: orthogonalg1
+
+    mlp_kwargs:
+      act_type: ELU
+    pcd_kwargs:
+      act_type: ELU
+
+  actor_kwargs:
+    weight_init_last_layers: False
+
+bptt:
+  max_epochs: 6000
+  max_agent_steps: 6.2e6
+  # max_epochs: 4000
+  # max_agent_steps: 4.1e6
+  # max_epochs: 2000
+  # max_agent_steps: 2.05e6
