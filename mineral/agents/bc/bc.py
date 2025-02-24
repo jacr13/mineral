@@ -252,13 +252,9 @@ class BC(Agent):
 
     def set_train(self):
         self.model.train()
-        if self.normalize_input:
-            self.obs_rms.train()
 
     def set_eval(self):
         self.model.eval()
-        if self.normalize_input:
-            self.obs_rms.eval()
 
     def save(self, f):
         ckpt = {

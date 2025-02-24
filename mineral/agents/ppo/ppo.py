@@ -175,12 +175,10 @@ class PPO(DAPGMixin, Agent):
         values = self.storage.data_dict['values']
         returns = self.storage.data_dict['returns']
         if self.normalize_value:
-            self.value_rms.train()
             self.value_rms.update(values)
             values = self.value_rms.normalize(values)
             self.value_rms.update(returns)
             returns = self.value_rms.normalize(returns)
-            self.value_rms.eval()
         self.storage.data_dict['values'] = values
         self.storage.data_dict['returns'] = returns
 
@@ -411,17 +409,9 @@ class PPO(DAPGMixin, Agent):
 
     def set_train(self):
         self.model.train()
-        if self.normalize_input:
-            self.obs_rms.train()
-        if self.normalize_value:
-            self.value_rms.train()
 
     def set_eval(self):
         self.model.eval()
-        if self.normalize_input:
-            self.obs_rms.eval()
-        if self.normalize_value:
-            self.value_rms.eval()
 
     def save(self, f):
         ckpt = {

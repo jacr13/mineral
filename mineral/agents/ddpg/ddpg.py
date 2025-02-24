@@ -331,16 +331,12 @@ class DDPG(Agent):
         self.critic.train()
         self.actor_target.train()
         self.critic_target.train()
-        if self.normalize_input:
-            self.obs_rms.train()
 
     def set_eval(self):
         self.actor.eval()
         self.critic.eval()
         self.actor_target.eval()
         self.critic_target.eval()
-        if self.normalize_input:
-            self.obs_rms.eval()
 
     def save(self, f):
         pass

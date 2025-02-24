@@ -383,8 +383,6 @@ class SAC(Agent):
             json.dump(scores, open(os.path.join(self.logdir, "scores.json"), "w"), indent=4)
 
     def set_train(self):
-        if self.normalize_input:
-            self.obs_rms.train()
         self.encoder.train()
         self.actor.train()
         self.critic.train()
@@ -393,8 +391,6 @@ class SAC(Agent):
         self.critic_target.train()
 
     def set_eval(self):
-        if self.normalize_input:
-            self.obs_rms.eval()
         self.encoder.eval()
         self.actor.eval()
         self.critic.eval()
