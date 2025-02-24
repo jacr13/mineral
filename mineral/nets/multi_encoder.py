@@ -87,7 +87,7 @@ class MultiEncoder(nn.Module):
                 self.weight_init_fn(self, self.weight_init)
 
             if self.weight_init_cnn is not None and self.cnn_shapes:
-                    self.weight_init_fn(self._cnn, self.weight_init_cnn)
+                self.weight_init_fn(self._cnn, self.weight_init_cnn)
 
             if self.weight_init_pcd is not None and self.pcd_shapes:
                 self.weight_init_fn(self._pcd, self.weight_init_pcd)

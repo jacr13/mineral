@@ -60,7 +60,8 @@ class SquashedNormal(D.TransformedDistribution):
     # def entropy(self):
     #     return self.base_dist.entropy()
 
-    def entropy(self, N=1):  # https://github.com/facebookresearch/online-dt/blob/c376fa113ba34bcd422da44598e8c2433c06a590/decision_transformer/models/decision_transformer.py#L81
+    # https://github.com/facebookresearch/online-dt/blob/c376fa113ba34bcd422da44598e8c2433c06a590/decision_transformer/models/decision_transformer.py#L81
+    def entropy(self, N=1):
         # sample from the distribution and then compute
         # the empirical entropy:
         x = self.rsample((N,))

@@ -94,7 +94,8 @@ class SHAC(Agent):
         # --- Encoder ---
         if self.network_config.get("encoder", None) is not None:
             EncoderCls = getattr(nets, self.network_config.encoder)
-            self.encoder = EncoderCls(self.obs_space, self.network_config.get("encoder_kwargs", {}), weight_init_fn=models.weight_init_)
+            encoder_kwargs = self.network_config.get("encoder_kwargs", {})
+            self.encoder = EncoderCls(self.obs_space, encoder_kwargs, weight_init_fn=models.weight_init_)
         else:
             f = lambda x: x['obs']
             self.encoder = nets.Lambda(f)
