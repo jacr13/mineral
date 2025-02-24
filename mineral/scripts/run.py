@@ -195,8 +195,10 @@ if __name__ == '__main__':
     )(lambda x: c.append(x))()
     config = c[0]
 
-    from ..envs.isaacgymenvs import import_isaacgym
+    task_suite = config.task.get('suite', 'isaacgymenvs')
+    if task_suite == 'isaacgymenvs':
+        from ..envs.isaacgymenvs import import_isaacgym
 
-    import_isaacgym()  # uncomment for isaacgym (need to import before torch)
+        import_isaacgym()  # (need to import before torch)
 
     main(config)
