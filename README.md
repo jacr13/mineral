@@ -12,7 +12,7 @@ A minimal(ish) reinforcement learning library that aggregates reliable implement
 
 - SHAC, Short Horizon Actor Critic ([`DiffRL`](https://github.com/NVlabs/DiffRL)) #rl, #diffsim
 
-- SAPO, Soft Analytic Policy Optimization (`ours`) #rl, #diffsim
+- SAPO, Soft Analytic Policy Optimization ([`ours`](https://arxiv.org/abs/2412.12089)) #rl, #diffsim
 
 - BC, Behavioral Cloning #il
 
@@ -42,6 +42,7 @@ pip install git+https://github.com/etaoxing/mineral
 # see https://github.com/rewarped/rewarped
 
 # DFlex
+pip install gym==0.23.1
 pip install git+https://github.com/rewarped/DiffRL
 # make sure to run this so DFlex kernels are built
 python -m dflex.examples.test_env --env AntEnv --num-envs 4 --render
@@ -62,3 +63,16 @@ cd -
 # ImportError: libpython3.8.so.1.0: cannot open shared object file: No such file or directory
 # use `import_isaacgym()` in mineral/envs/isaacgymenvs.py
 ```
+
+# Usage
+
+See commands in `examples/`:
+- [`Rewarped`](docs/rewarped.md)
+- [`DFlex`](docs/dflex.md)
+- [`IsaacGymEnvs`](docs/isaacgymenvs.md)
+
+Want to use your own configs, agents, or envs? Check out `examples/run.py`, and replace `python -m mineral.scripts.run ...` with `python -m examples.run 'hydra.searchpath=[pkg://examples/cfgs]' ...` to load configs from `examples/cfgs/`.
+
+Use `CUDA_VISIBLE_DEVICES=1 python ...` to run on a specific GPU.
+
+Use `python ... run=eval task.env.render=True ckpt="workdir/<exp>/<run>/ckpt/final.pth"` to load checkpoints and visualize agents (trajectories are saved as USDs).
