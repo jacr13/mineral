@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "mineral"
 authors = [{ name = "etaoxing", email = "etaoxing@users.noreply.github.com" }]
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
+description = "A minimal(ish) reinforcement learning library that aggregates reliable implementations"
+license = { text = "MIT License" }
 classifiers = [
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -30,18 +31,21 @@ dependencies = [
 ]
 dynamic = ["version", "readme"]
 
+[project.optional-dependencies]
+dev = ["ruff"]
+
 [project.urls]
 GitHub = "https://github.com/etaoxing/mineral"
 
-[tool.setuptools]
-packages = ["mineral"]
+[tool.setuptools.packages.find]
+include = ["mineral*"]
+
+[tool.setuptools.package-data]
+mineral = ["cfgs/**", "**/*.yml", "**/*.yaml"]
 
 [tool.setuptools.dynamic]
 version = { file = ["VERSION"] }
 readme = { file = ["README.md"], content-type = "text/markdown" }
-
-[project.optional-dependencies]
-dev = ["ruff"]
 
 [tool.ruff]
 cache-dir = ".cache/ruff"
