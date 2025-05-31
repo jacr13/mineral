@@ -70,7 +70,7 @@ def weight_init_uniform_(m, fan="avg", scale=1.0, variance_factor=1.0):
 
 
 def weight_init_(module, weight_init):
-    if weight_init == None:
+    if weight_init is None:
         pass
     elif weight_init == "orthogonal":
         module.apply(weight_init_orthogonal_)

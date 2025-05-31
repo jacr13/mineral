@@ -356,35 +356,35 @@ class PPO(DAPGMixin, Agent):
         obs = self._convert_obs(obs)
         dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
 
+        sample = True
         total_eval_episodes = self.num_actors * 2
         eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
         with self._as_metrics(eval_metrics), torch.no_grad():
             while self.metrics.num_episodes < total_eval_episodes:
-                for n in range(self.horizon_len):
-                    if not self.env_autoresets:
-                        raise NotImplementedError
+                if not self.env_autoresets:
+                    raise NotImplementedError
 
-                    model_out = self.model_act(obs, sample=True)
-                    # do env step
-                    actions = torch.clamp(model_out['actions'], -1.0, 1.0)
-                    obs, r, dones, infos = self.env.step(actions)
-                    obs = self._convert_obs(obs)
-                    r, dones = (
-                        torch.tensor(r, device=self.device),
-                        torch.tensor(dones, device=self.device),
-                    )
-                    rewards = r.reshape(-1, 1)
+                model_out = self.model_act(obs, sample=sample)
+                # do env step
+                actions = torch.clamp(model_out['actions'], -1.0, 1.0)
+                obs, r, dones, infos = self.env.step(actions)
+                obs = self._convert_obs(obs)
+                r, dones = (
+                    torch.tensor(r, device=self.device),
+                    torch.tensor(dones, device=self.device),
+                )
+                rewards = r.reshape(-1, 1)
 
-                    done_indices = torch.where(dones)[0].tolist()
-                    self.metrics.update(
-                        self.epoch,
-                        self.env,
-                        obs,
-                        rewards.squeeze(-1),
-                        done_indices,
-                        infos,
-                    )
-                self.metrics.flush_video(self.epoch)
+                done_indices = torch.where(dones)[0].tolist()
+                self.metrics.update(
+                    self.epoch,
+                    self.env,
+                    obs,
+                    rewards.squeeze(-1),
+                    done_indices,
+                    infos,
+                )
+            self.metrics.flush_video(self.epoch)
 
             metrics = {
                 "eval_scores/num_episodes": self.metrics.num_episodes,
