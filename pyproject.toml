@@ -1,51 +1,35 @@
-[build-system]
-requires = ["setuptools", "build", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
+package-mode = true
 name = "mineral"
-authors = [{ name = "etaoxing", email = "etaoxing@users.noreply.github.com" }]
-requires-python = ">=3.8"
+version = "0.1.0"
+authors = ["etaoxing <etaoxing@users.noreply.github.com>"]
 description = "A minimal(ish) reinforcement learning library that aggregates reliable implementations"
-license = { text = "MIT License" }
-classifiers = [
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3 :: Only",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+
+# if not same as current python version run `poetry env use /home/joao/miniconda3/envs/py-310/bin/python` 
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+torch = [
+  { version = "^2.6", markers = "sys_platform == 'darwin'" },
+  { version = "^2.6", source = "pytorch-cu124", markers = "sys_platform == 'linux'" }
 ]
-dependencies = [
-    "torch",
-    "hydra-core",
-    "hydra_colorlog",
-    "wandb",
-    "termcolor",
-    "tensorboard",
-    "pandas",
-    "tabulate",
-    "scipy",
-]
-dynamic = ["version", "readme"]
+dflex = { git = "https://github.com/jacr13/DiffRL.git", branch = "main" }
+hydra-core = "^1.3.2"
+hydra-colorlog = "^1.2.0"
+wandb = "^0.22.2"
+termcolor = "^3.1.0"
+tensorboard = "^2.20.0"
+pandas = "^2.3.3"
+tabulate = "^0.9.0"
+scipy = "1.15.3"
+gym = "0.23.1"
+rewarped = "^1.3.3"
+urchin = "^0.0.29"
 
-[project.optional-dependencies]
-dev = ["ruff"]
-
-[project.urls]
-GitHub = "https://github.com/etaoxing/mineral"
-
-[tool.setuptools.packages.find]
-include = ["mineral*"]
-
-[tool.setuptools.package-data]
-mineral = ["cfgs/**", "**/*.yml", "**/*.yaml"]
-
-[tool.setuptools.dynamic]
-version = { file = ["VERSION"] }
-readme = { file = ["README.md"], content-type = "text/markdown" }
+[[tool.poetry.source]]
+name     = "pytorch-cu124"  # CUDA-specific wheels
+url      = "https://download.pytorch.org/whl/cu124"
+priority = "supplemental"
 
 [tool.ruff]
 cache-dir = ".cache/ruff"
@@ -96,3 +80,64 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-format = true
+
+# keep relevant parts in sync with pre-commit
+[tool.poe.tasks]  # https://github.com/nat-n/poethepoet
+# sort
+_poetry_sort = "poetry sort"
+
+# install
+install = "poetry install --no-root"
+install_nodev = "poetry install --no-root --no-dev"
+
+# format
+isort_format = "poetry run isort ."
+black_format = "poetry run black ."
+ruff_format = "poetry run ruff check --fix ."
+ruff_fix = "poetry run ruff check --fix --unsafe-fixes ."
+format = ["isort_format", "black_format", "ruff_format", "_poetry_sort"]
+
+# delete venv and lock
+_delete_venv = "poetry env remove python"
+_delete_lock = "rm -f poetry.lock"
+delete = ["_delete_lock", "_delete_venv"]
+
+# reinstall of venv
+reinstall = ["delete", "install"]
+
+# cleaning
+clean = """
+rm -rf .coverage
+        htmlcov
+        coverage.xml
+        .mypy_cache
+        .ruff_cache
+        .pytest_cache
+        ./**/__pycache__
+        dist
+        logs
+"""
+
+# docker
+# --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)
+docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 --no-cache -t candidj0/mineral:no_kernels ."
+docker_build_k_1 = "docker run --gpus=all -u 1000:1000 -v .:/workspace --name mineral_build candidj0/mineral:no_kernels python -c 'import dflex'"
+docker_build_k_2 = "docker commit mineral_build candidj0/mineral:latest"
+docker_build_k_3 = "docker rm mineral_build"
+docker_build_dflex_kernels = ["docker_build_k_1", "docker_build_k_2", "docker_build_k_3"]
+
+docker_push = "docker push candidj0/mineral:latest"
+dbp = ["docker_build", "docker_build_dflex_kernels", "docker_push"]
+
+docker = """
+docker run \
+    --gpus=all \
+    --rm \
+    -it \
+    -u 1000:1000 \
+    --env-file .env \
+    -v /etc/timezone:/etc/timezone:ro \
+    -v /etc/localtime:/etc/localtime:ro \
+    -v .:/workspace \
+    candidj0/mineral:latest bash
+"""
