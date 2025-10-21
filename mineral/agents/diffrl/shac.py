@@ -248,7 +248,7 @@ class SHAC(Agent):
             return actions
 
     @torch.no_grad()
-    def evaluate_policy(self, num_episodes, sample=False):
+    def evaluate_policy(self, num_episodes, sample=False, render=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
         episode_discounted_rewards_hist = []
@@ -257,17 +257,35 @@ class SHAC(Agent):
         episode_discounted_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         episode_gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
+        completed_episodes = {}
+        completed_episodes_returns = []
+        completed_episodes_lengths = []
+
+        episode_obs = []
+        episode_act = []
+        episode_next_obs = []
+        episode_rew = []
+        episode_done = []
+        dones_ids = []
+
         obs = self.env.reset()
         obs = self._convert_obs(obs)
 
         episodes = 0
         while episodes < num_episodes:
+            episode_obs.append(obs["obs"].clone())
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
             actions = self.get_actions(obs, sample=sample)
-            obs, rew, done, _ = self.env.step(actions)
+            obs, rew, done, info = self.env.step(actions)
             obs = self._convert_obs(obs)
+
+            real_obs = info["obs_before_reset"]
+            episode_act.append(actions)
+            episode_next_obs.append(real_obs)
+            episode_rew.append(rew)
+            episode_done.append(done)
 
             episode_rewards += rew
             episode_lengths += 1
@@ -276,6 +294,12 @@ class SHAC(Agent):
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
+                ep_obs = torch.stack(episode_obs).transpose(0, 1)
+                ep_act = torch.stack(episode_act).transpose(0, 1)
+                ep_next_obs = torch.stack(episode_next_obs).transpose(0, 1)
+                ep_rew = torch.stack(episode_rew).transpose(0, 1)
+                ep_done = torch.stack(episode_done).transpose(0, 1)
+
                 for done_env_id in done_env_ids:
                     print('rew = {:.2f}, len = {}'.format(episode_rewards[done_env_id].item(), episode_lengths[done_env_id]))
                     episode_rewards_hist.append(episode_rewards[done_env_id].item())
@@ -286,6 +310,33 @@ class SHAC(Agent):
                     episode_discounted_rewards[done_env_id] = 0.0
                     episode_gamma[done_env_id] = 1.0
                     episodes += 1
+                
+                    completed_episodes[episodes] = {
+                        "obs": ep_obs[done_env_id],
+                        "act": ep_act[done_env_id],
+                        "next_obs": ep_next_obs[done_env_id],
+                        "rew": ep_rew[done_env_id],
+                        "done": ep_done[done_env_id],
+                    }
+                    completed_episodes_returns.append(ep_rew[done_env_id].sum().item())
+                    completed_episodes_lengths.append(ep_rew[done_env_id].shape[0])
+
+        mean_completed_episode_return = np.mean(completed_episodes_returns)
+        mean_completed_episodes_lengths = np.mean(completed_episodes_lengths)
+        save_path = os.path.join(self.logdir, "demos")
+        if save_path is not None:
+            os.makedirs(save_path, exist_ok=True)
+            task_name = self.full_cfg.task.name
+            env_name = self.full_cfg.task.env.env_name
+
+            print(env_name, task_name)
+            torch.save(
+                completed_episodes,
+                os.path.join(
+                    save_path,
+                    f"{task_name}_{env_name}_demos{len(completed_episodes)}_epochs{self.epoch}_steps{self.agent_steps}_return{int(mean_completed_episode_return)}_len{int(mean_completed_episodes_lengths)}.pt",
+                ),
+            )
 
         return episode_rewards_hist, episode_lengths_hist, episode_discounted_rewards_hist
 
