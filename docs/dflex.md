@@ -18,6 +18,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 <details>
@@ -38,6 +39,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 <details>
@@ -54,6 +56,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 <details>
@@ -71,6 +74,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 <details>
@@ -88,6 +92,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 <details>
@@ -105,6 +110,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=130
+
 </details>
 
 ## Ant
@@ -125,6 +131,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
 </details>
 
 <details>
@@ -145,6 +152,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
 </details>
 
 <details>
@@ -161,6 +169,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
 </details>
 
 <details>
@@ -178,6 +187,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
 </details>
 
 <details>
@@ -195,6 +205,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
 </details>
 
 <details>
@@ -212,6 +223,24 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=100
+
+</details>
+
+<details>
+<summary>OTIL</summary>
+    <br>
+
+    python -m mineral.scripts.run \
+    task=DFlex agent=DFlexAntOTIL task.env.env_name=ant \
+    \
+    logdir="workdir/DFlexAnt10M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)" \
+    agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
+    \
+    agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
+    \
+    wandb.mode=online wandb.project=otil \
+    run=train_eval seed=100
+
 </details>
 
 ## Humanoid
@@ -232,6 +261,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 <details>
@@ -252,6 +282,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 <details>
@@ -268,6 +299,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 <details>
@@ -287,6 +319,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 <details>
@@ -306,6 +339,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 <details>
@@ -325,6 +359,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=110
+
 </details>
 
 ## SNUHumanoid
@@ -345,6 +380,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>
 
 <details>
@@ -365,6 +401,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>
 
 <details>
@@ -381,6 +418,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>
 
 <details>
@@ -400,6 +438,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>
 
 <details>
@@ -419,6 +458,7 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>
 
 <details>
@@ -438,4 +478,5 @@
     \
     wandb.mode=online wandb.project=rewarped \
     run=train_eval seed=120
+
 </details>

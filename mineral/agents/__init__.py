@@ -4,3 +4,4 @@ from .diffrl.bptt import BPTT
 from .diffrl.shac import SHAC
 from .ppo.ppo import PPO
 from .sac.sac import SAC
+from .otil.otil import OTIL
