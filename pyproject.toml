@@ -133,11 +133,22 @@ docker = """
 docker run \
     --gpus=all \
     --rm \
+    --env-file .env \
     -it \
     -u 1000:1000 \
-    --env-file .env \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
+    -v .:/workspace \
+    candidj0/mineral:latest bash
+"""
+
+docker_win = """
+docker run \
+    --gpus=all \
+    --rm \
+    --env-file .env \
+    -it \
+    -u 1000:1000 \
     -v .:/workspace \
     candidj0/mineral:latest bash
 """
