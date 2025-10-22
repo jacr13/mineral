@@ -23,6 +23,7 @@ network:
 otil:
   multi_gpu: ${...multi_gpu}
   num_actors: ${...task.env.numEnvs}
+  demos_path: ""
 
   reward_shaper:
     fn: scale
