@@ -3,46 +3,46 @@
 
 # DFlex
 
-# SAPO - Hopper
-python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper \
-\
-logdir="workdir/DFlexHopper10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
-agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
-\
-agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
-agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
-\
-wandb.mode=online wandb.project=rewarped \
-run=train_eval seed=130
+# # SAPO - Hopper
+# python -m mineral.scripts.run \
+# task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper \
+# \
+# logdir="workdir/DFlexHopper10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+# agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
+# \
+# agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
+# agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
+# \
+# wandb.mode=online wandb.project=rewarped \
+# run=train_eval seed=130
 
-# SAPO - Ant
-python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=ant \
-\
-logdir="workdir/DFlexAnt10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
-agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
-\
-agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
-agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
-\
-wandb.mode=online wandb.project=rewarped \
-run=train_eval seed=100
+# # SAPO - Ant
+# python -m mineral.scripts.run \
+# task=DFlex agent=DFlexAntSAPO task.env.env_name=ant \
+# \
+# logdir="workdir/DFlexAnt10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+# agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
+# \
+# agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
+# agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
+# \
+# wandb.mode=online wandb.project=rewarped \
+# run=train_eval seed=100
 
-# SAPO - Humanoid
-python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=humanoid \
-\
-logdir="workdir/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
-agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
-\
-agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
-agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
-agent.shac.critic_optim_kwargs.lr=5e-4 \
-agent.shac.target_critic_alpha=0.995 \
-\
-wandb.mode=online wandb.project=rewarped \
-run=train_eval seed=110
+# # SAPO - Humanoid
+# python -m mineral.scripts.run \
+# task=DFlex agent=DFlexAntSAPO task.env.env_name=humanoid \
+# \
+# logdir="workdir/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+# agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
+# \
+# agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
+# agent.network.critic_kwargs.mlp_kwargs.units=\[64,64\] \
+# agent.shac.critic_optim_kwargs.lr=5e-4 \
+# agent.shac.target_critic_alpha=0.995 \
+# \
+# wandb.mode=online wandb.project=rewarped \
+# run=train_eval seed=110
 
 # SAPO - SNUHumanoid
 python -m mineral.scripts.run \
