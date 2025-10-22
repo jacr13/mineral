@@ -50,6 +50,14 @@ class OTIL(Agent):
         ), f"OTIL demos path: {demos_path} does not exist"
         self.demos = torch.load(demos_path, map_location=self.device)
 
+        print(self.demos.keys())
+        print(self.demos["obs"].shape)
+
+        n_envs = 10
+        self.demos["obs"] = self.demos["obs"][:n_envs, :, :]
+        self.demos["rew"] = self.demos["rew"][:n_envs, :]
+        self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
+
         cfg = BestOfKConfig(
             T=self.horizon_len,
             K=8,
@@ -173,7 +181,13 @@ class OTIL(Agent):
         self.timer = Timer()
 
     def create_buffers(self, T, B):
-
+        self.obs_buf = {
+            k: torch.zeros((T, B) + v, dtype=torch.float32, device=self.device)
+            for k, v in self.obs_space.items()
+        }
+        self.action_buf = torch.zeros(
+            (T, B, self.action_dim), dtype=torch.float32, device=self.device
+        )
         # for kl divergence computing
         self.mus = torch.zeros(
             (T, B, self.num_actions), dtype=torch.float32, device=self.device
@@ -406,6 +420,7 @@ class OTIL(Agent):
                     f"ep_lengths {mean_episode_lengths:.2f},",
                     f'grad_norm_before_clip/actor {metrics["train_stats/grad_norm_before_clip/actor"]:.2f},',
                     f'grad_norm_after_clip/actor {metrics["train_stats/grad_norm_after_clip/actor"]:.2f},',
+                    f"expected return {self.expert_return:.2f}",
                     f"\b\b |",
                 )
 
@@ -516,6 +531,10 @@ class OTIL(Agent):
             obs = {k: obs_rms[k].normalize(v) for k, v in obs.items()}
 
         for i in range(self.horizon_len):
+            with torch.no_grad():
+                for k, v in obs.items():
+                    self.obs_buf[k][i] = v.clone()
+
             # take env step
             z = self.actor_encoder(obs)
             actions, mu, sigma, distr = self.get_actions(
