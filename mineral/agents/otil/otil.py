@@ -37,12 +37,18 @@ class OTIL(Agent):
         self.tanh_clamp = self.network_config.get(
             "tanh_clamp", False
         )  # on actions, if not done in actor dist
-        self.actor_detach_z = self.shac_config.get("actor_detach_z", False)
+        self.actor_detach_z = self.otil_config.get("actor_detach_z", False)
 
-        self.horizon_len = self.shac_config.horizon_len
-        self.max_epochs = self.shac_config.get(
+        self.horizon_len = self.otil_config.horizon_len
+        self.max_epochs = self.otil_config.get(
             "max_epochs", 0
         )  # set to 0 to disable and track by max_agent_steps instead
+
+        demos_path = self.otil_config.demos_path
+        assert os.path.exists(
+            demos_path
+        ), f"OTIL demos path: {demos_path} does not exist"
+        self.demos = torch.load(demos_path, map_location=self.device)
 
         cfg = BestOfKConfig(
             T=self.horizon_len,
@@ -92,7 +98,7 @@ class OTIL(Agent):
         self.encoder.to(self.device)
         print("Encoder:", self.encoder)
 
-        self.share_encoder = self.shac_config.get("share_encoder", True)
+        self.share_encoder = self.otil_config.get("share_encoder", True)
         if self.share_encoder:
             self.actor_encoder = self.encoder
             print("Actor Encoder: (shared)")
@@ -117,9 +123,9 @@ class OTIL(Agent):
         print("Actor:", self.actor)
 
         # --- Optim ---
-        OptimCls = getattr(torch.optim, self.shac_config.optim_type)
+        OptimCls = getattr(torch.optim, self.otil_config.optim_type)
 
-        if self.shac_config.get("actor_detach_encoder", False):
+        if self.otil_config.get("actor_detach_encoder", False):
             actor_optim_params = self.actor.parameters()
         else:
             actor_optim_params = itertools.chain(
@@ -127,17 +133,17 @@ class OTIL(Agent):
             )
         self.actor_optim = OptimCls(
             actor_optim_params,
-            **self.shac_config.get("actor_optim_kwargs", {}),
+            **self.otil_config.get("actor_optim_kwargs", {}),
         )
         print("Actor Optim:", self.actor_optim)
 
         self.actor_lr = self.actor_optim.defaults["lr"]
-        self.min_lr, self.max_lr = self.shac_config.get(
+        self.min_lr, self.max_lr = self.otil_config.get(
             "min_lr", 1e-5
-        ), self.shac_config.get("max_lr", self.actor_lr)
+        ), self.otil_config.get("max_lr", self.actor_lr)
         # kl scheduler
         self.last_lr = self.actor_lr
-        scheduler_kwargs = self.shac_config.get("scheduler_kwargs", {})
+        scheduler_kwargs = self.otil_config.get("scheduler_kwargs", {})
         self.scheduler_kwargs = {
             **scheduler_kwargs,
             **dict(min_lr=self.min_lr, max_lr=self.max_lr),
@@ -395,6 +401,7 @@ class OTIL(Agent):
                     f'SPS: {timings["lastrate"]:.2f} |',  # actually totalrate since we don't reset the timer
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
                     f"Stats:",
+                    f"actor_loss {metrics['train_stats/actor_loss']:.2f},",
                     f"ep_rewards {mean_episode_rewards:.2f},",
                     f"ep_lengths {mean_episode_lengths:.2f},",
                     f'grad_norm_before_clip/actor {metrics["train_stats/grad_norm_before_clip/actor"]:.2f},',
@@ -443,18 +450,18 @@ class OTIL(Agent):
 
             with torch.no_grad():
                 grad_norm_before_clip = grad_norm(self.actor.parameters())
-                if self.shac_config.truncate_grads:
-                    if self.shac_config.get("max_grad_value", None) is not None:
+                if self.otil_config.truncate_grads:
+                    if self.otil_config.get("max_grad_value", None) is not None:
                         nn.utils.clip_grad_value_(
-                            self.actor.parameters(), self.shac_config.max_grad_value
+                            self.actor.parameters(), self.otil_config.max_grad_value
                         )
-                    # elif self.shac_config.get("actor_agc_clip", None) is not None:
+                    # elif self.otil_config.get("actor_agc_clip", None) is not None:
                     #     clip_agc_(
-                    #         self.actor.parameters(), self.shac_config.actor_agc_clip
+                    #         self.actor.parameters(), self.otil_config.actor_agc_clip
                     #     )
-                    elif self.shac_config.max_grad_norm is not None:
+                    elif self.otil_config.max_grad_norm is not None:
                         nn.utils.clip_grad_norm_(
-                            self.actor.parameters(), self.shac_config.max_grad_norm
+                            self.actor.parameters(), self.otil_config.max_grad_norm
                         )
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
