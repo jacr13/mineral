@@ -16,8 +16,8 @@ from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
 from . import models
-from .utils import grad_norm, adaptive_scheduler, policy_kl
 from .best_of_k import BestOfKConfig, BestOfKSoftminOT
+from .utils import adaptive_scheduler, grad_norm, policy_kl
 
 
 class OTIL(Agent):
@@ -600,7 +600,10 @@ class OTIL(Agent):
                         self.episode_lengths[done_env_id] = 0
 
         obs_list = torch.stack(obs_list, dim=1).to(self.device)
-        loss, info = self.loss_fn(obs_list, self.demos["obs"], sim_is_window=False)
+        with torch.no_grad():
+            if self.obs_rms is not None:
+                obs_exp = obs_rms["obs"].normalize(self.demos["obs"])
+        loss, info = self.loss_fn(obs_list, obs_exp, sim_is_window=False)
 
         self.agent_steps += self.horizon_len * self.num_envs
         return loss, info
