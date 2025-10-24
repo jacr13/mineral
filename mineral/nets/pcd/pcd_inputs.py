@@ -54,7 +54,7 @@ class PCDInputs(nn.Module):
             pos = pos.reshape(-1, *pos.shape[2:])
             if x is not None:
                 x = x.reshape(-1, *x.shape[2:])
-            data = dict(x=x, pos=pos, batch=batch)
+            data = {'x': x, 'pos': pos, 'batch': batch}
 
             data = self.pcd_transforms(data)
             return data

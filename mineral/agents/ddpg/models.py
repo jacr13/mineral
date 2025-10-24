@@ -12,10 +12,14 @@ class Actor(nn.Module):
         action_dim,
         tanh_policy=True,
         fixed_sigma=None,
-        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
-        dist_kwargs={},
+        mlp_kwargs=None,
+        dist_kwargs=None,
         weight_init=None,
     ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {"units": [512, 256, 128], "act_type": "ELU"}
+        if dist_kwargs is None:
+            dist_kwargs = {}
         super().__init__()
         self.tanh_policy = tanh_policy
         self.fixed_sigma = fixed_sigma
@@ -37,7 +41,7 @@ class Actor(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.weight_init == None:
+        if self.weight_init is None:
             pass
         elif self.weight_init == "orthogonal":  # drqv2
             self.apply(weight_init_orthogonal_)
@@ -73,9 +77,11 @@ class EnsembleQ(nn.Module):
         state_dim,
         action_dim,
         n_critics=2,
-        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
+        mlp_kwargs=None,
         weight_init=None,
     ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {"units": [512, 256, 128], "act_type": "ELU"}
         super().__init__()
         self.n_critics = n_critics
         critics = []
@@ -89,7 +95,7 @@ class EnsembleQ(nn.Module):
 
     def reset_parameters(self):
         for critic in self.critics:
-            if self.weight_init == None:
+            if self.weight_init is None:
                 pass
             elif self.weight_init == "orthogonal":  # drqv2
                 critic.apply(weight_init_orthogonal_)
@@ -123,9 +129,11 @@ class DistributionalEnsembleQ(nn.Module):
         v_max=10,
         num_atoms=51,
         n_critics=2,
-        mlp_kwargs=dict(units=[512, 256, 128], act_type="ELU"),
+        mlp_kwargs=None,
         weight_init=None,
     ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {"units": [512, 256, 128], "act_type": "ELU"}
         super().__init__()
         self.v_min = v_min
         self.v_max = v_max
@@ -147,7 +155,7 @@ class DistributionalEnsembleQ(nn.Module):
         return True
 
     def reset_parameters(self):
-        if self.weight_init != None:
+        if self.weight_init is not None:
             raise NotImplementedError(self.weight_init)
 
     def forward(self, state, action):

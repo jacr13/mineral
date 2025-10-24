@@ -2,7 +2,6 @@ import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ...nets import MLP, Dist
 
@@ -91,11 +90,15 @@ class Actor(nn.Module):
         action_dim,
         fixed_sigma=True,
         init_sigma=-1.0,
-        mlp_kwargs=dict(norm_type="LayerNorm", act_type="ELU"),
-        dist_kwargs=dict(dist_type="normal"),
+        mlp_kwargs=None,
+        dist_kwargs=None,
         weight_init="orthogonal",
         weight_init_last_layers=False,
     ):
+        if dist_kwargs is None:
+            dist_kwargs = {'dist_type': 'normal'}
+        if mlp_kwargs is None:
+            mlp_kwargs = {'norm_type': 'LayerNorm', 'act_type': 'ELU'}
         super().__init__()
         self.fixed_sigma = fixed_sigma
         self.init_sigma = init_sigma
@@ -151,9 +154,11 @@ class Critic(nn.Module):
         self,
         state_dim,
         action_dim,
-        mlp_kwargs=dict(act_type="ELU", norm_type="LayerNorm"),
+        mlp_kwargs=None,
         weight_init="orthogonal",
     ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {'act_type': 'ELU', 'norm_type': 'LayerNorm'}
         super().__init__()
         self.critic_mlp = MLP(state_dim, out_dim=1, plain_last=True, **mlp_kwargs)
 
@@ -186,9 +191,11 @@ class EnsembleCritic(nn.Module):
         n_critics=1,
         n_sample=None,
         with_vmap=False,
-        mlp_kwargs=dict(act_type="ELU", norm_type="LayerNorm"),
+        mlp_kwargs=None,
         weight_init="orthogonal",
     ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {'act_type': 'ELU', 'norm_type': 'LayerNorm'}
         super().__init__()
         self.n_critics = n_critics
         self.n_sample = n_sample
@@ -236,7 +243,7 @@ class EnsembleCritic(nn.Module):
         if isinstance(x, dict):
             x = x["z"]
         if self.with_vmap:
-            Vs = self.vmap([p for p in self.params], (), x)
+            Vs = self.vmap(list(self.params), (), x)
         else:
             Vs = torch.stack([critic(x) for critic in self.critics])
 

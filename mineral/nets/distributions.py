@@ -44,7 +44,7 @@ class SquashedNormal(D.TransformedDistribution):
 
         try:
             self.base_dist = D.Normal(loc, scale)
-        except (AssertionError, ValueError) as e:
+        except (AssertionError, ValueError):
             print(loc)
             print(torch.where(torch.isnan(loc)))
         transforms = [TanhTransform()]

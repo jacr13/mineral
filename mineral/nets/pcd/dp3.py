@@ -13,8 +13,8 @@ def MLP(
     in_size = units[0]
     for i in range(1, len(units)):
         out_size = units[i]
-        l = nn.Linear(in_size, out_size)
-        layers.append(l)
+        layer = nn.Linear(in_size, out_size)
+        layers.append(layer)
 
         if plain_last and i == len(units) - 1:
             break
@@ -41,13 +41,15 @@ class DP3PointNet(nn.Module):
         node_feature_dim=0,
         global_feature_dim=64,
         local_feature_dim=None,
-        block_channels=[64, 128, 256],
+        block_channels=None,
         pool="max",
         norm_type="LayerNorm",
         act_type="ReLU",
         plain_last=False,
         remove_last_act=True,
     ):
+        if block_channels is None:
+            block_channels = [64, 128, 256]
         super().__init__()
         assert local_feature_dim is None, print("Not implemented")
         self.node_feature_dim = node_feature_dim
@@ -56,7 +58,7 @@ class DP3PointNet(nn.Module):
         self.pool = pool
 
         D = 3 + node_feature_dim
-        norm_act_kwargs = dict(norm_type=norm_type, act_type=act_type)
+        norm_act_kwargs = {"norm_type": norm_type, "act_type": act_type}
         self.mlp = MLP([D, *block_channels], **norm_act_kwargs)
         self.final_projection = MLP([block_channels[-1], global_feature_dim], plain_last=plain_last, **norm_act_kwargs)
         if not plain_last and remove_last_act:

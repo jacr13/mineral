@@ -81,9 +81,7 @@ class BestOfKSoftminOT(nn.Module):
         self.device = device
         self.dtype = dtype
         if cfg.use_mlp_features:
-            assert (
-                cfg.feature_dim is not None
-            ), "Set feature_dim when use_mlp_features=True"
+            assert cfg.feature_dim is not None, "Set feature_dim when use_mlp_features=True"
             self.feat = MLPFeat(cfg.feature_dim, cfg.embed_dim)
         else:
             self.feat = IdentityFeat()
@@ -101,7 +99,12 @@ class BestOfKSoftminOT(nn.Module):
 
     @torch.no_grad()
     def _sample_expert_ids_and_starts(
-        self, B: int, K: int, expert_lens: torch.Tensor, T: int, device  # [M]
+        self,
+        B: int,
+        K: int,
+        expert_lens: torch.Tensor,
+        T: int,
+        device,  # [M]
     ):
         # Only choose experts with length >= T
         valid = expert_lens >= T
@@ -143,10 +146,8 @@ class BestOfKSoftminOT(nn.Module):
         sim_is_window: bool = False,
         sim_start: Optional[int] = None,
     ) -> Tuple[torch.Tensor, dict]:
-
         cfg = self.cfg
         device = sim_seq.device
-        dtype = sim_seq.dtype
 
         expert = expert.detach()
 
@@ -188,12 +189,8 @@ class BestOfKSoftminOT(nn.Module):
                 assert (expert_lens <= Nmax).all()
 
             # Sample K windows from the bank for each sim env
-            expert_ids, starts = self._sample_expert_ids_and_starts(
-                B, cfg.K, expert_lens, T, device
-            )
-            expert_crops = self._gather_crops_from_bank(
-                bank, expert_ids, starts, T
-            )  # [B,K,T,d]
+            expert_ids, starts = self._sample_expert_ids_and_starts(B, cfg.K, expert_lens, T, device)
+            expert_crops = self._gather_crops_from_bank(bank, expert_ids, starts, T)  # [B,K,T,d]
         elif expert.dim() == 3 and expert.shape[0] == B:
             # Per-batch expert trajectories [B,N,d] (old behavior)
             N = expert.shape[1]
@@ -212,22 +209,15 @@ class BestOfKSoftminOT(nn.Module):
         # Embed features
         sim_f = self.feat(sim_win)  # [B,T,d’]
         if self.cfg.use_mlp_features:
-            d_feat = sim_f.shape[-1]
+            _d_feat = sim_f.shape[-1]
         # Flatten K dimension to compute OT per-crop
         exp_f = self.feat(expert_crops.view(B * cfg.K, T, -1)).view(B, cfg.K, T, -1)
 
-        sim_f_tiled = (
-            sim_f.unsqueeze(1)
-            .expand(B, cfg.K, T, sim_f.shape[-1])
-            .contiguous()
-            .view(B * cfg.K, T, -1)
-        )
+        sim_f_tiled = sim_f.unsqueeze(1).expand(B, cfg.K, T, sim_f.shape[-1]).contiguous().view(B * cfg.K, T, -1)
         exp_f_flat = exp_f.contiguous().view(B * cfg.K, T, -1)
 
         C = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
-        P = log_sinkhorn(
-            C, eps=cfg.eps, iters=cfg.sinkhorn_iters
-        ).detach()  # [B*K, T, T]
+        P = log_sinkhorn(C, eps=cfg.eps, iters=cfg.sinkhorn_iters).detach()  # [B*K, T, T]
         Lk = (P * C).sum(dim=(-1, -2)).view(B, cfg.K)  # [B, K]
 
         # Softmin over K
@@ -258,9 +248,7 @@ if __name__ == "__main__":
 
     sim_seq = torch.randn(B_env, Ts, d_in, device=device)
     expert_bank = torch.randn(M_expert, N, d_in, device=device)
-    expert_lens = torch.randint(
-        N - 50, N + 1, (M_expert,), device=device
-    )  # variable lengths near N
+    expert_lens = torch.randint(N - 50, N + 1, (M_expert,), device=device)  # variable lengths near N
 
     cfg = BestOfKConfig(
         T=T,
@@ -274,9 +262,7 @@ if __name__ == "__main__":
     )
     loss_fn = BestOfKSoftminOT(cfg, device=device).to(device)
 
-    loss, info = loss_fn(
-        sim_seq, expert_bank, expert_lens=expert_lens, sim_is_window=False
-    )
+    loss, info = loss_fn(sim_seq, expert_bank, expert_lens=expert_lens, sim_is_window=False)
     print("Loss:", loss.item())
     print("Best crop per env (first 5):", info["best_idx"][:5])
     if "expert_ids" in info and info["expert_ids"] is not None:

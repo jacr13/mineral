@@ -6,7 +6,7 @@ import torch.nn as nn
 
 @torch.no_grad()
 def soft_update(target_net, current_net, tau: float):
-    for tar, cur in zip(target_net.parameters(), current_net.parameters()):
+    for tar, cur in zip(target_net.parameters(), current_net.parameters(), strict=False):
         # tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
         tar.mul_(1.0 - tau).add_(cur * tau)
 
@@ -17,22 +17,22 @@ def distl_projection(next_dist, reward, done, gamma, v_min=-10, v_max=10, num_at
 
     target_z = (reward + (1 - done) * gamma * support.to(done.device)).clamp(min=v_min, max=v_max)
     b = (target_z - v_min) / delta_z
-    l = b.floor().long()
-    u = b.ceil().long()
+    lower_idx = b.floor().long()
+    upper_idx = b.ceil().long()
 
-    l[torch.logical_and((u > 0), (l == u))] -= 1
-    u[torch.logical_and((l < (num_atoms - 1)), (l == u))] += 1
+    lower_idx[torch.logical_and((upper_idx > 0), (lower_idx == upper_idx))] -= 1
+    upper_idx[torch.logical_and((lower_idx < (num_atoms - 1)), (lower_idx == upper_idx))] += 1
 
     proj_dist = torch.zeros_like(next_dist)
     offset = torch.linspace(0, (batch_size - 1) * num_atoms, batch_size, device=done.device)
     offset = offset.unsqueeze(1).expand(batch_size, num_atoms).long()
-    proj_dist.view(-1).index_add_(0, (l + offset).view(-1), (next_dist * (u.float() - b)).view(-1))
-    proj_dist.view(-1).index_add_(0, (u + offset).view(-1), (next_dist * (b - l.float())).view(-1))
+    proj_dist.view(-1).index_add_(0, (lower_idx + offset).view(-1), (next_dist * (upper_idx.float() - b)).view(-1))
+    proj_dist.view(-1).index_add_(0, (upper_idx + offset).view(-1), (next_dist * (b - lower_idx.float())).view(-1))
     return proj_dist
 
 
 def weight_init_(module, weight_init):
-    if weight_init == None:
+    if weight_init is None:
         pass
     elif weight_init == "orthogonal":  # drqv2
         module.apply(weight_init_orthogonal_)

@@ -5,9 +5,7 @@ from torch.utils.data import Dataset
 
 
 def transform_op(arr):
-    """
-    swap and then flatten axes 0 and 1
-    """
+    """Swap and then flatten axes 0 and 1."""
     if arr is None:
         return arr
     s = arr.size()
@@ -64,7 +62,7 @@ class ExperienceBuffer(Dataset):
         self.last_range = (start, end)
         input_dict = {}
         for k, v in self.data_dict.items():
-            if type(v) is dict:
+            if isinstance(v, dict):
                 v_dict = {kd: vd[start:end] for kd, vd in v.items()}
                 input_dict[k] = v_dict
             else:
@@ -87,7 +85,7 @@ class ExperienceBuffer(Dataset):
         self.data_dict['sigma'][start:end] = sigma
 
     def update_data(self, name, index, val):
-        if type(val) is dict:
+        if isinstance(val, dict):
             for k, v in val.items():
                 self.storage_dict[name][k][index, :] = v
         else:

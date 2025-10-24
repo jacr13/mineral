@@ -13,6 +13,5 @@ if __name__ == '__main__':
 
     from mineral.scripts import run
 
-    from . import agents, envs
 
     run.main(config)

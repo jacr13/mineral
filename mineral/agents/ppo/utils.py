@@ -1,8 +1,5 @@
 import math
 
-import torch
-import torch.nn as nn
-
 
 class AdaptiveScheduler:
     def __init__(self, kl_threshold=0.008, min_lr=1e-6, max_lr=1e-2):

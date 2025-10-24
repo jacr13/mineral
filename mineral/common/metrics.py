@@ -14,11 +14,13 @@ class Metrics(nn.Module):
         self,
         current_scores,
         tracker_len,
-        info_keys={},  # assuming keys in obs_dict
+        info_keys=None,  # assuming keys in obs_dict
         save_video_every=0,
         save_video_consecutive=0,
         env_render=False,
     ):
+        if info_keys is None:
+            info_keys = {}
         super().__init__()
 
         # --- Keys ---

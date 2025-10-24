@@ -42,8 +42,8 @@ def import_isaacgym():
             conda_lib_path = (
                 Path(sys.executable).parent.parent / f"lib/libpython{version_info.major}.{version_info.minor}m.so.1.0"
             )
-        python_lib = cdll.LoadLibrary(str(conda_lib_path))
+        _python_lib = cdll.LoadLibrary(str(conda_lib_path))
         print(f"Load Python lib {conda_lib_path}")
 
-    import isaacgym
-    import torch
+    import isaacgym  # noqa: F401
+    import torch  # noqa: F401

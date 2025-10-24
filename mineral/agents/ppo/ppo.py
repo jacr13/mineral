@@ -27,7 +27,7 @@ class PPO(DAPGMixin, Agent):
         super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
-        rms_config = dict(eps=1e-5, with_clamp=True, initial_count=1, dtype=torch.float64)
+        rms_config = {'eps': 1e-5, 'with_clamp': True, 'initial_count': 1, 'dtype': torch.float64}
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -231,7 +231,7 @@ class PPO(DAPGMixin, Agent):
                         f'Epochs: {self.epoch + 1} |',
                         f'Agent Steps: {int(self.agent_steps):,} |',
                         f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
-                        f'Stats:',
+                        'Stats:',
                         f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
                         f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
                         f'last_sps {timings["lastrate"]:.2f},',
