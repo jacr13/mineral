@@ -51,7 +51,12 @@ class BPTT(Agent):
         self.max_epochs = self.bptt_config.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
 
         # --- Normalizers ---
-        rms_config = {'eps': 1e-5, 'correction': 0, 'initial_count': 1e-4, 'dtype': torch.float64}  # unbiased=False -> correction=0
+        rms_config = {
+            'eps': 1e-5,
+            'correction': 0,
+            'initial_count': 1e-4,
+            'dtype': torch.float64,
+        }  # unbiased=False -> correction=0
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():

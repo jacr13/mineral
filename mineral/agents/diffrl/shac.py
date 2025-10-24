@@ -556,9 +556,9 @@ class SHAC(Agent):
                 # TODO: self.encoder.parameters()
                 grad_norm_before_clip = grad_norm(self.actor.parameters())
                 if self.shac_config.truncate_grads:
-                    if self.shac_config.get("actor_agc_clip", None) is not None:
-                        clip_agc_(self.actor.parameters(), self.shac_config.actor_agc_clip)
-                    elif self.shac_config.get("max_grad_value", None) is not None:
+                    # if self.shac_config.get("actor_agc_clip", None) is not None:
+                    #     clip_agc_(self.actor.parameters(), self.shac_config.actor_agc_clip)
+                    if self.shac_config.get("max_grad_value", None) is not None:
                         nn.utils.clip_grad_value_(self.actor.parameters(), self.shac_config.max_grad_value)
                     elif self.shac_config.max_grad_norm is not None:
                         nn.utils.clip_grad_norm_(self.actor.parameters(), self.shac_config.max_grad_norm)
@@ -844,9 +844,9 @@ class SHAC(Agent):
                     # TODO: self.encoder.parameters()
                     grad_norm_before_clip = grad_norm(self.critic.parameters())
                     grad_norms_before_clip.append(grad_norm_before_clip)
-                    if self.shac_config.get("critic_agc_clip", None) is not None:
-                        clip_agc_(self.critic.parameters(), self.shac_config.critic_agc_clip)
-                    elif self.shac_config.get("max_grad_value", None) is not None:
+                    # if self.shac_config.get("critic_agc_clip", None) is not None:
+                    #     clip_agc_(self.critic.parameters(), self.shac_config.critic_agc_clip)
+                    if self.shac_config.get("max_grad_value", None) is not None:
                         nn.utils.clip_grad_value_(self.critic.parameters(), self.shac_config.max_grad_value)
                     elif self.shac_config.max_grad_norm is not None:
                         nn.utils.clip_grad_norm_(self.critic.parameters(), self.shac_config.max_grad_norm)
