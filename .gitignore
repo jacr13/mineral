@@ -3,6 +3,7 @@ data/
 workdir/
 workdir2/
 outputs/
+experts/dflex/*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
