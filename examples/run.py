@@ -13,5 +13,4 @@ if __name__ == '__main__':
 
     from mineral.scripts import run
 
-
     run.main(config)

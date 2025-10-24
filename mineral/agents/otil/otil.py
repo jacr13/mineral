@@ -33,20 +33,14 @@ class OTIL(Agent):
         self.max_episode_length = self.env.max_episode_length
 
         # --- OTIL Parameters ---
-        self.tanh_clamp = self.network_config.get(
-            "tanh_clamp", False
-        )  # on actions, if not done in actor dist
+        self.tanh_clamp = self.network_config.get("tanh_clamp", False)  # on actions, if not done in actor dist
         self.actor_detach_z = self.otil_config.get("actor_detach_z", False)
 
         self.horizon_len = self.otil_config.horizon_len
-        self.max_epochs = self.otil_config.get(
-            "max_epochs", 0
-        )  # set to 0 to disable and track by max_agent_steps instead
+        self.max_epochs = self.otil_config.get("max_epochs", 0)  # set to 0 to disable and track by max_agent_steps instead
 
         demos_path = self.otil_config.demos_path
-        assert os.path.exists(
-            demos_path
-        ), f"OTIL demos path: {demos_path} does not exist"
+        assert os.path.exists(demos_path), f"OTIL demos path: {demos_path} does not exist"
         self.demos = torch.load(demos_path, map_location=self.device)
 
         print(self.demos.keys())
@@ -76,9 +70,7 @@ class OTIL(Agent):
         if self.tanh_clamp:  # legacy
             # unbiased=False -> correction=0
             # https://github.com/NVlabs/DiffRL/blob/a4c0dd1696d3c3b885ce85a3cb64370b580cb913/utils/running_mean_std.py#L34
-            rms_config = {
-                "eps": 1e-5, "correction": 0, "initial_count": 1e-4, "dtype": torch.float32
-            }
+            rms_config = {"eps": 1e-5, "correction": 0, "initial_count": 1e-4, "dtype": torch.float32}
         else:
             rms_config = {"eps": 1e-5, "initial_count": 1, "dtype": torch.float64}
         if self.normalize_input:
@@ -96,9 +88,7 @@ class OTIL(Agent):
         if self.network_config.get("encoder", None) is not None:
             EncoderCls = getattr(nets, self.network_config.encoder)
             encoder_kwargs = self.network_config.get("encoder_kwargs", {})
-            self.encoder = EncoderCls(
-                self.obs_space, encoder_kwargs, weight_init_fn=models.weight_init_
-            )
+            self.encoder = EncoderCls(self.obs_space, encoder_kwargs, weight_init_fn=models.weight_init_)
         else:
             f = lambda x: x["obs"]
             self.encoder = nets.Lambda(f)
@@ -123,9 +113,7 @@ class OTIL(Agent):
             assert self.action_dim == self.env.num_actions
 
         ActorCls = getattr(models, self.network_config.actor)
-        self.actor = ActorCls(
-            obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {})
-        )
+        self.actor = ActorCls(obs_dim, self.action_dim, **self.network_config.get("actor_kwargs", {}))
         self.actor.to(self.device)
         print("Actor:", self.actor)
 
@@ -135,9 +123,7 @@ class OTIL(Agent):
         if self.otil_config.get("actor_detach_encoder", False):
             actor_optim_params = self.actor.parameters()
         else:
-            actor_optim_params = itertools.chain(
-                self.actor_encoder.parameters(), self.actor.parameters()
-            )
+            actor_optim_params = itertools.chain(self.actor_encoder.parameters(), self.actor.parameters())
         self.actor_optim = OptimCls(
             actor_optim_params,
             **self.otil_config.get("actor_optim_kwargs", {}),
@@ -145,9 +131,7 @@ class OTIL(Agent):
         print("Actor Optim:", self.actor_optim)
 
         self.actor_lr = self.actor_optim.defaults["lr"]
-        self.min_lr, self.max_lr = self.otil_config.get(
-            "min_lr", 1e-5
-        ), self.otil_config.get("max_lr", self.actor_lr)
+        self.min_lr, self.max_lr = self.otil_config.get("min_lr", 1e-5), self.otil_config.get("max_lr", self.actor_lr)
         # kl scheduler
         self.last_lr = self.actor_lr
         scheduler_kwargs = self.otil_config.get("scheduler_kwargs", {})
@@ -163,9 +147,7 @@ class OTIL(Agent):
         self.create_buffers(T, B)
 
         # --- Episode Metrics ---
-        self.episode_rewards = torch.zeros(
-            self.num_envs, dtype=torch.float32, device=self.device
-        )
+        self.episode_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         self.episode_lengths = torch.zeros(self.num_envs, dtype=int, device=self.device)
 
         self.episode_rewards_hist = []
@@ -180,20 +162,11 @@ class OTIL(Agent):
         self.timer = Timer()
 
     def create_buffers(self, T, B):
-        self.obs_buf = {
-            k: torch.zeros((T, B) + v, dtype=torch.float32, device=self.device)
-            for k, v in self.obs_space.items()
-        }
-        self.action_buf = torch.zeros(
-            (T, B, self.action_dim), dtype=torch.float32, device=self.device
-        )
+        self.obs_buf = {k: torch.zeros((T, B) + v, dtype=torch.float32, device=self.device) for k, v in self.obs_space.items()}
+        self.action_buf = torch.zeros((T, B, self.action_dim), dtype=torch.float32, device=self.device)
         # for kl divergence computing
-        self.mus = torch.zeros(
-            (T, B, self.num_actions), dtype=torch.float32, device=self.device
-        )
-        self.sigmas = torch.zeros(
-            (T, B, self.num_actions), dtype=torch.float32, device=self.device
-        )
+        self.mus = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
+        self.sigmas = torch.zeros((T, B, self.num_actions), dtype=torch.float32, device=self.device)
         # TODO complete
         pass
 
@@ -225,9 +198,7 @@ class OTIL(Agent):
     def evaluate_policy(self, num_episodes, sample=False, render=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
-        episode_rewards = torch.zeros(
-            self.num_envs, dtype=torch.float32, device=self.device
-        )
+        episode_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         episode_lengths = torch.zeros(self.num_envs, dtype=int)
 
         completed_episodes = {}
@@ -335,9 +306,7 @@ class OTIL(Agent):
             # learning rate schedule
             if self.otil_config.lr_schedule == "linear":
                 assert self.max_epochs > 0
-                actor_lr = (self.min_lr - self.actor_lr) * float(
-                    self.epoch / self.max_epochs
-                ) + self.actor_lr
+                actor_lr = (self.min_lr - self.actor_lr) * float(self.epoch / self.max_epochs) + self.actor_lr
                 for param_group in self.actor_optim.param_groups:
                     param_group["lr"] = actor_lr
                 lr = actor_lr
@@ -345,9 +314,7 @@ class OTIL(Agent):
                 lr = self.actor_lr
             elif self.otil_config.lr_schedule == "kl":
                 if self.avg_kl is not None:
-                    actor_lr = adaptive_scheduler(
-                        self.last_lr, self.avg_kl.item(), **self.scheduler_kwargs
-                    )
+                    actor_lr = adaptive_scheduler(self.last_lr, self.avg_kl.item(), **self.scheduler_kwargs)
                     for param_group in self.actor_optim.param_groups:
                         param_group["lr"] = actor_lr
                     self.last_lr = actor_lr
@@ -365,12 +332,7 @@ class OTIL(Agent):
             # train metrics
             results = {**actor_results}
             metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
-            metrics.update(
-                {
-                    k: torch.mean(torch.cat(results[k]), 0).cpu().numpy()
-                    for k in ["mu", "sigma"]
-                }
-            )  # distr
+            metrics.update({k: torch.mean(torch.cat(results[k]), 0).cpu().numpy() for k in ["mu", "sigma"]})  # distr
             metrics.update({"epoch": self.epoch, "lr": lr})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
@@ -380,9 +342,7 @@ class OTIL(Agent):
                 "train/make_critic_dataset",
                 "train/update_critic",
             )
-            timings = self.timer.stats(
-                step=self.agent_steps, total_names=timings_total_names, reset=False
-            )
+            timings = self.timer.stats(step=self.agent_steps, total_names=timings_total_names, reset=False)
             timing_metrics = {f"train_timings/{k}": v for k, v in timings.items()}
             metrics.update(timing_metrics)
 
@@ -465,17 +425,13 @@ class OTIL(Agent):
                 grad_norm_before_clip = grad_norm(self.actor.parameters())
                 if self.otil_config.truncate_grads:
                     if self.otil_config.get("max_grad_value", None) is not None:
-                        nn.utils.clip_grad_value_(
-                            self.actor.parameters(), self.otil_config.max_grad_value
-                        )
+                        nn.utils.clip_grad_value_(self.actor.parameters(), self.otil_config.max_grad_value)
                     # elif self.otil_config.get("actor_agc_clip", None) is not None:
                     #     clip_agc_(
                     #         self.actor.parameters(), self.otil_config.actor_agc_clip
                     #     )
                     elif self.otil_config.max_grad_norm is not None:
-                        nn.utils.clip_grad_norm_(
-                            self.actor.parameters(), self.otil_config.max_grad_norm
-                        )
+                        nn.utils.clip_grad_norm_(self.actor.parameters(), self.otil_config.max_grad_norm)
                 grad_norm_after_clip = grad_norm(self.actor.parameters())
 
                 # sanity check
@@ -494,9 +450,7 @@ class OTIL(Agent):
         with torch.no_grad():
             obs = {k: v.view(-1, *v.shape[2:]) for k, v in self.obs_buf.items()}
             _, mu, sigma, distr = self.get_actions(obs, sample=False, dist=True)
-            old_mu, old_sigma = self.mus.view(-1, self.num_actions), self.sigmas.view(
-                -1, self.num_actions
-            )
+            old_mu, old_sigma = self.mus.view(-1, self.num_actions), self.sigmas.view(-1, self.num_actions)
 
             kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
             results["mu"].append(mu)
@@ -535,9 +489,7 @@ class OTIL(Agent):
 
             # take env step
             z = self.actor_encoder(obs)
-            actions, mu, sigma, distr = self.get_actions(
-                obs, z=z, sample=True, dist=True
-            )
+            actions, mu, sigma, distr = self.get_actions(obs, z=z, sample=True, dist=True)
 
             with torch.no_grad():
                 self.action_buf[i] = actions.clone()
@@ -574,26 +526,15 @@ class OTIL(Agent):
             with torch.no_grad():
                 if len(done_env_ids) > 0:
                     done_env_ids = done_env_ids.detach().cpu()
-                    self.episode_rewards_tracker.update(
-                        self.episode_rewards[done_env_ids]
-                    )
-                    self.episode_lengths_tracker.update(
-                        self.episode_lengths[done_env_ids]
-                    )
+                    self.episode_rewards_tracker.update(self.episode_rewards[done_env_ids])
+                    self.episode_lengths_tracker.update(self.episode_lengths[done_env_ids])
                     self.num_episodes += len(done_env_ids)
                     for done_env_id in done_env_ids:
-                        if (
-                            self.episode_rewards[done_env_id] > 1e6
-                            or self.episode_rewards[done_env_id] < -1e6
-                        ):
+                        if self.episode_rewards[done_env_id] > 1e6 or self.episode_rewards[done_env_id] < -1e6:
                             print("ep_rewards error")
                             raise ValueError
-                        self.episode_rewards_hist.append(
-                            self.episode_rewards[done_env_id].item()
-                        )
-                        self.episode_lengths_hist.append(
-                            self.episode_lengths[done_env_id].item()
-                        )
+                        self.episode_rewards_hist.append(self.episode_rewards[done_env_id].item())
+                        self.episode_lengths_hist.append(self.episode_lengths[done_env_id].item())
                         self.episode_rewards[done_env_id] = 0.0
                         self.episode_lengths[done_env_id] = 0
 
@@ -609,9 +550,7 @@ class OTIL(Agent):
     def eval(self):
         self.set_eval()
 
-        episode_rewards, episode_lengths = self.evaluate_policy(
-            num_episodes=self.num_actors * 2, sample=True
-        )
+        episode_rewards, episode_lengths = self.evaluate_policy(num_episodes=self.num_actors * 2, sample=True)
 
         metrics = {
             "eval_scores/num_episodes": len(episode_rewards),
@@ -647,9 +586,7 @@ class OTIL(Agent):
             "mini_epoch": self.mini_epoch,
             "agent_steps": self.agent_steps,
             "obs_rms": self.obs_rms.state_dict() if self.normalize_input else None,
-            "actor_encoder": (
-                self.actor_encoder.state_dict() if not self.share_encoder else None
-            ),
+            "actor_encoder": (self.actor_encoder.state_dict() if not self.share_encoder else None),
             "encoder": self.encoder.state_dict(),
             "actor": self.actor.state_dict(),
         }
