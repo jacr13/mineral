@@ -31,7 +31,7 @@ class SAC(Agent):
         super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
-        rms_config = dict(eps=1e-4, with_clamp=True, initial_count="eps")
+        rms_config = {"eps": 1e-4, "with_clamp": True, "initial_count": "eps"}
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -236,7 +236,7 @@ class SAC(Agent):
                     f'Epochs: {self.epoch + 1} |',
                     f'Agent Steps: {int(self.agent_steps):,} |',
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
-                    f'Stats:',
+                    'Stats:',
                     f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
                     f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
                     f'last_sps {timings["lastrate"]:.2f},',
@@ -250,7 +250,7 @@ class SAC(Agent):
 
     def update_net(self, memory):
         results = collections.defaultdict(list)
-        for i in range(self.sac_config.mini_epochs):
+        for _i in range(self.sac_config.mini_epochs):
             self.mini_epoch += 1
             obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size, device=self.device)
 
@@ -440,7 +440,7 @@ class SAC(Agent):
                 continue
             if k == 'actor_target' and (self.sac_config.no_tgt_actor):
                 continue
-            if k == 'log_alpha' and (not self.sac_config.alpha is None):
+            if k == 'log_alpha' and (self.sac_config.alpha is not None):
                 continue
 
             if k == 'log_alpha':

@@ -27,17 +27,25 @@ class MLP(nn.Module):
         self,
         in_dim,
         out_dim=None,
-        units=[512, 256, 128],
+        units=None,
         dropout=None,
-        dropout_kwargs=dict(inplace=False),
+        dropout_kwargs=None,
         where_dropout="every",
         norm_type=None,
-        norm_kwargs={},
+        norm_kwargs=None,
         act_type="ReLU",
-        act_kwargs=dict(inplace=True),
+        act_kwargs=None,
         bias=True,
         plain_last=False,
     ):
+        if act_kwargs is None:
+            act_kwargs = {"inplace": True}
+        if dropout_kwargs is None:
+            dropout_kwargs = {"inplace": False}
+        if norm_kwargs is None:
+            norm_kwargs = {}
+        if units is None:
+            units = [512, 256, 128]
         super().__init__()
         if out_dim is not None:
             units = [*units, out_dim]

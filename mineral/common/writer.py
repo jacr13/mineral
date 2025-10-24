@@ -49,7 +49,7 @@ class TensorboardWriter(AsyncOutput):
         flat_config = flatten_dict(config)
         try:
             import pandas as pd
-            import tabulate
+            # import tabulate
 
             d = pd.DataFrame.from_dict(flat_config, orient='index')
             self.writer.add_text('cfg', d.to_markdown(), 0)
@@ -170,14 +170,13 @@ def _prepare_video(V):
 
 # https://stackoverflow.com/a/62186053
 def flatten_dict(dictionary, parent_key=False, separator='.'):
-    """
-    Turn a nested dictionary into a flattened dictionary
+    """Turn a nested dictionary into a flattened dictionary.
+
     :param dictionary: The dictionary to flatten
     :param parent_key: The string to prepend to dictionary's keys
     :param separator: The string used to separate flattened keys
-    :return: A flattened dictionary
+    :return: A flattened dictionary.
     """
-
     items = []
     for key, value in dictionary.items():
         new_key = str(parent_key) + separator + key if parent_key else key

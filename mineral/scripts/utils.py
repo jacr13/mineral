@@ -1,5 +1,4 @@
 import os
-import sys
 from typing import Dict
 
 import numpy as np
@@ -26,7 +25,7 @@ def omegaconf_to_dict(d: DictConfig) -> Dict:
 
 
 def set_np_formatting():
-    """formats numpy print"""
+    """Formats numpy print."""
     np.set_printoptions(
         edgeitems=30,
         infstr='inf',
@@ -95,7 +94,7 @@ def make_batch_env(num_envs, make_env_fn, parallel='process', device='numpy'):
     from ..common.parallel import Parallel
 
     ctors = []
-    for index in range(num_envs):
+    for _index in range(num_envs):
         ctor = lambda: make_env_fn()
         if parallel != 'none':
             ctor = bind(Parallel, ctor, parallel)

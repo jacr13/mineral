@@ -17,7 +17,7 @@ class Timer:
         self._step = 0
 
     def reset(self):
-        for k, v in self._active_scopes.items():
+        for _k, v in self._active_scopes.items():
             v.__exit__(None, None, None)
         self._active_scopes.clear()
         for timings in self._durations.values():

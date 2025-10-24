@@ -19,8 +19,8 @@ class Parallel:
                 return bind(self.worker, Message.CALL, name)
             else:
                 return self.worker(Message.READ, name)()
-        except AttributeError:
-            raise ValueError(name)
+        except AttributeError as err:
+            raise ValueError(name) from err
 
     def __len__(self):
         return self.worker(Message.CALL, '__len__')()

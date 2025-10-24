@@ -113,7 +113,7 @@ class ProcessWorker:
 
         _FN = cloudpickle.loads(fn)
         _STATE = None
-        for initializer in cloudpickle.loads(initializers):
+        for _initializer in cloudpickle.loads(initializers):
             initializers()
 
     @staticmethod
@@ -175,8 +175,8 @@ class ProcessPipeWorker:
         while callid not in self._results:
             try:
                 message, callid, payload = self._pipe.recv()
-            except (OSError, EOFError):
-                raise RuntimeError('Lost connection to worker.')
+            except (OSError, EOFError) as err:
+                raise RuntimeError("Lost connection to worker.") from err
             if message == Message.ERROR:
                 raise Exception(payload)
             assert message == Message.RESULT, message

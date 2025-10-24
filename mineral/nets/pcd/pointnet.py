@@ -15,8 +15,8 @@ def MLP(
     in_size = units[0]
     for i in range(1, len(units)):
         out_size = units[i]
-        l = nn.Linear(in_size, out_size)
-        layers.append(l)
+        layer = nn.Linear(in_size, out_size)
+        layers.append(layer)
 
         if plain_last and i == len(units) - 1:
             break
@@ -39,11 +39,15 @@ class STNkd(nn.Module):
     def __init__(
         self,
         input_dim,
-        conv_units=[64, 128, 1024],
-        mlp_units=[1024, 512, 256],
+        conv_units=None,
+        mlp_units=None,
         norm_type="BatchNorm1d",
         act_type="ReLU",
     ):
+        if mlp_units is None:
+            mlp_units = [1024, 512, 256]
+        if conv_units is None:
+            conv_units = [64, 128, 1024]
         super().__init__()
         # using linear layers for conv1d
         self.conv = MLP([input_dim] + conv_units, norm_type=norm_type, act_type=act_type)
@@ -74,15 +78,21 @@ class PointNet(nn.Module):
         node_feature_dim=0,
         global_feature_dim=1024,
         local_feature_dim=None,
-        feature_units=[64, 128],
-        stn_kwargs=dict(conv_units=[64, 128, 1024], mlp_units=[1024, 512, 256]),
-        fstn_kwargs={},
+        feature_units=None,
+        stn_kwargs=None,
+        fstn_kwargs=None,
         feature_transform=False,
         pool="max",
         norm_type="BatchNorm1d",
         act_type="ReLU",
         plain_last=False,  # different than orig impl. that has bn but no relu in the last layer
     ):
+        if stn_kwargs is None:
+            stn_kwargs = {"conv_units": [64, 128, 1024], "mlp_units": [1024, 512, 256]}
+        if fstn_kwargs is None:
+            fstn_kwargs = {}
+        if feature_units is None:
+            feature_units = [64, 128]
         super().__init__()
         self.node_feature_dim = node_feature_dim
         self.global_feature_dim = global_feature_dim
@@ -95,7 +105,7 @@ class PointNet(nn.Module):
         self.local_feature_dim = feature_units[0]
 
         D = 3 + node_feature_dim
-        norm_act_kwargs = dict(norm_type=norm_type, act_type=act_type)
+        norm_act_kwargs = {"norm_type": norm_type, "act_type": act_type}
         self.stn = STNkd(D, **dict(**norm_act_kwargs, **stn_kwargs))
         if self.feature_transform:
             self.fstn = STNkd(feature_units[0], **dict(**norm_act_kwargs, **fstn_kwargs))

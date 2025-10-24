@@ -8,7 +8,6 @@ from copy import deepcopy
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from ... import nets
 from ...common import normalizers
@@ -77,11 +76,11 @@ class OTIL(Agent):
         if self.tanh_clamp:  # legacy
             # unbiased=False -> correction=0
             # https://github.com/NVlabs/DiffRL/blob/a4c0dd1696d3c3b885ce85a3cb64370b580cb913/utils/running_mean_std.py#L34
-            rms_config = dict(
-                eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float32
-            )
+            rms_config = {
+                "eps": 1e-5, "correction": 0, "initial_count": 1e-4, "dtype": torch.float32
+            }
         else:
-            rms_config = dict(eps=1e-5, initial_count=1, dtype=torch.float64)
+            rms_config = {"eps": 1e-5, "initial_count": 1, "dtype": torch.float64}
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -154,7 +153,7 @@ class OTIL(Agent):
         scheduler_kwargs = self.otil_config.get("scheduler_kwargs", {})
         self.scheduler_kwargs = {
             **scheduler_kwargs,
-            **dict(min_lr=self.min_lr, max_lr=self.max_lr),
+            **{"min_lr": self.min_lr, "max_lr": self.max_lr},
         }
         self.avg_kl = self.scheduler_kwargs.get("kl_threshold", None)
 
@@ -240,7 +239,6 @@ class OTIL(Agent):
         episode_next_obs = []
         episode_rew = []
         episode_done = []
-        dones_ids = []
 
         obs = self.env.reset()
         obs = self._convert_obs(obs)
@@ -414,14 +412,14 @@ class OTIL(Agent):
                     f"Agent Steps: {int(self.agent_steps):,} |",
                     f'SPS: {timings["lastrate"]:.2f} |',  # actually totalrate since we don't reset the timer
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
-                    f"Stats:",
+                    "Stats:",
                     f"actor_loss {metrics['train_stats/actor_loss']:.2f},",
                     f"ep_rewards {mean_episode_rewards:.2f},",
                     f"ep_lengths {mean_episode_lengths:.2f},",
                     f'grad_norm_before_clip/actor {metrics["train_stats/grad_norm_before_clip/actor"]:.2f},',
                     f'grad_norm_after_clip/actor {metrics["train_stats/grad_norm_after_clip/actor"]:.2f},',
                     f"expected return {self.expert_return:.2f}",
-                    f"\b\b |",
+                    "\b\b |",
                 )
 
         timings = self.timer.stats(step=self.agent_steps)

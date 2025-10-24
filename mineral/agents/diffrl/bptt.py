@@ -51,7 +51,7 @@ class BPTT(Agent):
         self.max_epochs = self.bptt_config.get('max_epochs', 0)  # set to 0 to disable and track by max_agent_steps instead
 
         # --- Normalizers ---
-        rms_config = dict(eps=1e-5, correction=0, initial_count=1e-4, dtype=torch.float64)  # unbiased=False -> correction=0
+        rms_config = {'eps': 1e-5, 'correction': 0, 'initial_count': 1e-4, 'dtype': torch.float64}  # unbiased=False -> correction=0
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -252,14 +252,14 @@ class BPTT(Agent):
                     f'Agent Steps: {int(self.agent_steps):,} |',
                     f'SPS: {timings["lastrate"]:.2f} |',  # actually totalrate since we don't reset the timer
                     f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
-                    f'Stats:',
+                    'Stats:',
                     f'ep_rewards {mean_episode_rewards:.2f},',
                     f'ep_lenths {mean_episode_lengths:.2f},',
                     f'ep_discounted_rewards {mean_episode_discounted_rewards:.2f},',
                     f'actor_loss {metrics["train_stats/actor_loss"]:.4f},',
                     f'grad_norm_before_clip {metrics["train_stats/grad_norm_before_clip"]:.2f},',
                     f'grad_norm_after_clip {metrics["train_stats/grad_norm_after_clip"]:.2f},',
-                    f'\b\b |',
+                    '\b\b |',
                 )
 
         timings = self.timer.stats(step=self.agent_steps)

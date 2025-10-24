@@ -24,7 +24,7 @@ class BC(Agent):
         super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
-        rms_config = dict()
+        rms_config = {}
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -147,7 +147,7 @@ class BC(Agent):
             self.epoch += 1
             self.set_train()
 
-            for i, batch in enumerate(self.train_dataloader):
+            for _i, batch in enumerate(self.train_dataloader):
                 self.mini_epoch += 1
                 results = self.update_model(batch)
 

@@ -18,7 +18,7 @@ def weight_init_orthogonal_(m):
 
 
 def weight_init_(module, weight_init):
-    if weight_init == None:
+    if weight_init is None:
         pass
     elif weight_init == "orthogonal":
         module.apply(weight_init_orthogonal_)
@@ -31,15 +31,19 @@ class ActorCritic(nn.Module):
         self,
         obs_space,
         action_dim,
-        mlp_kwargs=dict(units=[512, 256, 128], act_type='ELU'),
+        mlp_kwargs=None,
         critic_mlp_kwargs=None,
         separate_value_mlp=True,
         fixed_sigma=True,
-        actor_dist_kwargs=dict(dist_type='normal'),
+        actor_dist_kwargs=None,
         weight_init="orthogonal",
         encoder=None,
         encoder_kwargs=None,
     ):
+        if actor_dist_kwargs is None:
+            actor_dist_kwargs = {'dist_type': 'normal'}
+        if mlp_kwargs is None:
+            mlp_kwargs = {'units': [512, 256, 128], 'act_type': 'ELU'}
         super().__init__()
         self.obs_space = obs_space
         self.separate_value_mlp = separate_value_mlp

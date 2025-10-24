@@ -28,7 +28,7 @@ class DDPG(Agent):
         super().__init__(full_cfg, **kwargs)
 
         # --- Normalizers ---
-        rms_config = dict(eps=1e-4, with_clamp=True, initial_count="eps")
+        rms_config = {"eps": 1e-4, "with_clamp": True, "initial_count": "eps"}
         if self.normalize_input:
             self.obs_rms = {}
             for k, v in self.obs_space.items():
@@ -239,7 +239,7 @@ class DDPG(Agent):
 
     def update_net(self, memory):
         results = collections.defaultdict(list)
-        for i in range(self.ddpg_config.mini_epochs):
+        for _i in range(self.ddpg_config.mini_epochs):
             self.mini_epoch += 1
             obs, action, reward, next_obs, done = memory.sample_batch(self.ddpg_config.batch_size)
 

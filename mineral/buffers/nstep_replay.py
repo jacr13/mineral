@@ -30,11 +30,11 @@ class NStepReplay:
     def add_to_buffer(self, obs, actions, rewards, next_obs, dones):
         if self.nstep > 1:
             obs_list, next_obs_list = collections.defaultdict(list), collections.defaultdict(list)
-            action_list, reward_list, done_list = list(), list(), list()
+            action_list, reward_list, done_list = [], [], []
             for i in range(dones.shape[1]):
-                for k, v in self.nstep_buf_obs.items():
+                for k in self.nstep_buf_obs.keys():
                     self.nstep_buf_obs[k] = self.fifo_shift(self.nstep_buf_obs[k], obs[k][:, i])
-                for k, v in self.nstep_buf_next_obs.items():
+                for k in self.nstep_buf_next_obs.keys():
                     self.nstep_buf_next_obs[k] = self.fifo_shift(self.nstep_buf_next_obs[k], next_obs[k][:, i])
                 self.nstep_buf_done = self.fifo_shift(self.nstep_buf_done, dones[:, i])
                 self.nstep_buf_action = self.fifo_shift(self.nstep_buf_action, actions[:, i])
