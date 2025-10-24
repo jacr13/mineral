@@ -4,6 +4,8 @@ workdir/
 workdir2/
 outputs/
 experts/dflex/*.pt
+eval/
+otil2.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
