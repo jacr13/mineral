@@ -260,19 +260,27 @@ class SHAC(Agent):
         completed_episodes = {}
         completed_episodes_returns = []
         completed_episodes_lengths = []
+        done_ids = torch.zeros(self.num_envs, dtype=int, device=self.device)
 
-        episode_obs = []
-        episode_act = []
-        episode_next_obs = []
-        episode_rew = []
-        episode_done = []
-
+        rollouts = {
+            env_num: {
+                "obs": {k: [] for k in self.obs_space.keys()},
+                "next_obs": {k: [] for k in self.obs_space.keys()},
+                "actions": [],
+                "rew": [],
+                "done": [],
+            }
+            for env_num in range(self.num_envs)
+        }
         obs = self.env.reset()
         obs = self._convert_obs(obs)
 
         episodes = 0
         while episodes < num_episodes:
-            episode_obs.append(obs["obs"].clone())
+            for env_num in range(self.num_envs):
+                for k, v in obs.items():
+                    rollouts[env_num]["obs"][k].append(v[env_num].clone())
+
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
@@ -280,11 +288,16 @@ class SHAC(Agent):
             obs, rew, done, info = self.env.step(actions)
             obs = self._convert_obs(obs)
 
-            real_obs = info["obs_before_reset"]
-            episode_act.append(actions)
-            episode_next_obs.append(real_obs)
-            episode_rew.append(rew)
-            episode_done.append(done)
+            # if obs_before_reset is available, use it, otherwise use obs
+            real_obs = info.get("obs_before_reset", obs)
+            real_obs = self._convert_obs(real_obs)
+
+            for env_num in range(self.num_envs):
+                for k, v in obs.items():
+                    rollouts[env_num]["next_obs"][k].append(v[env_num].clone())
+                rollouts[env_num]["actions"].append(actions[env_num])
+                rollouts[env_num]["rew"].append(rew[env_num])
+                rollouts[env_num]["done"].append(done[env_num])
 
             episode_rewards += rew
             episode_lengths += 1
@@ -293,13 +306,12 @@ class SHAC(Agent):
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
-                ep_obs = torch.stack(episode_obs).transpose(0, 1)
-                ep_act = torch.stack(episode_act).transpose(0, 1)
-                ep_next_obs = torch.stack(episode_next_obs).transpose(0, 1)
-                ep_rew = torch.stack(episode_rew).transpose(0, 1)
-                ep_done = torch.stack(episode_done).transpose(0, 1)
-
                 for done_env_id in done_env_ids:
+                    done_env_id = int(done_env_id)
+                    done_ids[done_env_id] += 1
+                    if done_ids[done_env_id] > 2:
+                        continue
+
                     print('rew = {:.2f}, len = {}'.format(episode_rewards[done_env_id].item(), episode_lengths[done_env_id]))
                     episode_rewards_hist.append(episode_rewards[done_env_id].item())
                     episode_lengths_hist.append(episode_lengths[done_env_id].item())
@@ -308,18 +320,24 @@ class SHAC(Agent):
                     episode_lengths[done_env_id] = 0
                     episode_discounted_rewards[done_env_id] = 0.0
                     episode_gamma[done_env_id] = 1.0
-                    episodes += 1
 
                     completed_episodes[episodes] = {
-                        "obs": ep_obs[done_env_id],
-                        "act": ep_act[done_env_id],
-                        "next_obs": ep_next_obs[done_env_id],
-                        "rew": ep_rew[done_env_id],
-                        "done": ep_done[done_env_id],
+                        "obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["obs"].items()},
+                        "act": torch.stack(rollouts[done_env_id]["actions"]),
+                        "next_obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["next_obs"].items()},
+                        "rew": torch.stack(rollouts[done_env_id]["rew"]),
+                        "done": torch.stack(rollouts[done_env_id]["done"]),
                     }
-                    completed_episodes_returns.append(ep_rew[done_env_id].sum().item())
-                    completed_episodes_lengths.append(ep_rew[done_env_id].shape[0])
-
+                    completed_episodes_returns.append(completed_episodes[episodes]["rew"].sum().item())
+                    completed_episodes_lengths.append(completed_episodes[episodes]["rew"].shape[0])
+                    episodes += 1
+                    rollouts[done_env_id] = {
+                        "obs": {k: [] for k in self.obs_space.keys()},
+                        "next_obs": {k: [] for k in self.obs_space.keys()},
+                        "actions": [],
+                        "rew": [],
+                        "done": [],
+                    }
         mean_completed_episode_return = np.mean(completed_episodes_returns)
         mean_completed_episodes_lengths = np.mean(completed_episodes_lengths)
         save_path = os.path.join(self.logdir, "demos")
