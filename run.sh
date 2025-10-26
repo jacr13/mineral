@@ -35,18 +35,17 @@
 # wandb.mode=online wandb.project=rewarped \
 # run=train_eval seed=110
 
-# SAPO - SNUHumanoid
-python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=snu_humanoid \
-logdir="workdir/DFlexSNUHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
-agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
-agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \
-agent.network.critic_kwargs.mlp_kwargs.units=\[256,256\] \
-agent.shac.critic_optim_kwargs.lr=5e-4 \
-agent.shac.target_critic_alpha=0.995 \
-wandb.mode=online wandb.project=rewarped \
-run=train_eval seed=120
-
+# # SAPO - SNUHumanoid
+# python -m mineral.scripts.run \
+# task=DFlex agent=DFlexAntSAPO task.env.env_name=snu_humanoid \
+# logdir="workdir/DFlexSNUHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+# agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
+# agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \
+# agent.network.critic_kwargs.mlp_kwargs.units=\[256,256\] \
+# agent.shac.critic_optim_kwargs.lr=5e-4 \
+# agent.shac.target_critic_alpha=0.995 \
+# wandb.mode=online wandb.project=rewarped \
+# run=train_eval seed=120
 
 
 # Rewarped
@@ -117,7 +116,7 @@ run=train_eval seed=1400
 # FluidMove - SAPO
 python -m mineral.scripts.run \
 task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Transport task.env.env_suite=softgym \
-logdir="workdir/Exp12W-RewarpedSoftgymTransport4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+logdir="workdir/RewarpedSoftgymTransport4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|joint_q|target_q' \
 agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \

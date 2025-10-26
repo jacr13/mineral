@@ -20,14 +20,14 @@ A minimal(ish) reinforcement learning library that aggregates reliable implement
 
 #### Tags
 
-| tag | description |
-| --- | --- |
-| #rl | (online) reinforcement learning |
-| #offrl | offline reinforcement learning |
-| #il | (offline) imitation learning |
-| #off2on | offline-to-online |
-| #diffsim | differentiable simulation |
-| #mpc | model predictive control |
+| tag      | description                     |
+| -------- | ------------------------------- |
+| #rl      | (online) reinforcement learning |
+| #offrl   | offline reinforcement learning  |
+| #il      | (offline) imitation learning    |
+| #off2on  | offline-to-online               |
+| #diffsim | differentiable simulation       |
+| #mpc     | model predictive control        |
 
 # Setup
 
@@ -67,6 +67,7 @@ cd -
 # Usage
 
 See commands in `examples/`:
+
 - [`Rewarped`](docs/rewarped.md)
 - [`DFlex`](docs/dflex.md)
 - [`IsaacGymEnvs`](docs/isaacgymenvs.md)
@@ -78,3 +79,16 @@ Use `CUDA_VISIBLE_DEVICES=1 python ...` to run on a specific GPU.
 Use `python ... run=eval task.env.render=True ckpt="workdir/<exp>/<run>/ckpt/final.pth"` to load checkpoints and visualize agents (trajectories are saved as USDs).
 For example:
 `python -m mineral.scripts.run task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper run=eval task.env.render=True ckpt="workdir/DFlexHopper10M-SAPO/20251017-232851.65/ckpt/final.pth"`
+
+`python -m mineral.scripts.run \
+task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Jumper task.env.env_suite=gradsim \
+logdir="eval/RewarpedJumper6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
+num_envs=32 \
+agent.network.encoder_kwargs.mlp_keys='com_q|com_qd|actions' \
+agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \
+agent.network.critic_kwargs.mlp_kwargs.units=\[256,256\] \
+agent.shac.critic_optim_kwargs.lr=5e-4 \
+agent.shac.target_critic_alpha=0.995 \
+wandb.mode=disabled wandb.project=rewarped \
+run=train_eval seed=1300 \
+ckpt="workdir/RewarpedJumper6M-SAPO/20251023-033913.48/ckpt/final.pth"`
