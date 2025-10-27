@@ -5,5 +5,6 @@ from .diffrl.shac import SHAC
 from .otil.otil import OTIL
 from .ppo.ppo import PPO
 from .sac.sac import SAC
+from .gail.gail import GAIL
 
-__all__ = ['BC', 'DDPG', 'BPTT', 'SHAC', 'OTIL', 'PPO', 'SAC']
+__all__ = ['BC', 'DDPG', 'BPTT', 'SHAC', 'OTIL', 'PPO', 'SAC', 'GAIL']
