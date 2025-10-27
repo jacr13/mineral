@@ -584,9 +584,10 @@ class SHAC(Agent):
 
                 # sanity check
                 if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
-                    print('NaN gradient', grad_norm_before_clip)
+                    print('NaN gradient - skipping update', grad_norm_before_clip)
                     # raise ValueError
-                    raise KeyboardInterrupt
+                    # raise KeyboardInterrupt
+                    self.actor_optim.zero_grad()
 
             if self.with_logprobs:
                 results["entropy"].append(-1.0 * self.logprobs.mean().detach())
