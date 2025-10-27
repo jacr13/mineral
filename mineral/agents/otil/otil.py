@@ -436,9 +436,11 @@ class OTIL(Agent):
 
                 # sanity check
                 if torch.isnan(grad_norm_before_clip) or grad_norm_before_clip > 1e6:
-                    print("NaN gradient", grad_norm_before_clip)
+                    print("NaN gradient - skipping update", grad_norm_before_clip)
                     # raise ValueError
-                    raise KeyboardInterrupt
+                    # raise KeyboardInterrupt
+                    self.actor_optim.zero_grad()
+
             results["actor_loss"].append(actor_loss.detach())
             results["grad_norm_before_clip/actor"].append(grad_norm_before_clip)
             results["grad_norm_after_clip/actor"].append(grad_norm_after_clip)
