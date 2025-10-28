@@ -97,6 +97,7 @@ for path in os.listdir(folder):
 
     print(ep_rew.sum(-1).mean())
 
+    os.makedirs("demos", exist_ok=True)
     avg_len = int(ep_len.float().mean().item())
     cleaned_path = (
         "_".join(path.split("/")[-1].split("_")[:2])
@@ -115,5 +116,5 @@ for path in os.listdir(folder):
             # "joint_q": ep_joint_q,
             # "joint_qd": ep_joint_qd,
         },
-        cleaned_path,
+        f"demos/{cleaned_path}",
     )

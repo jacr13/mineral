@@ -6,6 +6,7 @@ workdir_check/
 outputs/
 experts/dflex/*.pt
 eval/
+demos/
 otil2.py
 
 # Byte-compiled / optimized / DLL files
