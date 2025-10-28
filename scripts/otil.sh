@@ -4,14 +4,14 @@
 # DFlex
 
 # OTIL - Hopper
-python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntOTIL task.env.env_name=hopper \
-logdir="workdir/DFlexHopper10M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)" \
-agent.otil.max_epochs=5000 agent.otil.max_agent_steps=10e6 \
-agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
-wandb.mode=online wandb.project=OTIL \
-run=train_eval seed=130 \
-agent.otil.demos_path="experts/DFlex_hopper_demos64_return5437_len1000.pt"
+# python -m mineral.scripts.run \
+# task=DFlex agent=DFlexAntOTIL task.env.env_name=hopper \
+# logdir="workdir/DFlexHopper10M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)" \
+# agent.otil.max_epochs=5000 agent.otil.max_agent_steps=10e6 \
+# agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
+# wandb.mode=online wandb.project=OTIL \
+# run=train_eval seed=130 \
+# agent.otil.demos_path="experts/DFlex_hopper_demos64_return5437_len1000.pt"
 
 # # OTIL - Ant
 # python -m mineral.scripts.run \
