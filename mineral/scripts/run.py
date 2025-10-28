@@ -11,6 +11,8 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from termcolor import cprint
 
+from .utils import create_uuid
+
 
 def make_envs(config):
     from .. import envs
@@ -104,11 +106,27 @@ def main(config: DictConfig):
         # connect to wandb
         wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
 
+        if wandb_config.get('project', None) is None:
+            wandb_config['project'] = logdir.split('/')[-2]
+
         if wandb_config.get('group', None) is not None:
             run_group = wandb_config['group']
         else:
             run_group = logdir.split('/')[-2]
             wandb_config['group'] = run_group
+
+        name = wandb_config.get('name', None)
+        print(f"{config.task.name}_{config.task.env.env_name}_{config.task.env.numEnvs}")
+        if name is None:
+            uuid = create_uuid(
+                method='human_hash',
+                add_salt=True,
+                config=resolved_config,
+                task=f"{config.task.name}_{config.task.env.env_name}_{config.task.env.numEnvs}",
+            )
+            print(f'Generated run name (uuid): {uuid}')
+            wandb_config['name'] = uuid
+            wandb_config['id'] = uuid
 
         wandb_run = wandb.init(
             **wandb_config,
