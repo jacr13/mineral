@@ -1,80 +1,93 @@
+import os
+
 import torch
 
-path = "dflex/DFlex_ant_demos128_epochs4882_steps10000384_return14008_len1500.pt"
-data = torch.load(path, map_location=torch.device("cpu"), weights_only=True)
+folder = "dflex"
 
-episode_obs = []
-episode_act = []
-episode_next_obs = []
-episode_rew = []
-episode_done = []
-episode_joint_q = []
-episode_joint_qd = []
+for path in os.listdir(folder):
+    path = os.path.join(folder, path)
+    data = torch.load(path, map_location=torch.device("cpu"), weights_only=True)
 
+    episode_obs = {k: [] for k in data[0]["obs"].keys()}
+    episode_act = []
+    episode_next_obs = {k: [] for k in data[0]["next_obs"].keys()}
+    episode_rew = []
+    episode_done = []
 
-for i in data:
-    print(i, data[i]["obs"].shape[0])
-    if data[i]["obs"].shape[0] == 1000:
-        episode_obs.append(data[i]["obs"])
-        episode_act.append(data[i]["act"])
-        episode_next_obs.append(data[i]["next_obs"])
-        episode_rew.append(data[i]["rew"])
-        episode_done.append(data[i]["done"])
-        # episode_joint_q.append(data[i]["joint_q"])
-        # episode_joint_qd.append(data[i]["joint_qd"])
+    # check max shape
+    shapes = {}
+    for k, v in data.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                if isinstance(v2, torch.Tensor):
+                    if v2.shape[0] not in shapes:
+                        shapes[v2.shape[0]] = 1
+                    else:
+                        shapes[v2.shape[0]] += 1
+                elif isinstance(v2, dict):
+                    for k3, v3 in v2.items():
+                        if isinstance(v3, torch.Tensor):
+                            if v3.shape[0] not in shapes:
+                                shapes[v3.shape[0]] = 1
+                            else:
+                                shapes[v3.shape[0]] += 1
+                        else:
+                            raise ValueError
+                else:
+                    raise ValueError
+        else:
+            raise ValueError
 
+    max_t = max(shapes.keys())
+    print(max_t)
 
-ep_obs = torch.stack(episode_obs)
-ep_act = torch.stack(episode_act)
-ep_next_obs = torch.stack(episode_next_obs)
-ep_rew = torch.stack(episode_rew)
-ep_done = torch.stack(episode_done)
-# ep_joint_q = torch.stack(episode_joint_q)
-# ep_joint_qd = torch.stack(episode_joint_qd)
+    for i in data:
+        print(i, data[i]["act"].shape[0])
+        if data[i]["act"].shape[0] == max_t:
+            for k, v in data[i]["obs"].items():
+                episode_obs[k].append(v)
+                episode_next_obs[k].append(data[i]["next_obs"][k])
+            episode_act.append(data[i]["act"])
+            episode_rew.append(data[i]["rew"])
+            episode_done.append(data[i]["done"])
+        else:
+            print("Skipping", i)
 
+    ep_obs = {k: torch.stack(v) for k, v in episode_obs.items()}
+    ep_next_obs = {k: torch.stack(v) for k, v in episode_next_obs.items()}
+    ep_act = torch.stack(episode_act)
+    ep_rew = torch.stack(episode_rew)
+    ep_done = torch.stack(episode_done)
 
-print(
-    ep_obs.shape,
-    ep_act.shape,
-    ep_next_obs.shape,
-    ep_rew.shape,
-    ep_done.shape,
-    # ep_joint_q.shape,
-    # ep_joint_qd.shape,
-)
+    for k, v in ep_obs.items():
+        print(k, v.shape)
+    for k, v in ep_next_obs.items():
+        print(k, v.shape)
+    print(
+        ep_act.shape,
+        ep_rew.shape,
+        ep_done.shape,
+        # ep_joint_q.shape,
+        # ep_joint_qd.shape,
+    )
 
+    print(ep_rew.sum(-1).mean())
 
-print("ep_obs", ep_obs.shape, ep_obs.sum(), ep_obs.mean(), ep_obs.std())
-print("ep_act", ep_act.shape, ep_act.sum(), ep_act.mean(), ep_act.std())
-print(
-    "ep_next_obs",
-    ep_next_obs.shape,
-    ep_next_obs.sum(),
-    ep_next_obs.mean(),
-    ep_next_obs.std(),
-)
-print("ep_rew", ep_rew.shape, ep_rew.sum(), ep_rew.mean(), ep_rew.std())
-print("ep_done", ep_done.shape)
-# print("ep_joint_q", ep_joint_q.shape)
-# print("ep_joint_qd", ep_joint_qd.shape)
+    cleaned_path = (
+        "_".join(path.split("/")[-1].split("_")[:2])
+        + f"_demos{ep_rew.shape[0]}_return{int(ep_rew.sum(-1).mean())}_len{ep_rew.shape[1]}.pt"
+    )
+    print(cleaned_path)
 
-print(ep_rew.sum(-1).mean())
-
-cleaned_path = (
-    "_".join(path.split("/")[-1].split("_")[:2])
-    + f"_demos{ep_obs.shape[0]}_return{int(ep_rew.sum(-1).mean())}_len{ep_obs.shape[1]}.pt"
-)
-print(cleaned_path)
-
-torch.save(
-    {
-        "obs": ep_obs,
-        "act": ep_act,
-        "next_obs": ep_next_obs,
-        "rew": ep_rew,
-        "done": ep_done,
-        # "joint_q": ep_joint_q,
-        # "joint_qd": ep_joint_qd,
-    },
-    cleaned_path,
-)
+    torch.save(
+        {
+            "obs": ep_obs,
+            "act": ep_act,
+            "next_obs": ep_next_obs,
+            "rew": ep_rew,
+            "done": ep_done,
+            # "joint_q": ep_joint_q,
+            # "joint_qd": ep_joint_qd,
+        },
+        cleaned_path,
+    )
