@@ -31,6 +31,13 @@ name     = "pytorch-cu124"  # CUDA-specific wheels
 url      = "https://download.pytorch.org/whl/cu124"
 priority = "supplemental"
 
+
+[tool.poetry.group.dev.dependencies]
+poethepoet = "^0.25.1"
+poetry-plugin-shell = "^1.0.0"
+ruff = "^0.3.7"
+
+
 [tool.ruff]
 cache-dir = ".cache/ruff"
 line-length = 127
