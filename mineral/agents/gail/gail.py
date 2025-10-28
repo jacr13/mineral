@@ -1,10 +1,6 @@
-import json
 import os
-import re
-from copy import deepcopy
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
 from ..ppo.ppo import PPO
@@ -55,9 +51,7 @@ class GAIL(PPO):
         obs_dim = self.obs_space["obs"]
         obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
         act_dim = self.action_dim
-        self.discriminator = Discriminator(obs_dim, act_dim, self.gail_config.get("discriminator_mlp", None)).to(
-            self.device
-        )
+        self.discriminator = Discriminator(obs_dim, act_dim, self.gail_config.get("discriminator_mlp", None)).to(self.device)
 
         disc_optim_kwargs = self.gail_config.get("discriminator_optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
         DiscOptim = getattr(torch.optim, disc_optim_kwargs.get("type", "Adam"))
@@ -144,7 +138,7 @@ class GAIL(PPO):
         # use the flattened storage prepared in prepare_training
         data = self.storage.data_dict
         obs = data['obses']['obs']  # [B, obs_dim]
-        act = data['actions']       # [B, act_dim]
+        act = data['actions']  # [B, act_dim]
 
         self.discriminator.train()
         losses = []
@@ -226,4 +220,3 @@ class GAIL(PPO):
                 self.writer.write()
 
                 self._checkpoint_save(metrics['train_scores/episode_rewards'])
-

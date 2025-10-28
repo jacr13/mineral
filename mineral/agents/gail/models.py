@@ -17,4 +17,3 @@ class Discriminator(nn.Module):
         x = torch.cat([obs, act], dim=-1)
         logits = self.net(x)
         return logits.squeeze(-1)
-
