@@ -59,9 +59,9 @@ def main() -> None:
         help="Directory to inspect (defaults to the repo's workdir).",
     )
     parser.add_argument(
-        "--no-render",
+        "--render",
         action="store_true",
-        help="Run evaluation without rendering.",
+        help="Run evaluation with rendering.",
     )
     args = parser.parse_args()
     root = args.root
@@ -73,9 +73,11 @@ def main() -> None:
 
     for child in root.iterdir():
         if child.is_dir():
+            # if "SNU" not in child.name:
+            #     continue
             print(child)
             try:
-                run_eval(child, render=not args.no_render)
+                run_eval(child, render=args.render)
             except Exception as e:
                 print(f"Skipping {child}, because of {e}")
             # stop
