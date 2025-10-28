@@ -196,11 +196,8 @@ class OTIL(Agent):
     def evaluate_policy(self, num_episodes, sample=False, render=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
-        episode_discounted_rewards_hist = []
         episode_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         episode_lengths = torch.zeros(self.num_envs, dtype=int)
-        episode_discounted_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
-        episode_gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
         completed_episodes = {}
         completed_episodes_returns = []
@@ -246,8 +243,6 @@ class OTIL(Agent):
 
             episode_rewards += rew
             episode_lengths += 1
-            episode_discounted_rewards += episode_gamma * rew
-            episode_gamma *= self.gamma
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
@@ -260,11 +255,8 @@ class OTIL(Agent):
                     print('rew = {:.2f}, len = {}'.format(episode_rewards[done_env_id].item(), episode_lengths[done_env_id]))
                     episode_rewards_hist.append(episode_rewards[done_env_id].item())
                     episode_lengths_hist.append(episode_lengths[done_env_id].item())
-                    episode_discounted_rewards_hist.append(episode_discounted_rewards[done_env_id].item())
                     episode_rewards[done_env_id] = 0.0
                     episode_lengths[done_env_id] = 0
-                    episode_discounted_rewards[done_env_id] = 0.0
-                    episode_gamma[done_env_id] = 1.0
 
                     completed_episodes[episodes] = {
                         "obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["obs"].items()},
