@@ -43,28 +43,10 @@ class OTIL(Agent):
         assert os.path.exists(demos_path), f"OTIL demos path: {demos_path} does not exist"
         self.demos = torch.load(demos_path, map_location=self.device)
 
-        print(self.demos.keys())
-        print(self.demos["obs"].shape)
-
         n_envs = 10
-        self.demos["obs"] = self.demos["obs"][:n_envs, :, :]
+        self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
         self.demos["rew"] = self.demos["rew"][:n_envs, :]
         self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
-
-        cfg = BestOfKConfig(
-            T=self.horizon_len,
-            K=8,
-            eps=0.1,
-            sinkhorn_iters=60,
-            tau=0.5,
-            use_mlp_features=False,
-            feature_dim=self.num_obs,
-            embed_dim=64,
-            use_huber=False,
-            huber_delta=1.0,
-            action_weight=1.0,
-        )
-        self.loss_fn = BestOfKSoftminOT(cfg, device=self.device)
 
         # --- Normalizers ---
         if self.tanh_clamp:  # legacy
@@ -141,6 +123,22 @@ class OTIL(Agent):
         }
         self.avg_kl = self.scheduler_kwargs.get("kl_threshold", None)
 
+        # --- Loss ---
+        cfg = BestOfKConfig(
+            T=self.horizon_len,
+            K=8,
+            eps=0.1,
+            sinkhorn_iters=60,
+            tau=0.5,
+            use_mlp_features=False,
+            feature_dim=self.num_obs,
+            embed_dim=64,
+            use_huber=False,
+            huber_delta=1.0,
+            action_weight=1.0,
+        )
+        self.loss_fn = BestOfKSoftminOT(cfg, device=self.device)
+
         # --- Replay Buffer ---
         assert self.num_actors == self.env.num_envs
         T, B = self.horizon_len, self.num_envs
@@ -198,72 +196,93 @@ class OTIL(Agent):
     def evaluate_policy(self, num_episodes, sample=False, render=False):
         episode_rewards_hist = []
         episode_lengths_hist = []
+        episode_discounted_rewards_hist = []
         episode_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         episode_lengths = torch.zeros(self.num_envs, dtype=int)
+        episode_discounted_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
+        episode_gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
         completed_episodes = {}
         completed_episodes_returns = []
         completed_episodes_lengths = []
+        done_ids = torch.zeros(self.num_envs, dtype=int, device=self.device)
 
-        episode_obs = []
-        episode_act = []
-        episode_next_obs = []
-        episode_rew = []
-        episode_done = []
-
+        rollouts = {
+            env_num: {
+                "obs": {k: [] for k in self.obs_space.keys()},
+                "next_obs": {k: [] for k in self.obs_space.keys()},
+                "actions": [],
+                "rew": [],
+                "done": [],
+            }
+            for env_num in range(self.num_envs)
+        }
         obs = self.env.reset()
         obs = self._convert_obs(obs)
 
         episodes = 0
         while episodes < num_episodes:
-            episode_obs.append(obs["obs"].clone())
+            for env_num in range(self.num_envs):
+                for k, v in obs.items():
+                    rollouts[env_num]["obs"][k].append(v[env_num].clone())
+
             if self.obs_rms is not None:
                 obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
 
             actions = self.get_actions(obs, sample=sample)
             obs, rew, done, info = self.env.step(actions)
-            obs = self._convert_obs(obs)
+            # if obs_before_reset is available, use it, otherwise use obs
+            real_obs = info.get("obs_before_reset", obs) or obs  # or obs is because obs_before_reset may return none
 
-            real_obs = info["obs_before_reset"]
-            episode_act.append(actions)
-            episode_next_obs.append(real_obs)
-            episode_rew.append(rew)
-            episode_done.append(done)
+            obs = self._convert_obs(obs)
+            real_obs = self._convert_obs(real_obs)
+
+            for env_num in range(self.num_envs):
+                for k, v in real_obs.items():
+                    rollouts[env_num]["next_obs"][k].append(v[env_num].clone())
+                rollouts[env_num]["actions"].append(actions[env_num])
+                rollouts[env_num]["rew"].append(rew[env_num])
+                rollouts[env_num]["done"].append(done[env_num])
 
             episode_rewards += rew
             episode_lengths += 1
+            episode_discounted_rewards += episode_gamma * rew
+            episode_gamma *= self.gamma
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             if len(done_env_ids) > 0:
-                ep_obs = torch.stack(episode_obs).transpose(0, 1)
-                ep_act = torch.stack(episode_act).transpose(0, 1)
-                ep_next_obs = torch.stack(episode_next_obs).transpose(0, 1)
-                ep_rew = torch.stack(episode_rew).transpose(0, 1)
-                ep_done = torch.stack(episode_done).transpose(0, 1)
-
                 for done_env_id in done_env_ids:
-                    print(
-                        "rew = {:.2f}, len = {}".format(
-                            episode_rewards[done_env_id].item(),
-                            episode_lengths[done_env_id],
-                        )
-                    )
+                    done_env_id = int(done_env_id)
+                    done_ids[done_env_id] += 1
+                    if done_ids[done_env_id] > 2:
+                        continue
+
+                    print('rew = {:.2f}, len = {}'.format(episode_rewards[done_env_id].item(), episode_lengths[done_env_id]))
                     episode_rewards_hist.append(episode_rewards[done_env_id].item())
                     episode_lengths_hist.append(episode_lengths[done_env_id].item())
+                    episode_discounted_rewards_hist.append(episode_discounted_rewards[done_env_id].item())
                     episode_rewards[done_env_id] = 0.0
                     episode_lengths[done_env_id] = 0
-                    episodes += 1
+                    episode_discounted_rewards[done_env_id] = 0.0
+                    episode_gamma[done_env_id] = 1.0
 
                     completed_episodes[episodes] = {
-                        "obs": ep_obs[done_env_id],
-                        "act": ep_act[done_env_id],
-                        "next_obs": ep_next_obs[done_env_id],
-                        "rew": ep_rew[done_env_id],
-                        "done": ep_done[done_env_id],
+                        "obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["obs"].items()},
+                        "act": torch.stack(rollouts[done_env_id]["actions"]),
+                        "next_obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["next_obs"].items()},
+                        "rew": torch.stack(rollouts[done_env_id]["rew"]),
+                        "done": torch.stack(rollouts[done_env_id]["done"]),
                     }
-                    completed_episodes_returns.append(ep_rew[done_env_id].sum().item())
-                    completed_episodes_lengths.append(ep_rew[done_env_id].shape[0])
-
+                    completed_episodes_returns.append(completed_episodes[episodes]["rew"].sum().item())
+                    completed_episodes_lengths.append(completed_episodes[episodes]["rew"].shape[0])
+                    episodes += 1
+                    rollouts[done_env_id] = {
+                        "obs": {k: [] for k in self.obs_space.keys()},
+                        "next_obs": {k: [] for k in self.obs_space.keys()},
+                        "actions": [],
+                        "rew": [],
+                        "done": [],
+                    }
         mean_completed_episode_return = np.mean(completed_episodes_returns)
         mean_completed_episodes_lengths = np.mean(completed_episodes_lengths)
         save_path = os.path.join(self.logdir, "demos")
@@ -281,10 +300,7 @@ class OTIL(Agent):
                 ),
             )
 
-        return (
-            episode_rewards_hist,
-            episode_lengths_hist,
-        )
+        return episode_rewards_hist, episode_lengths_hist
 
     def initialize_env(self):
         try:
@@ -474,7 +490,7 @@ class OTIL(Agent):
         obs = self._convert_obs(obs)
 
         # collete trajectories and compute actor loss
-        obs_list = []  # TODO: fix convert to tensor.zeros
+        obs_window = {k: [] for k in obs.keys()}
 
         if self.obs_rms is not None:
             # update obs rms
@@ -498,10 +514,11 @@ class OTIL(Agent):
                 self.mus[i, ...] = mu.clone()
                 self.sigmas[i, ...] = sigma.clone()
 
-            obs, rew, done, extra_info = self.env.step(actions)
-            obs = self._convert_obs(obs)
+            obs, rew, done, info = self.env.step(actions)
+            # if obs_before_reset is available, use it, otherwise use obs
+            real_obs = info.get("obs_before_reset", obs) or obs  # or obs is because obs_before_reset may return none
 
-            real_obs = extra_info["obs_before_reset"]
+            obs = self._convert_obs(obs)
             real_obs = self._convert_obs(real_obs)
 
             with torch.no_grad():
@@ -521,7 +538,8 @@ class OTIL(Agent):
                 obs = {k: obs_rms[k].normalize(v) for k, v in obs.items()}
                 real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
 
-            obs_list.append(real_obs["obs"])
+            for k, v in real_obs.items():
+                obs_window[k].append(v)
 
             done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
             # collect episode metrics
@@ -540,11 +558,14 @@ class OTIL(Agent):
                         self.episode_rewards[done_env_id] = 0.0
                         self.episode_lengths[done_env_id] = 0
 
-        obs_list = torch.stack(obs_list, dim=1).to(self.device)
+        obs_window = {k: torch.stack(v, dim=1) for k, v in obs_window.items()}
         with torch.no_grad():
             if self.obs_rms is not None:
-                obs_exp = obs_rms["obs"].normalize(self.demos["obs"])
-        loss, info = self.loss_fn(obs_list, obs_exp, sim_is_window=False)
+                obs_exp = {k: obs_rms[k].normalize(v) for k, v in self.demos["obs"].items()}
+
+        obs_z = self.actor_encoder(obs_window)
+        exp_z = self.actor_encoder(obs_exp).detach()
+        loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=False)
 
         self.agent_steps += self.horizon_len * self.num_envs
         return loss, info
