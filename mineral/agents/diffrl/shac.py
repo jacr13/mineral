@@ -287,7 +287,9 @@ class SHAC(Agent):
             actions = self.get_actions(obs, sample=sample)
             obs, rew, done, info = self.env.step(actions)
             # if obs_before_reset is available, use it, otherwise use obs
-            real_obs = info.get("obs_before_reset", obs) or obs  # or obs is because obs_before_reset may return none
+            real_obs = info.get("obs_before_reset", obs)
+            if real_obs is None:
+                real_obs = obs
 
             obs = self._convert_obs(obs)
             real_obs = self._convert_obs(real_obs)

@@ -5,14 +5,15 @@ import torch
 folder = "dflex"
 
 for path in os.listdir(folder):
-    path = os.path.join(folder, path)
-    data = torch.load(path, map_location=torch.device("cpu"), weights_only=True)
+    full_path = os.path.join(folder, path)
+    data = torch.load(full_path, map_location=torch.device("cpu"), weights_only=True)
 
     episode_obs = {k: [] for k in data[0]["obs"].keys()}
     episode_act = []
     episode_next_obs = {k: [] for k in data[0]["next_obs"].keys()}
     episode_rew = []
     episode_done = []
+    episode_lens = []
 
     # check max shape
     shapes = {}
@@ -43,21 +44,44 @@ for path in os.listdir(folder):
 
     for i in data:
         print(i, data[i]["act"].shape[0])
-        if data[i]["act"].shape[0] == max_t:
-            for k, v in data[i]["obs"].items():
-                episode_obs[k].append(v)
-                episode_next_obs[k].append(data[i]["next_obs"][k])
-            episode_act.append(data[i]["act"])
-            episode_rew.append(data[i]["rew"])
-            episode_done.append(data[i]["done"])
-        else:
-            print("Skipping", i)
+        t = data[i]["act"].shape[0]
+
+        # record original length
+        episode_lens.append(t)
+
+        # pad obs and next_obs to max_t along time dimension
+        for k, v in data[i]["obs"].items():
+            padded = torch.zeros((max_t, *v.shape[1:]), dtype=v.dtype)
+            padded[:t] = v
+            episode_obs[k].append(padded)
+
+            v_next = data[i]["next_obs"][k]
+            padded_next = torch.zeros((max_t, *v_next.shape[1:]), dtype=v_next.dtype)
+            padded_next[:t] = v_next
+            episode_next_obs[k].append(padded_next)
+
+        # pad act, rew, done
+        act = data[i]["act"]
+        padded_act = torch.zeros((max_t, *act.shape[1:]), dtype=act.dtype)
+        padded_act[:t] = act
+        episode_act.append(padded_act)
+
+        rew = data[i]["rew"]
+        padded_rew = torch.zeros((max_t, *rew.shape[1:]), dtype=rew.dtype)
+        padded_rew[:t] = rew
+        episode_rew.append(padded_rew)
+
+        done = data[i]["done"]
+        padded_done = torch.zeros((max_t, *done.shape[1:]), dtype=done.dtype)
+        padded_done[:t] = done
+        episode_done.append(padded_done)
 
     ep_obs = {k: torch.stack(v) for k, v in episode_obs.items()}
     ep_next_obs = {k: torch.stack(v) for k, v in episode_next_obs.items()}
     ep_act = torch.stack(episode_act)
     ep_rew = torch.stack(episode_rew)
     ep_done = torch.stack(episode_done)
+    ep_len = torch.tensor(episode_lens, dtype=torch.long)
 
     for k, v in ep_obs.items():
         print(k, v.shape)
@@ -73,9 +97,10 @@ for path in os.listdir(folder):
 
     print(ep_rew.sum(-1).mean())
 
+    avg_len = int(ep_len.float().mean().item())
     cleaned_path = (
         "_".join(path.split("/")[-1].split("_")[:2])
-        + f"_demos{ep_rew.shape[0]}_return{int(ep_rew.sum(-1).mean())}_len{ep_rew.shape[1]}.pt"
+        + f"_demos{ep_rew.shape[0]}_return{int(ep_rew.sum(-1).mean())}_len{avg_len}.pt"
     )
     print(cleaned_path)
 
@@ -86,6 +111,7 @@ for path in os.listdir(folder):
             "next_obs": ep_next_obs,
             "rew": ep_rew,
             "done": ep_done,
+            "lengths": ep_len,
             # "joint_q": ep_joint_q,
             # "joint_qd": ep_joint_qd,
         },
