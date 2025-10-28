@@ -286,14 +286,14 @@ class SHAC(Agent):
 
             actions = self.get_actions(obs, sample=sample)
             obs, rew, done, info = self.env.step(actions)
-            obs = self._convert_obs(obs)
-
             # if obs_before_reset is available, use it, otherwise use obs
-            real_obs = info.get("obs_before_reset", obs)
+            real_obs = info.get("obs_before_reset", obs) or obs  # or obs is because obs_before_reset may return none
+
+            obs = self._convert_obs(obs)
             real_obs = self._convert_obs(real_obs)
 
             for env_num in range(self.num_envs):
-                for k, v in obs.items():
+                for k, v in real_obs.items():
                     rollouts[env_num]["next_obs"][k].append(v[env_num].clone())
                 rollouts[env_num]["actions"].append(actions[env_num])
                 rollouts[env_num]["rew"].append(rew[env_num])
