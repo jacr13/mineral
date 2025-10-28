@@ -37,7 +37,7 @@ def run_eval(exp_root: Path, *, render: bool = True) -> None:
     config.run = "eval"
     config.ckpt = str(ckpt_path)
     config.ckpt_keys = config.get("ckpt_keys", "")
-    config.logdir = str(run_dir)
+    config.logdir = str(run_dir).replace("workdir", "eval")
 
     if "wandb" in config:
         config.wandb.mode = "disabled"
@@ -83,3 +83,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+    # add offset to render check rewarped
