@@ -16,16 +16,16 @@ for path in os.listdir(folder):
 
     # check max shape
     shapes = {}
-    for k, v in data.items():
+    for _k, v in data.items():
         if isinstance(v, dict):
-            for k2, v2 in v.items():
+            for _k2, v2 in v.items():
                 if isinstance(v2, torch.Tensor):
                     if v2.shape[0] not in shapes:
                         shapes[v2.shape[0]] = 1
                     else:
                         shapes[v2.shape[0]] += 1
                 elif isinstance(v2, dict):
-                    for k3, v3 in v2.items():
+                    for _k3, v3 in v2.items():
                         if isinstance(v3, torch.Tensor):
                             if v3.shape[0] not in shapes:
                                 shapes[v3.shape[0]] = 1
