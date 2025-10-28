@@ -145,6 +145,3 @@ dmypy.json
 
 # Swap files
 *.sw*
-
-# VSCode
-.vscode
