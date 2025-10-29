@@ -1,0 +1,25 @@
+task:
+  name: DFlex
+  env:
+    env_name: humanoid
+agent:
+  name: DFlexAntSAPO
+  shac:
+    max_epochs: 5000
+    max_agent_steps: 10000000
+    critic_optim_kwargs:
+      lr: 5e-4
+    target_critic_alpha: 0.995
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 110

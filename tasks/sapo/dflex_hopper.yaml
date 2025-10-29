@@ -1,0 +1,22 @@
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: DFlexAntSAPO
+  shac:
+    max_epochs: 5000
+    max_agent_steps: 10000000
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexHopper10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
