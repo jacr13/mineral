@@ -1,7 +1,10 @@
 import argparse
-import subprocess
-from pathlib import Path
 import os
+import random
+import subprocess
+from copy import deepcopy
+from itertools import product
+from pathlib import Path
 
 import yaml
 
@@ -176,6 +179,50 @@ def _build_overrides(config):
     return overrides
 
 
+def _set_nested_value(config, path, value):
+    cursor = config
+    for key in path[:-1]:
+        if key not in cursor or not isinstance(cursor[key], dict):
+            cursor[key] = {}
+        cursor = cursor[key]
+    cursor[path[-1]] = value
+
+
+def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
+    keys = list(sweep_spec.keys())
+    options = []
+    for key in keys:
+        values = sweep_spec[key]
+        if not isinstance(values, list):
+            raise ValueError(
+                f"Sweep entry '{key}' must be a list, got '{type(values).__name__}'.",
+            )
+        options.append(values)
+
+    combinations = list(product(*options))
+    if not combinations:
+        return []
+
+    if mode == "random":
+        random.shuffle(combinations)
+
+    limit = None
+    # sweep_max == 0 means "no limit" so only apply the cap when positive.
+    if max_variants is not None and max_variants > 0:
+        limit = min(max_variants, len(combinations))
+
+    if limit is not None:
+        combinations = combinations[:limit]
+
+    variants = []
+    for combination in combinations:
+        config_variant = deepcopy(base_config)
+        for key, value in zip(keys, combination):
+            _set_nested_value(config_variant, key.split("."), value)
+        variants.append(config_variant)
+    return variants
+
+
 def _command_from_overrides(overrides):
     if not overrides:
         return "python -m mineral.scripts.run"
@@ -248,28 +295,50 @@ def run(args):
     created_scripts = []
     for config_path in configs:
         rel_path = config_path.relative_to(Path("tasks"))
-        job_name = rel_path.with_suffix("").name
         job_subdir = spawn_root / rel_path.parent
         job_subdir.mkdir(parents=True, exist_ok=True)
-        script_path = job_subdir / f"{job_name}.sh"
 
         with config_path.open("r", encoding="utf-8") as file:
             task_config = yaml.safe_load(file) or {}
 
-        overrides = _build_overrides(task_config)
-        command = _command_from_overrides(overrides)
+        sweep_spec = task_config.pop("sweep", None)
+        base_name = rel_path.with_suffix("").name
 
-        if args.deployment == "slurm":
-            _write_slurm_script(script_path, job_name, command, args)
+        if args.sweep:
+            if not sweep_spec:
+                continue  # Skip configs without sweep definitions when sweep mode is requested
+            sweep_variants = _generate_sweep_configs(
+                task_config,
+                sweep_spec,
+                args.sweep_mode,
+                args.sweep_max,
+            )
+            variant_entries = [
+                (f"{base_name}_sweep{index:03d}", variant_config)
+                for index, variant_config in enumerate(sweep_variants)
+            ]
+            if not variant_entries:
+                continue
         else:
-            _write_tmux_script(script_path, job_name, command, args)
+            variant_entries = [(base_name, task_config)]
 
-        created_scripts.append(script_path)
+        for variant_name, variant_config in variant_entries:
+            script_path = job_subdir / f"{variant_name}.sh"
 
-        if args.deploy_now:
-            subprocess.run(["bash", str(script_path)], check=True)
-            if args.clear:
-                script_path.unlink()
+            overrides = _build_overrides(variant_config)
+            command = _command_from_overrides(overrides)
+
+            if args.deployment == "slurm":
+                _write_slurm_script(script_path, variant_name, command, args)
+            else:
+                _write_tmux_script(script_path, variant_name, command, args)
+
+            created_scripts.append(script_path)
+
+            if args.deploy_now:
+                subprocess.run(["bash", str(script_path)], check=True)
+                if args.clear:
+                    script_path.unlink()
 
     if not args.deploy_now or not args.clear:
         for script_path in created_scripts:
@@ -283,7 +352,6 @@ if __name__ == "__main__":
     parser.add_argument("--task_name", type=str, default=None)
     parser.add_argument("--env_bundle", type=str, default=None)
     parser.add_argument("--demo_dir", type=str, default=None)
-    parser.add_argument("--num_trials", type=int, default=50)
     parser.add_argument(
         "--deployment",
         type=str,
@@ -302,6 +370,19 @@ if __name__ == "__main__":
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "clear", default=False, help="clear files after deployment")
+    parser.add_argument(
+        "--sweep_max",
+        type=int,
+        default=5,
+        help="Upper bound on generated sweep variants; set to 0 for no cap.",
+    )
+    parser.add_argument(
+        "--sweep_mode",
+        type=str,
+        default="grid",
+        choices=["grid", "random"],
+        help="Variant selection strategy: full grid or random sampling (before sweep_max).",
+    )
     parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
     parser.add_argument(
         "--wandb_entity",
