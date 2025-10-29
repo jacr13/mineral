@@ -20,3 +20,10 @@ wandb:
   project: rewarped
 run: train_eval
 seed: 100
+
+sweep:
+  agent.otil.max_epochs: [2000, 5000, 10000]
+  agent.network.actor_kwargs.mlp_kwargs.units:
+    - [128, 64, 32]
+    - [256, 128, 64]
+  seed: [1, 2, 3]
