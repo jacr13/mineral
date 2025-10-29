@@ -5,59 +5,34 @@ import subprocess
 from copy import deepcopy
 from itertools import product
 from pathlib import Path
+from datetime import timedelta
 
 import yaml
 
-CALIBERS = {
-    "debug": {
+CALIBERS = [
+    {
         "time": "0-00:10:00",
         "partition": {"cpu": "debug-cpu", "gpu": "shared-gpu"},
     },
-    "veryveryshort": {
-        "time": "0-00:30:00",
-        "partition": {"cpu": "shared-cpu", "gpu": "shared-gpu"},
-    },
-    "veryshort": {
-        "time": "0-03:00:00",
-        "partition": {"cpu": "shared-cpu", "gpu": "shared-gpu"},
-    },
-    "short": {
-        "time": "0-06:00:00",
-        "partition": {"cpu": "shared-cpu", "gpu": "shared-gpu"},
-    },
-    "long": {
+    {
         "time": "0-12:00:00",
         "partition": {"cpu": "shared-cpu", "gpu": "shared-gpu"},
     },
-    "daylong": {
-        "time": "1-00:00:00",
-        "partition": {
-            "cpu": "public-cpu,private-cui-cpu",
-            "gpu": "private-cui-gpu,private-kalousis-gpu",
-        },
-    },
-    "verylong": {
-        "time": "2-00:00:00",
-        "partition": {
-            "cpu": "public-cpu,private-cui-cpu",
-            "gpu": "private-cui-gpu,private-kalousis-gpu",
-        },
-    },
-    "veryverylong": {
+    {
         "time": "4-00:00:00",
         "partition": {
             "cpu": "public-cpu,private-cui-cpu",
             "gpu": "private-cui-gpu,private-kalousis-gpu",
         },
     },
-    "veryveryverylong": {
+    {
         "time": "7-00:00:00",
         "partition": {
             "cpu": "public-longrun-cpu,private-cui-cpu",
             "gpu": "private-cui-gpu,private-kalousis-gpu",
         },
     },
-}
+]
 
 SBATCH_GPU = "#SBATCH --gres=gpu:1"
 
@@ -260,10 +235,43 @@ def _write_tmux_script(script_path, name, command, args):
     script_path.chmod(0o755)
 
 def _write_slurm_script(script_path, name, command, args):
-    caliber = CALIBERS[args.caliber]
-    partition = caliber["partition"][args.device]
-    duration = caliber["time"]
+    def _get_partition_and_duration(runtime, device):
+        """
+        Given a runtime string (e.g. '12h', '30m', '1d', or '0-12:00:00'),
+        return the most suitable partition configuration.
+        """
+        # --- Parse runtime string into timedelta ---
+        def to_timedelta(s: str) -> timedelta:
+            if "-" in s:  # format like 0-12:00:00
+                days, hms = s.split("-")
+                hours, minutes, seconds = map(int, hms.split(":"))
+                return timedelta(days=int(days), hours=hours, minutes=minutes, seconds=seconds)
+            else:
+                t = int(s[:-1])
+                if s.endswith("s"):
+                    return timedelta(seconds=t), f"0d-00:00:{t:02d}"
+                elif s.endswith("m"):
+                    return timedelta(minutes=t), f"0d-00:{t:02d}:00"
+                elif s.endswith("h"):
+                    return timedelta(hours=t), f"0d-{t:02d}:00:00"
+                elif s.endswith("d"):
+                    return timedelta(days=t), f"{t}d-00:00:00"
+                else:
+                    raise ValueError(f"Invalid runtime format: {s}")
 
+        input_time, formatted_duration = to_timedelta(runtime)
+
+        # --- Select best partition ---
+        best_partition = CALIBERS[0]["partition"][device]
+        for rule in CALIBERS:
+            if to_timedelta(rule["time"]) <= input_time:
+                best_partition = rule["partition"][device]
+            else:
+                break
+
+        return best_partition, formatted_duration
+
+    partition, duration = _get_partition_and_duration(args.runtime, args.device)
     num_workers = 1
     memory = 32
 
@@ -370,8 +378,6 @@ if __name__ == "__main__":
     # Parse the arguments
     parser = argparse.ArgumentParser(description="Job Spawner")
     parser.add_argument("--task_name", type=str, default=None)
-    parser.add_argument("--env_bundle", type=str, default=None)
-    parser.add_argument("--demo_dir", type=str, default=None)
     parser.add_argument(
         "--deployment",
         type=str,
@@ -386,7 +392,7 @@ if __name__ == "__main__":
         default="cpu",
         help="Which device?",
     )
-    parser.add_argument("--caliber", type=str, default="short", choices=CALIBERS.keys())
+    parser.add_argument("--runtime", type=str, default="12h", help="job runtime use format d-hh:mm:ss, or number of minutes, hours, days e.g., 30m, 2h, 1d")
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "clear", default=False, help="clear files after deployment")
@@ -414,19 +420,6 @@ if __name__ == "__main__":
             "Use dot paths, e.g. --set wandb.mode=offline --set agent.otil.max_epochs=6000."
         ),
     )
-    parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
-    parser.add_argument(
-        "--wandb_entity",
-        type=str,
-        default=None,
-        help="team or personal username",
-    )
-    parser.add_argument(
-        "--wandb_project",
-        type=str,
-        default=None,
-        help="wandb project name",
-    )
     boolean_flag(parser, "docker", default=False, help="use docker?")
     parser.add_argument(
         "--docker_image",
@@ -434,6 +427,13 @@ if __name__ == "__main__":
         default=None,
         help="Name of docker image or path to image (cluster)",
     )
+
+    # args not used yet:
+    parser.add_argument("--env_bundle", type=str, default=None)
+    parser.add_argument("--demo_dir", type=str, default=None)
+    parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
+
+
     args = parser.parse_args()
 
     # Create (and optionally deploy) the jobs
