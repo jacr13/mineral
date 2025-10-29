@@ -1,6 +1,7 @@
 import argparse
 import subprocess
 from pathlib import Path
+import os
 
 import yaml
 
@@ -156,15 +157,15 @@ def _flatten_value(prefix, value):
             overrides.extend(_flatten_value(f"{prefix}.{key}", sub_value))
         return overrides
     if isinstance(value, list):
-        return [f"{prefix}={_format_list(value)}"]
-    return [f"{prefix}={_format_scalar(value)}"]
+        return [f"\t\t{prefix}={_format_list(value)}"]
+    return [f"\t\t{prefix}={_format_scalar(value)}"]
 
 
 def _build_overrides(config):
     overrides = []
     for key, value in config.items():
         if isinstance(value, dict) and "name" in value:
-            overrides.append(f"{key}={_format_scalar(value['name'])}")
+            overrides.append(f"\t\t{key}={_format_scalar(value['name'])}")
             nested = {k: v for k, v in value.items() if k != "name"}
             for nested_key, nested_value in nested.items():
                 overrides.extend(
@@ -185,20 +186,42 @@ def _command_from_overrides(overrides):
     return "\n".join(lines)
 
 
-def _write_tmux_script(script_path, name, command):
+def _write_tmux_script(script_path, name, command, args):
+    if args.docker:
+        if args.docker_image is None:
+            raise ValueError("Docker image must be specified when using Docker.")
+        command = DOCKER_CMD.format(
+            docker_image=args.docker_image,
+            command=command,
+        )
+
     script_path.write_text(TMUX_FILE_CONTENT.format(name=name, command=command))
     script_path.chmod(0o755)
 
-
-def _write_slurm_script(script_path, name, command, caliber):
-    partition = caliber["partition"].get("gpu", caliber["partition"]["cpu"])
+def _write_slurm_script(script_path, name, command, args):
+    caliber = CALIBERS[args.caliber]
+    partition = caliber["partition"][args.device]
     duration = caliber["time"]
+
+    num_workers = 1
+    memory = 32
+
+    if args.docker:
+        if args.docker_image is None:
+            raise ValueError("Docker image must be specified when using Singularity.")
+        command = SINGULARITY_CMD.format(
+            num_workers=num_workers,
+            cuda="--nv" if args.device == "gpu" else "",
+            sing_image=args.docker_image,
+            path2code=os.getcwdb().decode(),
+            command=command,
+        )
     script_content = SBATCH_FILE_CONTENT.format(
         name=name,
         partition=partition,
-        num_workers=1,
+        num_workers=num_workers,
         duration=duration,
-        memory=32,
+        memory=memory,
         extra_params=SBATCH_GPU,
         modules="",
         command=command,
@@ -237,10 +260,9 @@ def run(args):
         command = _command_from_overrides(overrides)
 
         if args.deployment == "slurm":
-            caliber = CALIBERS[args.caliber]
-            _write_slurm_script(script_path, job_name, command, caliber)
+            _write_slurm_script(script_path, job_name, command, args)
         else:
-            _write_tmux_script(script_path, job_name, command)
+            _write_tmux_script(script_path, job_name, command, args)
 
         created_scripts.append(script_path)
 
@@ -261,7 +283,7 @@ if __name__ == "__main__":
     parser.add_argument("--task_name", type=str, default=None)
     parser.add_argument("--env_bundle", type=str, default=None)
     parser.add_argument("--demo_dir", type=str, default=None)
-    parser.add_argument("--num_trials", type=int, default=0)
+    parser.add_argument("--num_trials", type=int, default=50)
     parser.add_argument(
         "--deployment",
         type=str,
@@ -269,24 +291,18 @@ if __name__ == "__main__":
         default="tmux",
         help="deploy how?",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "gpu"],
+        default="cpu",
+        help="Which device?",
+    )
     parser.add_argument("--caliber", type=str, default="short", choices=CALIBERS.keys())
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "clear", default=False, help="clear files after deployment")
-    boolean_flag(parser, "wandb_upgrade", default=True, help="upgrade wandb?")
     parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
-    parser.add_argument(
-        "--wandb_base_url",
-        type=str,
-        default="https://api.wandb.ai",
-        help="your wandb base url",
-    )
-    parser.add_argument(
-        "--wandb_api_key",
-        type=str,
-        default=None,
-        help="your wandb api key",
-    )
     parser.add_argument(
         "--wandb_entity",
         type=str,
