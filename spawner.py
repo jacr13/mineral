@@ -209,8 +209,8 @@ def _write_slurm_script(script_path, name, command, caliber):
 
 def run(args):
     tasks_root = Path("tasks")
-    if args.prefix:
-        tasks_root = tasks_root / args.prefix
+    if args.task_name:
+        tasks_root = tasks_root / args.task_name
 
     if not tasks_root.exists():
         raise FileNotFoundError(f"No task definitions in '{tasks_root}'.")
@@ -258,7 +258,7 @@ def run(args):
 if __name__ == "__main__":
     # Parse the arguments
     parser = argparse.ArgumentParser(description="Job Spawner")
-    parser.add_argument("--prefix", type=str, default=None)
+    parser.add_argument("--task_name", type=str, default=None)
     parser.add_argument("--env_bundle", type=str, default=None)
     parser.add_argument("--demo_dir", type=str, default=None)
     parser.add_argument("--num_trials", type=int, default=0)

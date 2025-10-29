@@ -1,0 +1,27 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Flip
+    env_suite: dexdeform
+agent:
+  name: RewarpedJumperSAPO
+  network:
+    encoder_kwargs:
+      mlp_keys: "com_q|joint_q"
+    actor_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+  otil:
+    critic_optim_kwargs:
+      lr: 5e-4
+    target_critic_alpha: 0.995
+logdir: "workdir/RewarpedDexDeformFlip6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1400

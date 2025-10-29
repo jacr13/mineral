@@ -1,0 +1,26 @@
+task:
+  name: Rewarped
+  env:
+    env_name: AllegroHand
+    env_suite: isaacgymenvs
+agent:
+  name: DFlexAntSAPO
+  otil:
+    max_epochs: 2000
+    max_agent_steps: 4100000
+    critic_optim_kwargs:
+      lr: 5e-4
+    target_critic_alpha: 0.995
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+logdir: "workdir/RewarpedAllegroHand4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1100
