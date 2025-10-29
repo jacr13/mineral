@@ -188,6 +188,20 @@ def _set_nested_value(config, path, value):
     cursor[path[-1]] = value
 
 
+def _parse_cli_overrides(raw_overrides):
+    overrides = []
+    for raw in raw_overrides or []:
+        if "=" not in raw:
+            raise ValueError(f"Override '{raw}' must be in the form key=value.")
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"Override '{raw}' has an empty key.")
+        parsed_value = yaml.safe_load(value)
+        overrides.append((key, parsed_value))
+    return overrides
+
+
 def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
     keys = list(sweep_spec.keys())
     options = []
@@ -293,6 +307,8 @@ def run(args):
         raise ValueError(f"No YAML task files found under '{tasks_root}'.")
 
     created_scripts = []
+    cli_overrides = _parse_cli_overrides(args.overrides)
+
     for config_path in configs:
         rel_path = config_path.relative_to(Path("tasks"))
         job_subdir = spawn_root / rel_path.parent
@@ -320,12 +336,16 @@ def run(args):
             if not variant_entries:
                 continue
         else:
-            variant_entries = [(base_name, task_config)]
+            variant_entries = [(base_name, deepcopy(task_config))]
 
         for variant_name, variant_config in variant_entries:
             script_path = job_subdir / f"{variant_name}.sh"
 
-            overrides = _build_overrides(variant_config)
+            effective_config = deepcopy(variant_config)
+            for key, value in cli_overrides:
+                _set_nested_value(effective_config, key.split("."), value)
+
+            overrides = _build_overrides(effective_config)
             command = _command_from_overrides(overrides)
 
             if args.deployment == "slurm":
@@ -382,6 +402,17 @@ if __name__ == "__main__":
         default="grid",
         choices=["grid", "random"],
         help="Variant selection strategy: full grid or random sampling (before sweep_max).",
+    )
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="key=value",
+        help=(
+            "Override config values (can be repeated). "
+            "Use dot paths, e.g. --set wandb.mode=offline --set agent.otil.max_epochs=6000."
+        ),
     )
     parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
     parser.add_argument(
