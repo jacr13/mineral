@@ -116,7 +116,6 @@ def main(config: DictConfig):
             wandb_config['group'] = run_group
 
         name = wandb_config.get('name', None)
-        print(f"{config.task.name}_{config.task.env.env_name}_{config.task.env.numEnvs}")
         if name is None:
             uuid = create_uuid(
                 method='human_hash',
