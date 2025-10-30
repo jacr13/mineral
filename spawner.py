@@ -36,7 +36,7 @@ CALIBERS = [
 
 SBATCH_GPU = "#SBATCH --gres=gpu:1"
 
-SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} -B $HOME/scratch:/scratch {sing_image} \\
+SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --no-home -B $HOME/scratch:/scratch {sing_image} \\
     bash -c "cd {path2code}; \\
     {command}"
 """
