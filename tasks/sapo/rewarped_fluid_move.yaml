@@ -30,3 +30,6 @@ seed: 1500
 
 sweep:
   seed: [100, 110, 120, 130, 140]
+
+spawner:
+  skip: true

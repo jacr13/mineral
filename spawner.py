@@ -38,7 +38,7 @@ SBATCH_GPU = "#SBATCH --gres=gpu:1"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
-SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --containall -B {path2code}:/workspace -B $HOME/scratch:/scratch {sing_image} \\
+SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --containall -B $HOME/tmp_asset_dir:/home/noroot/conda/lib/python3.10/site-packages/rewarped/assets/warp_mpm_sga -B {path2code}:/workspace -B $HOME/scratch:/scratch {sing_image} \\
     bash -c "cd /workspace; \\
     {command}"
 """
@@ -287,6 +287,7 @@ def _write_slurm_script(script_path, name, command, args):
     num_workers = 1
     memory = 32
 
+    modules = ""
     if args.docker:
         if args.docker_image is None:
             raise ValueError("Docker image must be specified when using Singularity.")
@@ -297,6 +298,8 @@ def _write_slurm_script(script_path, name, command, args):
             path2code=os.getcwdb().decode(),
             command=command,
         )
+        modules = "export APPTAINERENV_UID=1000\nexport APPTAINERENV_GID=1000"
+
     script_content = SBATCH_FILE_CONTENT.format(
         name=name,
         partition=partition,
@@ -304,7 +307,7 @@ def _write_slurm_script(script_path, name, command, args):
         duration=duration,
         memory=memory,
         extra_params=SBATCH_GPU,
-        modules="",
+        modules=modules,
         command=command,
     )
     script_path.write_text(script_content)
@@ -359,6 +362,19 @@ def run(args):
             task_config = yaml.safe_load(file) or {}
 
         sweep_spec = task_config.pop("sweep", None)
+        spawner_spec = task_config.pop("spawner", None)
+        skip_task = False
+        if isinstance(spawner_spec, dict):
+            skip_task = bool(spawner_spec.get("skip", False))
+        elif isinstance(spawner_spec, bool):
+            skip_task = spawner_spec
+        elif spawner_spec is not None:
+            raise ValueError(f"'spawner' entry in '{config_path}' must be a mapping or boolean.")
+
+        if skip_task:
+            print(f"Skipping task config: {config_path} (spawner.skip is true)")
+            continue
+
         base_name = rel_path.with_suffix("").name
 
         if args.sweep:
