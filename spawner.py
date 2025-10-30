@@ -36,8 +36,8 @@ CALIBERS = [
 
 SBATCH_GPU = "#SBATCH --gres=gpu:1"
 
-SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --no-home -B $HOME/scratch:/scratch {sing_image} \\
-    bash -c "cd {path2code}; \\
+SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --containall -B {path2code}:/workspace -B $HOME/scratch:/scratch {sing_image} \\
+    bash -c "cd /workspace; \\
     {command}"
 """
 
@@ -216,8 +216,8 @@ def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
 
 def _command_from_overrides(overrides):
     if not overrides:
-        return "poetry run python -m mineral.scripts.run"
-    lines = ["poetry run python -m mineral.scripts.run \\"]
+        return "python -m mineral.scripts.run"
+    lines = ["python -m mineral.scripts.run \\"]
     for index, override in enumerate(overrides):
         suffix = " \\" if index < len(overrides) - 1 else ""
         lines.append(f"{override}{suffix}")
