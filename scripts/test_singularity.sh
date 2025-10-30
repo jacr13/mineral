@@ -8,5 +8,4 @@ python spawner.py \
     --runtime 10m \
     --no-cleanup \
     --set agent.shac.max_epochs=2 \
-    --set wandb.mode=offline \
     --deploy_now 
