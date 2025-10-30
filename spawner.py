@@ -303,25 +303,48 @@ def _write_slurm_script(script_path, name, command, args):
 
 
 def run(args):
-    tasks_root = Path("tasks")
-    if args.task_name:
-        tasks_root = tasks_root / args.task_name
+    base_tasks_root = Path("tasks").resolve()
 
-    if not tasks_root.exists():
-        raise FileNotFoundError(f"No task definitions in '{tasks_root}'.")
+    if args.task_name:
+        task_path = Path(args.task_name)
+        if task_path.exists():
+            task_path = task_path.resolve()
+        else:
+            candidate = base_tasks_root / task_path
+            if candidate.exists():
+                task_path = candidate.resolve()
+            else:
+                raise FileNotFoundError(
+                    f"Task entry '{args.task_name}' not found (checked '{task_path}' and '{candidate}')."
+                )
+    else:
+        task_path = base_tasks_root
+
+    if not task_path.exists():
+        raise FileNotFoundError(f"No task definitions in '{task_path}'.")
+
+    if task_path.is_dir():
+        configs = [path.resolve() for path in sorted(task_path.rglob("*.yaml"))]
+        if not configs:
+            raise ValueError(f"No YAML task files found under '{task_path}'.")
+    elif task_path.is_file():
+        if task_path.suffix.lower() not in {".yaml", ".yml"}:
+            raise ValueError(f"Task file '{task_path}' must be a YAML file.")
+        configs = [task_path.resolve()]
+    else:
+        raise ValueError(f"Unsupported task entry type: '{task_path}'.")
 
     spawn_root = Path("spawn")
     spawn_root.mkdir(parents=True, exist_ok=True)
-
-    configs = sorted(tasks_root.rglob("*.yaml"))
-    if not configs:
-        raise ValueError(f"No YAML task files found under '{tasks_root}'.")
 
     created_scripts = []
     cli_overrides = _parse_cli_overrides(args.overrides)
 
     for config_path in configs:
-        rel_path = config_path.relative_to(Path("tasks"))
+        try:
+            rel_path = config_path.relative_to(base_tasks_root)
+        except ValueError:
+            rel_path = Path(config_path.name)
         job_subdir = spawn_root / rel_path.parent
         job_subdir.mkdir(parents=True, exist_ok=True)
 
@@ -410,10 +433,10 @@ def run(args):
 
             if args.deploy_now:
                 subprocess.run(["bash", str(script_path)], check=True)
-                if args.clear:
+                if args.cleanup:
                     script_path.unlink()
 
-    if not args.deploy_now or not args.clear:
+    if not args.deploy_now or not args.cleanup:
         for script_path in created_scripts:
             print(f"Created task script: {script_path}")
 
@@ -444,7 +467,7 @@ if __name__ == "__main__":
     )
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
-    boolean_flag(parser, "clear", default=False, help="clear files after deployment")
+    boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")
     boolean_flag(parser, "timestamp", default=True, help="append timestamp (YYYYMMDD_HHMMSS) to generated script filenames")
     boolean_flag(parser, "sweep_logdir", default=True, help="override logdir per sweep with timestamped subdirectories")
     parser.add_argument(
