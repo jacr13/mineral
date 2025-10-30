@@ -5,7 +5,7 @@ import subprocess
 from copy import deepcopy
 from itertools import product
 from pathlib import Path
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import yaml
 
@@ -346,8 +346,51 @@ def run(args):
         else:
             variant_entries = [(base_name, deepcopy(task_config))]
 
-        for variant_name, variant_config in variant_entries:
-            script_path = job_subdir / f"{variant_name}.sh"
+        for sweep_index, (variant_name, variant_config) in enumerate(variant_entries, start=1):
+            timestamp_base = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp_component = ""
+            duplicate_component = ""
+
+            if args.timestamp:
+                timestamp_component = f"_{timestamp_base}"
+                script_basename = f"{variant_name}{timestamp_component}"
+                script_path = job_subdir / f"{script_basename}.sh"
+                counter = 1
+                while script_path.exists():
+                    duplicate_component = f"_{counter:02d}"
+                    script_basename = f"{variant_name}{timestamp_component}{duplicate_component}"
+                    script_path = job_subdir / f"{script_basename}.sh"
+                    counter += 1
+            else:
+                script_basename = variant_name
+                script_path = job_subdir / f"{script_basename}.sh"
+                counter = 1
+                while script_path.exists():
+                    duplicate_component = f"_{counter:02d}"
+                    script_basename = f"{variant_name}{duplicate_component}"
+                    script_path = job_subdir / f"{script_basename}.sh"
+                    counter += 1
+                timestamp_component = f"_{timestamp_base}"
+
+            job_name = script_basename
+
+            if args.sweep and args.sweep_logdir:
+                base_logdir = variant_config.get("logdir")
+                experiment_name = None
+                if isinstance(base_logdir, str):
+                    stripped = base_logdir.strip('"')
+                    if stripped.startswith("workdir/"):
+                        parts = stripped.split("/")
+                        if len(parts) > 1 and parts[1]:
+                            experiment_name = parts[1]
+                if not experiment_name:
+                    experiment_name = variant_name
+
+                logdir_suffix = timestamp_component or f"_{timestamp_base}"
+                if duplicate_component:
+                    logdir_suffix = f"{logdir_suffix}{duplicate_component}"
+                experiment_with_time = f"{experiment_name}{logdir_suffix}"
+                variant_config["logdir"] = f"workdir/{experiment_with_time}/sweep_{sweep_index}"
 
             effective_config = deepcopy(variant_config)
             for key, value in cli_overrides:
@@ -357,9 +400,9 @@ def run(args):
             command = _command_from_overrides(overrides)
 
             if args.deployment == "slurm":
-                _write_slurm_script(script_path, variant_name, command, args)
+                _write_slurm_script(script_path, job_name, command, args)
             else:
-                _write_tmux_script(script_path, variant_name, command, args)
+                _write_tmux_script(script_path, job_name, command, args)
 
             created_scripts.append(script_path)
 
@@ -396,6 +439,8 @@ if __name__ == "__main__":
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "clear", default=False, help="clear files after deployment")
+    boolean_flag(parser, "timestamp", default=True, help="append timestamp (YYYYMMDD_HHMMSS) to generated script filenames")
+    boolean_flag(parser, "sweep_logdir", default=True, help="override logdir per sweep with timestamped subdirectories")
     parser.add_argument(
         "--sweep_max",
         type=int,
