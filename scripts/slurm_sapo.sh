@@ -9,4 +9,5 @@ python spawner.py \
     --no-cleanup \
     --sweep \
     --sweep_max 10 \
+    --set wandb.project=rewarped-slurm \
     --deploy_now 
