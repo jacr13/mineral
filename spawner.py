@@ -431,6 +431,7 @@ def run(args):
             overrides = _build_overrides(effective_config)
             command = _command_from_overrides(overrides)
 
+            print(f"Created task script: {script_path}")
             if args.deployment == "slurm":
                 _write_slurm_script(script_path, job_name, command, args)
                 if args.deploy_now:
@@ -443,10 +444,6 @@ def run(args):
             created_scripts.append(script_path)
             if args.cleanup:
                 script_path.unlink()
-
-    if not args.deploy_now or not args.cleanup:
-        for script_path in created_scripts:
-            print(f"Created task script: {script_path}")
 
 
 if __name__ == "__main__":
