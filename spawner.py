@@ -252,13 +252,13 @@ def _write_slurm_script(script_path, name, command, args):
             else:
                 t = int(s[:-1])
                 if s.endswith("s"):
-                    return timedelta(seconds=t), f"0d-00:00:{t:02d}"
+                    return timedelta(seconds=t), f"0-00:00:{t:02d}"
                 elif s.endswith("m"):
-                    return timedelta(minutes=t), f"0d-00:{t:02d}:00"
+                    return timedelta(minutes=t), f"0-00:{t:02d}:00"
                 elif s.endswith("h"):
-                    return timedelta(hours=t), f"0d-{t:02d}:00:00"
+                    return timedelta(hours=t), f"0-{t:02d}:00:00"
                 elif s.endswith("d"):
-                    return timedelta(days=t), f"{t}d-00:00:00"
+                    return timedelta(days=t), f"{t}-00:00:00"
                 else:
                     raise ValueError(f"Invalid runtime format: {s}")
 
@@ -314,9 +314,7 @@ def run(args):
             if candidate.exists():
                 task_path = candidate.resolve()
             else:
-                raise FileNotFoundError(
-                    f"Task entry '{args.task_name}' not found (checked '{task_path}' and '{candidate}')."
-                )
+                raise FileNotFoundError(f"Task entry '{args.task_name}' not found (checked '{task_path}' and '{candidate}').")
     else:
         task_path = base_tasks_root
 
@@ -426,15 +424,16 @@ def run(args):
 
             if args.deployment == "slurm":
                 _write_slurm_script(script_path, job_name, command, args)
+                if args.deploy_now:
+                    subprocess.run(["sbatch", str(script_path)], check=True)
             else:
                 _write_local_script(script_path, job_name, command, args)
+                if args.deploy_now:
+                    subprocess.run(["bash", str(script_path)], check=True)
 
             created_scripts.append(script_path)
-
-            if args.deploy_now:
-                subprocess.run(["bash", str(script_path)], check=True)
-                if args.cleanup:
-                    script_path.unlink()
+            if args.cleanup:
+                script_path.unlink()
 
     if not args.deploy_now or not args.cleanup:
         for script_path in created_scripts:
