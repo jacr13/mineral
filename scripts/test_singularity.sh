@@ -6,6 +6,7 @@ python spawner.py \
     --docker_image mineral.sif \
     --deployment slurm  \
     --runtime 10m \
-    # --deploy_now \
     --no-cleanup \
-    --set agent.shac.max_epoch=2
+    --set agent.shac.max_epochs=2 \
+    --set wandb.mode=offline \
+    --deploy_now 
