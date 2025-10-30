@@ -36,6 +36,8 @@ CALIBERS = [
 
 SBATCH_GPU = "#SBATCH --gres=gpu:1"
 
+_SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
+
 SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --containall -B {path2code}:/workspace -B $HOME/scratch:/scratch {sing_image} \\
     bash -c "cd /workspace; \\
     {command}"
@@ -91,6 +93,11 @@ def boolean_flag(parser, name, default=False, help=None):
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
 
 
+def _quote(value_str: str) -> str:
+    escaped = value_str.replace("\\", "\\\\").replace('"', '\\"')
+    return f'\\"{escaped}\\"'
+
+
 def get_gitsha():
     _gitsha = "gitSHA_{}"
     try:
@@ -110,11 +117,13 @@ def _format_scalar(value):
         return "null"
     value_str = str(value)
     if not value_str:
-        return '""'
+        return _quote("")
+    if any(char in _SHELL_QUOTE_CHARS for char in value_str):
+        return _quote(value_str)
     if "$(" in value_str:
-        return f'"{value_str}"'
+        return _quote(value_str)
     if any(char.isspace() for char in value_str):
-        return f'"{value_str}"'
+        return _quote(value_str)
     return value_str
 
 
