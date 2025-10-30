@@ -216,8 +216,8 @@ def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
 
 def _command_from_overrides(overrides):
     if not overrides:
-        return "python -m mineral.scripts.run"
-    lines = ["python -m mineral.scripts.run \\"]
+        return "poetry run python -m mineral.scripts.run"
+    lines = ["poetry run python -m mineral.scripts.run \\"]
     for index, override in enumerate(overrides):
         suffix = " \\" if index < len(overrides) - 1 else ""
         lines.append(f"{override}{suffix}")
