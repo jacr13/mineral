@@ -15,7 +15,7 @@ from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
 from . import models
-from .best_of_k import BestOfKConfig, BestOfKSoftminOT
+from .best_of_k import BestOfK, BestOfKConfig
 from .utils import adaptive_scheduler, grad_norm, policy_kl
 
 
@@ -137,7 +137,7 @@ class OTIL(Agent):
             huber_delta=1.0,
             action_weight=1.0,
         )
-        self.loss_fn = BestOfKSoftminOT(cfg, device=self.device)
+        self.loss_fn = BestOfK(cfg, device=self.device)
 
         # --- Replay Buffer ---
         assert self.num_actors == self.env.num_envs
