@@ -62,7 +62,7 @@ DOCKER_CMD = """docker run \\
     {docker_image} {command}
 """
 
-TMUX_FILE_CONTENT = """#!/usr/bin/env bash
+LOCAL_SCRIPT_CONTENT = """#!/usr/bin/env bash
 
 # job name: {name}
 
@@ -222,7 +222,7 @@ def _command_from_overrides(overrides):
     return "\n".join(lines)
 
 
-def _write_tmux_script(script_path, name, command, args):
+def _write_local_script(script_path, name, command, args):
     if args.docker:
         if args.docker_image is None:
             raise ValueError("Docker image must be specified when using Docker.")
@@ -231,7 +231,7 @@ def _write_tmux_script(script_path, name, command, args):
             command=command,
         )
 
-    script_path.write_text(TMUX_FILE_CONTENT.format(name=name, command=command))
+    script_path.write_text(LOCAL_SCRIPT_CONTENT.format(name=name, command=command))
     script_path.chmod(0o755)
 
 def _write_slurm_script(script_path, name, command, args):
@@ -402,7 +402,7 @@ def run(args):
             if args.deployment == "slurm":
                 _write_slurm_script(script_path, job_name, command, args)
             else:
-                _write_tmux_script(script_path, job_name, command, args)
+                _write_local_script(script_path, job_name, command, args)
 
             created_scripts.append(script_path)
 
@@ -424,9 +424,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--deployment",
         type=str,
-        choices=["tmux", "slurm"],
-        default="tmux",
-        help="deploy how?",
+        choices=["local", "slurm"],
+        default="local",
+        help="deployment backend",
     )
     parser.add_argument(
         "--device",
