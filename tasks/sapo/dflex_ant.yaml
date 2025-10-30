@@ -20,3 +20,6 @@ wandb:
   project: rewarped
 run: train_eval
 seed: 100
+
+sweep:
+  seed: [100, 110, 120, 130, 140, 1000, 1100, 1200, 1300, 1400]
