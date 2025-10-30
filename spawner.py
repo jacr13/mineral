@@ -3,9 +3,9 @@ import os
 import random
 import subprocess
 from copy import deepcopy
+from datetime import datetime, timedelta
 from itertools import product
 from pathlib import Path
-from datetime import datetime, timedelta
 
 import yaml
 
@@ -69,6 +69,7 @@ LOCAL_SCRIPT_CONTENT = """#!/usr/bin/env bash
 {command}
 """
 
+
 def boolean_flag(parser, name, default=False, help=None):
     """Add a boolean flag to argparse parser.
 
@@ -88,6 +89,7 @@ def boolean_flag(parser, name, default=False, help=None):
         help=help,
     )
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
+
 
 def get_gitsha():
     _gitsha = "gitSHA_{}"
@@ -206,7 +208,7 @@ def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
     variants = []
     for combination in combinations:
         config_variant = deepcopy(base_config)
-        for key, value in zip(keys, combination):
+        for key, value in zip(keys, combination, strict=False):
             _set_nested_value(config_variant, key.split("."), value)
         variants.append(config_variant)
     return variants
@@ -234,12 +236,13 @@ def _write_local_script(script_path, name, command, args):
     script_path.write_text(LOCAL_SCRIPT_CONTENT.format(name=name, command=command))
     script_path.chmod(0o755)
 
+
 def _write_slurm_script(script_path, name, command, args):
     def _get_partition_and_duration(runtime, device):
-        """
-        Given a runtime string (e.g. '12h', '30m', '1d', or '0-12:00:00'),
+        """Given a runtime string (e.g. '12h', '30m', '1d', or '0-12:00:00'),
         return the most suitable partition configuration.
         """
+
         # --- Parse runtime string into timedelta ---
         def to_timedelta(s: str) -> timedelta:
             if "-" in s:  # format like 0-12:00:00
@@ -338,8 +341,7 @@ def run(args):
                 args.sweep_max,
             )
             variant_entries = [
-                (f"{base_name}_sweep{index:03d}", variant_config)
-                for index, variant_config in enumerate(sweep_variants)
+                (f"{base_name}_sweep{index:03d}", variant_config) for index, variant_config in enumerate(sweep_variants)
             ]
             if not variant_entries:
                 continue
@@ -416,7 +418,6 @@ def run(args):
             print(f"Created task script: {script_path}")
 
 
-
 if __name__ == "__main__":
     # Parse the arguments
     parser = argparse.ArgumentParser(description="Job Spawner")
@@ -432,10 +433,15 @@ if __name__ == "__main__":
         "--device",
         type=str,
         choices=["cpu", "gpu"],
-        default="cpu",
+        default="gpu",
         help="Which device?",
     )
-    parser.add_argument("--runtime", type=str, default="12h", help="job runtime use format d-hh:mm:ss, or number of minutes, hours, days e.g., 30m, 2h, 1d")
+    parser.add_argument(
+        "--runtime",
+        type=str,
+        default="12h",
+        help="job runtime use format d-hh:mm:ss, or number of minutes, hours, days e.g., 30m, 2h, 1d",
+    )
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "clear", default=False, help="clear files after deployment")
@@ -477,7 +483,6 @@ if __name__ == "__main__":
     parser.add_argument("--env_bundle", type=str, default=None)
     parser.add_argument("--demo_dir", type=str, default=None)
     parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
-
 
     args = parser.parse_args()
 
