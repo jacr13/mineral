@@ -13,6 +13,8 @@ from termcolor import cprint
 
 from .utils import create_uuid
 
+from dotenv import load_dotenv
+load_dotenv()
 
 def make_envs(config):
     from .. import envs
