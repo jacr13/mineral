@@ -26,6 +26,7 @@ torch = [
 urchin = "^0.0.29"
 wandb = "^0.22.2"
 python-dotenv = "^1.2.1"
+atalaya = {extras = ["wandb"], version = "^0.2.8"}
 
 [[tool.poetry.source]]
 name     = "pytorch-cu124"  # CUDA-specific wheels
