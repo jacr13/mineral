@@ -165,6 +165,52 @@ def _build_overrides(config):
     return overrides
 
 
+def _parse_runtime(runtime: str):
+    runtime = runtime.strip()
+    if "-" in runtime:
+        days_part, hms = runtime.split("-", 1)
+        hours_str, minutes_str, seconds_str = hms.split(":")
+        days = int(days_part)
+        hours = int(hours_str)
+        minutes = int(minutes_str)
+        seconds = int(seconds_str)
+        formatted = f"{days}-{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds), formatted
+
+    if not runtime:
+        raise ValueError("Runtime value cannot be empty.")
+
+    suffix = runtime[-1]
+    amount = int(runtime[:-1])
+    if suffix == "s":
+        duration_td = timedelta(seconds=amount)
+        formatted = f"0-00:00:{amount:02d}"
+    elif suffix == "m":
+        duration_td = timedelta(minutes=amount)
+        formatted = f"0-00:{amount:02d}:00"
+    elif suffix == "h":
+        duration_td = timedelta(hours=amount)
+        formatted = f"0-{amount:02d}:00:00"
+    elif suffix == "d":
+        duration_td = timedelta(days=amount)
+        formatted = f"{amount}-00:00:00"
+    else:
+        raise ValueError(f"Invalid runtime format: {runtime}")
+
+    return duration_td, formatted
+
+
+def _select_partition(runtime_td, device):
+    partition = CALIBERS[0]["partition"][device]
+    for rule in CALIBERS:
+        rule_td, _ = _parse_runtime(rule["time"])
+        if rule_td <= runtime_td:
+            partition = rule["partition"][device]
+        else:
+            break
+    return partition
+
+
 def _set_nested_value(config, path, value):
     cursor = config
     for key in path[:-1]:
@@ -247,43 +293,8 @@ def _write_local_script(script_path, name, command, args):
 
 
 def _write_slurm_script(script_path, name, command, args):
-    def _get_partition_and_duration(runtime, device):
-        """Given a runtime string (e.g. '12h', '30m', '1d', or '0-12:00:00'),
-        return the most suitable partition configuration.
-        """
-
-        # --- Parse runtime string into timedelta ---
-        def to_timedelta(s: str) -> timedelta:
-            if "-" in s:  # format like 0-12:00:00
-                days, hms = s.split("-")
-                hours, minutes, seconds = map(int, hms.split(":"))
-                return timedelta(days=int(days), hours=hours, minutes=minutes, seconds=seconds)
-            else:
-                t = int(s[:-1])
-                if s.endswith("s"):
-                    return timedelta(seconds=t), f"0-00:00:{t:02d}"
-                elif s.endswith("m"):
-                    return timedelta(minutes=t), f"0-00:{t:02d}:00"
-                elif s.endswith("h"):
-                    return timedelta(hours=t), f"0-{t:02d}:00:00"
-                elif s.endswith("d"):
-                    return timedelta(days=t), f"{t}-00:00:00"
-                else:
-                    raise ValueError(f"Invalid runtime format: {s}")
-
-        input_time, formatted_duration = to_timedelta(runtime)
-
-        # --- Select best partition ---
-        best_partition = CALIBERS[0]["partition"][device]
-        for rule in CALIBERS:
-            if to_timedelta(rule["time"]) <= input_time:
-                best_partition = rule["partition"][device]
-            else:
-                break
-
-        return best_partition, formatted_duration
-
-    partition, duration = _get_partition_and_duration(args.runtime, args.device)
+    runtime_td, duration = _parse_runtime(args.runtime)
+    partition = args.partition or _select_partition(runtime_td, args.device)
     num_workers = 1
     memory = 32
 
@@ -348,7 +359,6 @@ def run(args):
     spawn_root.mkdir(parents=True, exist_ok=True)
 
     created_scripts = []
-    cli_overrides = _parse_cli_overrides(args.overrides)
 
     for config_path in configs:
         try:
@@ -366,10 +376,21 @@ def run(args):
         skip_task = False
         if isinstance(spawner_spec, dict):
             skip_task = bool(spawner_spec.get("skip", False))
+            spawner_overrides = {}
+            if "args" in spawner_spec:
+                if not isinstance(spawner_spec["args"], dict):
+                    raise ValueError(f"'spawner.args' entry in '{config_path}' must be a mapping.")
+                spawner_overrides.update(spawner_spec["args"])
+            for key, value in spawner_spec.items():
+                if key not in {"skip", "args"}:
+                    spawner_overrides[key] = value
         elif isinstance(spawner_spec, bool):
             skip_task = spawner_spec
+            spawner_overrides = {}
         elif spawner_spec is not None:
             raise ValueError(f"'spawner' entry in '{config_path}' must be a mapping or boolean.")
+        else:
+            spawner_overrides = {}
 
         if skip_task:
             print(f"Skipping task config: {config_path} (spawner.skip is true)")
@@ -377,14 +398,24 @@ def run(args):
 
         base_name = rel_path.with_suffix("").name
 
-        if args.sweep:
+        effective_args = deepcopy(args)
+        for key, value in spawner_overrides.items():
+            if not hasattr(effective_args, key):
+                raise ValueError(
+                    f"'spawner' override '{key}' in '{config_path}' does not match any CLI argument.",
+                )
+            setattr(effective_args, key, value)
+
+        cli_overrides = _parse_cli_overrides(effective_args.overrides)
+
+        if effective_args.sweep:
             if not sweep_spec:
                 continue  # Skip configs without sweep definitions when sweep mode is requested
             sweep_variants = _generate_sweep_configs(
                 task_config,
                 sweep_spec,
-                args.sweep_mode,
-                args.sweep_max,
+                effective_args.sweep_mode,
+                effective_args.sweep_max,
             )
             variant_entries = [
                 (f"{base_name}_sweep{index:03d}", variant_config) for index, variant_config in enumerate(sweep_variants)
@@ -399,7 +430,7 @@ def run(args):
             timestamp_component = ""
             duplicate_component = ""
 
-            if args.timestamp:
+            if effective_args.timestamp:
                 timestamp_component = f"_{timestamp_base}"
                 script_basename = f"{variant_name}{timestamp_component}"
                 script_path = job_subdir / f"{script_basename}.sh"
@@ -422,7 +453,7 @@ def run(args):
 
             job_name = script_basename
 
-            if args.sweep and args.sweep_logdir:
+            if effective_args.sweep and effective_args.sweep_logdir:
                 base_logdir = variant_config.get("logdir")
                 experiment_name = None
                 if isinstance(base_logdir, str):
@@ -448,17 +479,17 @@ def run(args):
             command = _command_from_overrides(overrides)
 
             print(f"Created task script: {script_path}")
-            if args.deployment == "slurm":
-                _write_slurm_script(script_path, job_name, command, args)
-                if args.deploy_now:
+            if effective_args.deployment == "slurm":
+                _write_slurm_script(script_path, job_name, command, effective_args)
+                if effective_args.deploy_now:
                     subprocess.run(["sbatch", str(script_path)], check=True)
             else:
-                _write_local_script(script_path, job_name, command, args)
-                if args.deploy_now:
+                _write_local_script(script_path, job_name, command, effective_args)
+                if effective_args.deploy_now:
                     subprocess.run(["bash", str(script_path)], check=True)
 
             created_scripts.append(script_path)
-            if args.cleanup:
+            if effective_args.cleanup:
                 script_path.unlink()
 
 
@@ -485,6 +516,12 @@ if __name__ == "__main__":
         type=str,
         default="12h",
         help="job runtime use format d-hh:mm:ss, or number of minutes, hours, days e.g., 30m, 2h, 1d",
+    )
+    parser.add_argument(
+        "--partition",
+        type=str,
+        default=None,
+        help="override slurm partition (e.g., private-kalousis-gpu)",
     )
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")

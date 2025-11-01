@@ -33,3 +33,4 @@ sweep:
 
 spawner:
   skip: true
+  runtime: "2-00:00:00"
