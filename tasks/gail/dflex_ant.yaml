@@ -1,0 +1,38 @@
+﻿task:
+  name: DFlex
+  env:
+    env_name: ant
+    no_grad: True
+
+agent:
+  name: DFlexAntGAIL
+  ppo:
+    max_agent_steps: 10000000
+  network:
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+      +critic_mlp_kwargs:
+        units: [64, 64]
+  gail:
+    demos_path: "experts/demos/DFlex_ant_demos128_return9338_len1000.pt"
+    discriminator_mlp:
+      units: [128, 64]
+      norm_type: LayerNorm
+      act_type: SiLU
+    discriminator_optim: { type: Adam, kwargs: { lr: 3e-4 } }
+    discriminator_iters: 1
+    expert_batch_size: 2048
+    policy_batch_size: 2048
+    reward_scale: 1.0
+    label_smooth: 0.0
+
+logdir: "workdir/DFlexAnt10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
