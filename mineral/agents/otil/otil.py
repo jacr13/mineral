@@ -39,11 +39,12 @@ class OTIL(Agent):
         self.horizon_len = self.otil_config.horizon_len
         self.max_epochs = self.otil_config.get("max_epochs", 0)  # set to 0 to disable and track by max_agent_steps instead
 
-        demos_path = self.otil_config.demos_path
-        assert os.path.exists(demos_path), f"OTIL demos path: {demos_path} does not exist"
+        # demos
+        demos_path = self.otil_config.demos.path
+        assert os.path.exists(demos_path), f"Demos path: {demos_path} does not exist"
         self.demos = torch.load(demos_path, map_location=self.device)
 
-        n_envs = 10
+        n_envs = self.otil_config.demos.num
         self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
         self.demos["rew"] = self.demos["rew"][:n_envs, :]
         self.expert_return = self.demos["rew"].sum(dim=1).mean().item()

@@ -16,58 +16,56 @@ class GAIL(PPO):
         # GAIL-specific config
         self.gail_config = full_cfg.agent.get("gail", {})
 
+        self.input_type = self.gail_config.input_type
+
         # demos
-        demos_path = self.gail_config.get("demos_path", "")
-        assert isinstance(demos_path, str) and len(demos_path) > 0, "GAIL requires agent.gail.demos_path"
-        assert os.path.exists(demos_path), f"GAIL demos path: {demos_path} does not exist"
-        demos = torch.load(demos_path, map_location=self.device)
+        demos_path = self.gail_config.demos.path
+        assert os.path.exists(demos_path), f"Demos path: {demos_path} does not exist"
+        self.demos = torch.load(demos_path, map_location=self.device)
 
-        # support either a packed tensor dict (obs, act) or dict of episodes
-        if isinstance(demos, dict) and "obs" in demos and "act" in demos:
-            expert_obs = demos["obs"]  # [N, T, obs_dim] or [B, obs_dim]
-            expert_act = demos["act"]  # [N, T, act_dim] or [B, act_dim]
-            if expert_obs.dim() == 3:
-                N, T, _ = expert_obs.shape
-                expert_obs = expert_obs.reshape(N * T, -1)
-                expert_act = expert_act.reshape(N * T, -1)
-        elif isinstance(demos, dict) and all(isinstance(k, (int, str)) for k in demos.keys()):
-            # dict of episodes {idx: {obs: [T, obs_dim], act: [T, act_dim], ...}}
-            obs_list, act_list = [], []
-            for ep in demos.values():
-                if "obs" in ep and "act" in ep:
-                    obs_list.append(ep["obs"])  # [T, obs_dim]
-                    act_list.append(ep["act"])  # [T, act_dim]
-            assert len(obs_list) > 0, "No (obs, act) pairs found in demos"
-            expert_obs = torch.cat(obs_list, dim=0)
-            expert_act = torch.cat(act_list, dim=0)
-        else:
-            raise ValueError("Unsupported demos format for GAIL: expected keys ('obs','act') or dict of episodes")
-
-        # ensure tensors on device
-        self.expert_obs = expert_obs.to(self.device).float()
-        self.expert_act = expert_act.to(self.device).float()
+        n_envs = self.gail_config.demos.num
+        self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
+        self.demos["act"] = self.demos["act"][:n_envs, ...]
+        self.demos["rew"] = self.demos["rew"][:n_envs, ...]
+        self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
 
         # discriminator
-        obs_dim = self.obs_space["obs"]
-        obs_dim = obs_dim[0] if isinstance(obs_dim, tuple) else obs_dim
+        discriminator_config = self.gail_config.get("discriminator", {})
         act_dim = self.action_dim
-        self.discriminator = Discriminator(obs_dim, act_dim, self.gail_config.get("discriminator_mlp", None)).to(self.device)
+        self.discriminator = Discriminator(
+            self.obs_space,
+            act_dim,
+            input_type=self.input_type,
+            discriminator_kwargs=discriminator_config,
+        ).to(self.device)
 
-        disc_optim_kwargs = self.gail_config.get("discriminator_optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
+        disc_optim_kwargs = discriminator_config.get("optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
         DiscOptim = getattr(torch.optim, disc_optim_kwargs.get("type", "Adam"))
         self.disc_optim = DiscOptim(self.discriminator.parameters(), **disc_optim_kwargs.get("kwargs", {}))
 
         # training params
-        self.disc_iters = int(self.gail_config.get("discriminator_iters", 1))
+        self.disc_iters = int(discriminator_config.get("iters", 1))
         self.expert_batch_size = int(self.gail_config.get("expert_batch_size", self.minibatch_size))
         self.policy_batch_size = int(self.gail_config.get("policy_batch_size", self.minibatch_size))
         self.reward_scale = float(self.gail_config.get("reward_scale", 1.0))
         self.label_smooth = float(self.gail_config.get("label_smooth", 0.0))
 
+    def get_discriminator_inputs(self, obs, actions, next_obs):
+        if self.input_type == "state":
+            input_1, input_2 = obs, None
+        elif self.input_type == "state_action":
+            input_1, input_2 = obs, actions
+        elif self.input_type == "state_state":
+            input_1, input_2 = obs, next_obs
+        else:
+            raise NotImplementedError
+
+        return input_1, input_2
+
     @torch.no_grad()
-    def gail_reward(self, obs, actions):
-        # obs: dict of tensors with key 'obs' -> [B, obs_dim]
-        logits = self.discriminator(obs, actions)  # [B]
+    def gail_reward(self, obs, actions, next_obs):
+        input_1, input_2 = self.get_discriminator_inputs(obs, actions, next_obs)
+        logits = self.discriminator(input_1, input_2)
         probs = torch.sigmoid(logits)
         reward = -torch.log(1.0 - probs + 1e-6)
         return (reward * self.reward_scale).unsqueeze(-1)
@@ -94,15 +92,18 @@ class GAIL(PPO):
             actions = torch.clamp(model_out['actions'], -1.0, 1.0)
             obs, r, self.dones, infos = self.env.step(actions)
             self.obs = self._convert_obs(obs)
-            r, self.dones = torch.tensor(r, device=self.device), torch.tensor(self.dones, device=self.device)
 
             # GAIL reward from discriminator using pre-step obs and taken actions
-            shaped_rewards = self.gail_reward(self.storage.storage_dict['obses']['obs'][n], model_out['actions'])
+            shaped_rewards = self.gail_reward(
+                obs={k: v[n] for k, v in self.storage.storage_dict['obses'].items()},
+                actions=model_out['actions'],
+                next_obs=self.obs,
+            )
 
             # update dones and rewards after env step
             self.storage.update_data('dones', n, self.dones)
             if self.value_bootstrap and 'time_outs' in infos:
-                time_outs = torch.tensor(infos['time_outs'], device=self.device)
+                time_outs = infos['time_outs']
                 time_outs = time_outs.reshape(-1, 1)
                 shaped_rewards += self.gamma * model_out['values'] * time_outs.float()
             self.storage.update_data('rewards', n, shaped_rewards)
@@ -130,28 +131,58 @@ class GAIL(PPO):
         self.storage.data_dict['returns'] = returns
 
     def _sample_expert_batch(self, batch_size):
-        N = self.expert_obs.shape[0]
-        idx = torch.randint(0, N, (batch_size,), device=self.device)
-        return self.expert_obs[idx], self.expert_act[idx]
+        num_trajs, length, _ = self.demos["act"].shape
+        # Sample random environment and step indices
+        trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
+        steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
+
+        expert_obs = {k: v[trajs_idx, steps_idx, ...] for k, v in self.demos["obs"].items()}
+        expert_act = self.demos["act"][trajs_idx, steps_idx, ...]
+        expert_next_obs = {k: v[trajs_idx, steps_idx + 1, ...] for k, v in self.demos["obs"].items()}
+        return expert_obs, expert_act, expert_next_obs
+
+    def _sample_batch(self, obs_rollout, actions, batch_size):
+        if len(actions.shape) == 2:
+            actions = actions.unsqueeze(0)
+            obs_rollout = {k: v.unsqueeze(0) for k, v in obs_rollout.items()}
+        num_trajs, length, _ = actions.shape
+
+        if length < 2:
+            raise ValueError("Rollout length must be >= 2 to sample next_obs")
+
+        # Sample random environment and step indices
+        trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
+        steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
+
+        obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in obs_rollout.items()}
+        act = actions[trajs_idx, steps_idx, :].detach()
+        next_obs = {k: v[trajs_idx, steps_idx + 1, ...].detach() for k, v in obs_rollout.items()}
+
+        return obs, act, next_obs
 
     def train_discriminator(self):
         # use the flattened storage prepared in prepare_training
         data = self.storage.data_dict
-        obs = data['obses']['obs']  # [B, obs_dim]
-        act = data['actions']  # [B, act_dim]
+        obs = data['obses']
+        act = data['actions']
 
+        print('Training discriminator...')
         self.discriminator.train()
         losses = []
         for _ in range(self.disc_iters):
             # sample policy batch
-            idx_pol = torch.randint(0, obs.size(0), (self.policy_batch_size,), device=self.device)
-            pol_obs, pol_act = obs[idx_pol], act[idx_pol]
+            pol_obs, pol_act, pol_next_obs = self._sample_batch(obs, act, self.policy_batch_size)
+
             # sample expert batch
-            exp_obs, exp_act = self._sample_expert_batch(self.expert_batch_size)
+            exp_obs, exp_act, exp_next_obs = self._sample_batch(self.demos["obs"], self.demos["act"], self.expert_batch_size)
 
             # forward
-            pol_logits = self.discriminator(pol_obs, pol_act)
-            exp_logits = self.discriminator(exp_obs, exp_act)
+            print("policy")
+            pol_input_1, pol_input_2 = self.get_discriminator_inputs(pol_obs, pol_act, pol_next_obs)
+            pol_logits = self.discriminator(pol_input_1, pol_input_2)
+
+            exp_input_1, exp_input_2 = self.get_discriminator_inputs(exp_obs, exp_act, exp_next_obs)
+            exp_logits = self.discriminator(exp_input_1, exp_input_2)
 
             # labels with optional smoothing
             real_label = 1.0 - self.label_smooth

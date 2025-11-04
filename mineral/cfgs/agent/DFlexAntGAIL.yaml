@@ -5,15 +5,23 @@ seed: ${..seed}
 algo: GAIL
 
 gail:
-  demos_path: "experts/DFlex_hopper_demos64_return5437_len1000.pt"
+  demos:
+    path: ""
+    num: 10
+
   # discriminator network
-  discriminator_mlp:
-    units: [256, 256]
-    norm_type: LayerNorm
-    act_type: SiLU
-  # discriminator optimization
-  discriminator_optim: { type: Adam, kwargs: { lr: 3e-4 } }
-  discriminator_iters: 1
+  input_type: state_action # 'state', 'state_action', or 'state_state'
+  discriminator:
+    iters: 1
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    encoder_kwargs: null
+    optim:
+      type: Adam
+      kwargs: { lr: 3e-4 }
+
   expert_batch_size: 2048
   policy_batch_size: 2048
   reward_scale: 1.0

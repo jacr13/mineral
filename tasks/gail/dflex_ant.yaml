@@ -15,13 +15,20 @@ agent:
       +critic_mlp_kwargs:
         units: [64, 64]
   gail:
-    demos_path: "experts/demos/DFlex_ant_demos128_return9338_len1000.pt"
-    discriminator_mlp:
-      units: [128, 64]
-      norm_type: LayerNorm
-      act_type: SiLU
-    discriminator_optim: { type: Adam, kwargs: { lr: 3e-4 } }
-    discriminator_iters: 1
+    demos:
+      path: "experts/demos/DFlex_ant_demos128_return9338_len1000.pt"
+      num: 10
+    input_type: state_action
+    discriminator:
+      iters: 1
+      mlp_kwargs:
+        units: [128, 64]
+        norm_type: LayerNorm
+        act_type: SiLU
+      encoder_kwargs: null
+      optim:
+        type: Adam
+        kwargs: { lr: 3e-4 }
     expert_batch_size: 2048
     policy_batch_size: 2048
     reward_scale: 1.0
