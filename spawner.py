@@ -146,15 +146,15 @@ def _flatten_value(prefix, value):
             overrides.extend(_flatten_value(f"{prefix}.{key}", sub_value))
         return overrides
     if isinstance(value, list):
-        return [f"\t\t{prefix}={_format_list(value)}"]
-    return [f"\t\t{prefix}={_format_scalar(value)}"]
+        return [f"{prefix}={_format_list(value)}"]
+    return [f"{prefix}={_format_scalar(value)}"]
 
 
-def _build_overrides(config):
+def _build_overrides(config, indent="\t\t"):
     overrides = []
     for key, value in config.items():
         if isinstance(value, dict) and "name" in value:
-            overrides.append(f"\t\t{key}={_format_scalar(value['name'])}")
+            overrides.append(f"{key}={_format_scalar(value['name'])}")
             nested = {k: v for k, v in value.items() if k != "name"}
             for nested_key, nested_value in nested.items():
                 overrides.extend(
@@ -162,6 +162,12 @@ def _build_overrides(config):
                 )
         else:
             overrides.extend(_flatten_value(key, value))
+
+    # check if we have any + to propagate and add indentation to each override for formatting
+    overrides = [
+        f"{indent}+{override.replace('.+', '.')}" if ".+" in override.split("=")[0] else f"{indent}{override}"
+        for override in overrides
+    ]
     return overrides
 
 
