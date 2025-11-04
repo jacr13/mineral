@@ -130,17 +130,6 @@ class GAIL(PPO):
         self.storage.data_dict['values'] = values
         self.storage.data_dict['returns'] = returns
 
-    def _sample_expert_batch(self, batch_size):
-        num_trajs, length, _ = self.demos["act"].shape
-        # Sample random environment and step indices
-        trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
-        steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
-
-        expert_obs = {k: v[trajs_idx, steps_idx, ...] for k, v in self.demos["obs"].items()}
-        expert_act = self.demos["act"][trajs_idx, steps_idx, ...]
-        expert_next_obs = {k: v[trajs_idx, steps_idx + 1, ...] for k, v in self.demos["obs"].items()}
-        return expert_obs, expert_act, expert_next_obs
-
     def _sample_batch(self, obs_rollout, actions, batch_size):
         if len(actions.shape) == 2:
             actions = actions.unsqueeze(0)
@@ -166,7 +155,6 @@ class GAIL(PPO):
         obs = data['obses']
         act = data['actions']
 
-        print('Training discriminator...')
         self.discriminator.train()
         losses = []
         for _ in range(self.disc_iters):
@@ -177,7 +165,6 @@ class GAIL(PPO):
             exp_obs, exp_act, exp_next_obs = self._sample_batch(self.demos["obs"], self.demos["act"], self.expert_batch_size)
 
             # forward
-            print("policy")
             pol_input_1, pol_input_2 = self.get_discriminator_inputs(pol_obs, pol_act, pol_next_obs)
             pol_logits = self.discriminator(pol_input_1, pol_input_2)
 
@@ -212,8 +199,10 @@ class GAIL(PPO):
             self.agent_steps += self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
 
             # discriminator update step(s)
+            print("Training discriminator...")
             disc_metrics = self.train_discriminator()
 
+            print("Training policy...")
             self.set_train()
             results = self.train_epoch()  # reuse PPO training on shaped rewards
             self.storage.data_dict = None
@@ -246,6 +235,10 @@ class GAIL(PPO):
                     **self.metrics.result(prefix='train'),
                 }
                 metrics.update(episode_metrics)
+
+                print(
+                    f"Epoch {self.epoch}, mini-epoch {self.mini_epoch}, steps {self.agent_steps}, loss/total {torch.stack(results['loss/total']).mean().item()}, actor_loss {torch.stack(results['loss/actor']).mean().item()}, critic_loss {torch.stack(results['loss/critic']).mean().item()}, disc_loss {disc_metrics['disc_loss'].item()}, episode_rewards {episode_metrics['train_scores/episode_rewards']}, episode_lengths {episode_metrics['train_scores/episode_lengths']}"
+                )
 
                 self.writer.add(self.agent_steps, metrics)
                 self.writer.write()

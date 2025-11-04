@@ -34,7 +34,7 @@ agent:
     reward_scale: 1.0
     label_smooth: 0.0
 
-logdir: "workdir/DFlexAnt10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)"
+logdir: "workdir/DFlexAnt10M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
   project: rewarped
