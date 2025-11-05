@@ -93,7 +93,9 @@ def boolean_flag(parser, name, default=False, help=None):
     parser.add_argument("--no-" + name, action="store_false", dest=dest)
 
 
-def _quote(value_str: str) -> str:
+def _quote(value_str: str, deployment: str) -> str:
+    if deployment == "local":
+        return f'"{value_str}"'
     escaped = value_str.replace("\\", "\\\\").replace('"', '\\"')
     return f'\\"{escaped}\\"'
 
@@ -108,7 +110,7 @@ def get_gitsha():
     return gitsha
 
 
-def _format_scalar(value):
+def _format_scalar(value, deployment):
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -117,51 +119,51 @@ def _format_scalar(value):
         return "null"
     value_str = str(value)
     if not value_str:
-        return _quote("")
+        return _quote("", deployment)
     if any(char in _SHELL_QUOTE_CHARS for char in value_str):
-        return _quote(value_str)
+        return _quote(value_str, deployment)
     if "$(" in value_str:
-        return _quote(value_str)
+        return _quote(value_str, deployment)
     if any(char.isspace() for char in value_str):
-        return _quote(value_str)
+        return _quote(value_str, deployment)
     return value_str
 
 
-def _format_list(values):
+def _format_list(values, deployment):
     formatted = []
     for item in values:
         if isinstance(item, list):
-            formatted.append(_format_list(item))
+            formatted.append(_format_list(item, deployment))
         elif isinstance(item, dict):
             raise ValueError("Nested dictionaries inside lists are not supported.")
         else:
-            formatted.append(_format_scalar(item))
+            formatted.append(_format_scalar(item, deployment))
     return f"[{','.join(formatted)}]"
 
 
-def _flatten_value(prefix, value):
+def _flatten_value(prefix, value, deployment):
     if isinstance(value, dict):
         overrides = []
         for key, sub_value in value.items():
-            overrides.extend(_flatten_value(f"{prefix}.{key}", sub_value))
+            overrides.extend(_flatten_value(f"{prefix}.{key}", sub_value, deployment))
         return overrides
     if isinstance(value, list):
-        return [f"{prefix}={_format_list(value)}"]
-    return [f"{prefix}={_format_scalar(value)}"]
+        return [f"{prefix}={_format_list(value, deployment)}"]
+    return [f"{prefix}={_format_scalar(value, deployment)}"]
 
 
-def _build_overrides(config, indent="\t\t"):
+def _build_overrides(config, deployment, indent="\t\t"):
     overrides = []
     for key, value in config.items():
         if isinstance(value, dict) and "name" in value:
-            overrides.append(f"{key}={_format_scalar(value['name'])}")
+            overrides.append(f"{key}={_format_scalar(value['name'], deployment)}")
             nested = {k: v for k, v in value.items() if k != "name"}
             for nested_key, nested_value in nested.items():
                 overrides.extend(
-                    _flatten_value(f"{key}.{nested_key}", nested_value),
+                    _flatten_value(f"{key}.{nested_key}", nested_value, deployment),
                 )
         else:
-            overrides.extend(_flatten_value(key, value))
+            overrides.extend(_flatten_value(key, value, deployment))
 
     # check if we have any + to propagate and add indentation to each override for formatting
     overrides = [
@@ -481,7 +483,7 @@ def run(args):
             for key, value in cli_overrides:
                 _set_nested_value(effective_config, key.split("."), value)
 
-            overrides = _build_overrides(effective_config)
+            overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
 
             print(f"Created task script: {script_path}")

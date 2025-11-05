@@ -32,12 +32,14 @@ class GAIL(PPO):
 
         # discriminator
         discriminator_config = self.gail_config.get("discriminator", {})
+        encoder_kwargs = full_cfg.agent.network.get("encoder_kwargs", {})
         act_dim = self.action_dim
         self.discriminator = Discriminator(
             self.obs_space,
             act_dim,
             input_type=self.input_type,
             discriminator_kwargs=discriminator_config,
+            encoder_kwargs=encoder_kwargs,
         ).to(self.device)
 
         disc_optim_kwargs = discriminator_config.get("optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
@@ -259,11 +261,26 @@ class GAIL(PPO):
                 }
                 metrics.update(episode_metrics)
 
-                print(
-                    f"Epoch {self.epoch}, mini-epoch {self.mini_epoch}, steps {self.agent_steps}, loss/total {torch.stack(results['loss/total']).mean().item()}, actor_loss {torch.stack(results['loss/actor']).mean().item()}, critic_loss {torch.stack(results['loss/critic']).mean().item()}, disc_loss {disc_metrics['disc_loss'].item()}, episode_rewards {episode_metrics['train_scores/episode_rewards']}, episode_lengths {episode_metrics['train_scores/episode_lengths']}"
-                )
-
                 self.writer.add(self.agent_steps, metrics)
                 self.writer.write()
 
                 self._checkpoint_save(metrics['train_scores/episode_rewards'])
+
+                if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
+                    print(
+                        f'Epochs: {self.epoch + 1} |',
+                        f'Agent Steps: {int(self.agent_steps):,} |',
+                        f'Best: {self.best_stat if self.best_stat is not None else -float("inf"):.2f} |',
+                        'Stats:',
+                        f'ep_rewards {episode_metrics["train_scores/episode_rewards"]:.2f},',
+                        f'ep_lengths {episode_metrics["train_scores/episode_lengths"]:.2f},',
+                        f'last_sps {timings["lastrate"]:.2f},',
+                        f'ExploreEnv_time {timings["agent.play_steps/total"] / 60:.1f} min,',
+                        f'UpdateRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
+                        f'SPS {timings["totalrate"]:.2f} |',
+                    )
+
+        timings = self.timer.stats(step=self.agent_steps)
+        print(timings)
+
+        self.save(os.path.join(self.ckpt_dir, 'final.pth'))

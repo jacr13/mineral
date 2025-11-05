@@ -1,15 +1,30 @@
 ﻿defaults:
-  - DFlexAntPPO
+  - RewarpedJumperPPO
   - PointNet
   - _self_
 
-network:
-  encoder_kwargs:
-    weight_init_pcd: orthogonal
-    weight_init_mlp: orthogonal
+seed: ${..seed}
+algo: GAIL
 
-ppo:
-  max_agent_steps: 6.2e6
-  # max_agent_steps: 4.1e6
-  # max_agent_steps: 2.05e6
-  minibatch_size: 1024
+gail:
+  demos:
+    path: ""
+    num: 10
+
+  # discriminator network
+  input_type: state_action # 'state', 'state_action', or 'state_state'
+  disc_update_freq: 3 # frequency (in epochs) to update discriminator
+  discriminator:
+    iters: 1
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    optim:
+      type: Adam
+      kwargs: { lr: 3e-4 }
+
+  expert_batch_size: 2048
+  policy_batch_size: 2048
+  reward_scale: 1.0
+  label_smooth: 0.0

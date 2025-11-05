@@ -27,7 +27,6 @@ agent:
         units: [256, 128]
         norm_type: LayerNorm
         act_type: SiLU
-      encoder_kwargs: null
       optim:
         type: Adam
         kwargs: { lr: 3e-4 }
