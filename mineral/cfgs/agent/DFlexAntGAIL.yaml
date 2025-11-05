@@ -11,6 +11,7 @@ gail:
 
   # discriminator network
   input_type: state_action # 'state', 'state_action', or 'state_state'
+  disc_update_freq: 3 # frequency (in epochs) to update discriminator
   discriminator:
     iters: 1
     mlp_kwargs:

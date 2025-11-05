@@ -1,28 +1,30 @@
-﻿task:
-  name: DFlex
+task:
+  name: Rewarped
   env:
-    env_name: ant
+    env_name: Jumper
+    env_suite: gradsim
     no_grad: True
 
 agent:
-  name: DFlexAntGAIL
-  ppo:
-    max_agent_steps: 10000000
+  name: RewarpedJumperGAIL
   network:
+    encoder_kwargs:
+      mlp_keys: "com_q|com_qd|actions"
     actor_critic_kwargs:
       mlp_kwargs:
-        units: [128, 64, 32]
+        units: [512, 256]
       +critic_mlp_kwargs:
-        units: [64, 64]
+        units: [256, 256]
+
   gail:
     demos:
-      path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
+      path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
       num: 10
     input_type: state_action
     discriminator:
       iters: 1
       mlp_kwargs:
-        units: [128, 64]
+        units: [256, 128]
         norm_type: LayerNorm
         act_type: SiLU
       encoder_kwargs: null
@@ -34,12 +36,16 @@ agent:
     reward_scale: 1.0
     label_smooth: 0.0
 
-logdir: "workdir/DFlexAnt10M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+logdir: "workdir/RewarpedJumper6M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
 wandb:
   mode: online
   project: rewarped
 run: train_eval
-seed: 100
+seed: 1300
 
 sweep:
   seed: [100, 110, 120, 130, 140]
+
+spawner:
+  runtime: "2-00:00:00"

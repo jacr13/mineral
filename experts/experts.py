@@ -2,7 +2,7 @@ import os
 
 import torch
 
-folder = "dflex"
+folder = "experts/dflex"
 
 for path in os.listdir(folder):
     full_path = os.path.join(folder, path)
@@ -72,9 +72,20 @@ for path in os.listdir(folder):
         episode_rew.append(padded_rew)
 
         done = data[i]["done"]
-        padded_done = torch.zeros((max_t, *done.shape[1:]), dtype=done.dtype)
+        padded_done = torch.ones((max_t, *done.shape[1:]), dtype=done.dtype)
         padded_done[:t] = done
         episode_done.append(padded_done)
+
+    episode_lens.reverse()
+    episode_act.reverse()
+    episode_rew.reverse()
+    episode_done.reverse()
+
+    for k in episode_obs.keys():
+        episode_obs[k].reverse()
+        episode_next_obs[k].reverse()
+
+    print(episode_lens)
 
     ep_obs = {k: torch.stack(v) for k, v in episode_obs.items()}
     ep_next_obs = {k: torch.stack(v) for k, v in episode_next_obs.items()}
@@ -97,7 +108,7 @@ for path in os.listdir(folder):
 
     print(ep_rew.sum(-1).mean())
 
-    os.makedirs("demos", exist_ok=True)
+    os.makedirs("experts/demos", exist_ok=True)
     avg_len = int(ep_len.float().mean().item())
     cleaned_path = (
         "_".join(path.split("/")[-1].split("_")[:2])
@@ -116,5 +127,5 @@ for path in os.listdir(folder):
             # "joint_q": ep_joint_q,
             # "joint_qd": ep_joint_qd,
         },
-        f"demos/{cleaned_path}",
+        f"experts/demos/{cleaned_path}",
     )

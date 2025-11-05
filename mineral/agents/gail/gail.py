@@ -26,6 +26,7 @@ class GAIL(PPO):
         n_envs = self.gail_config.demos.num
         self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
         self.demos["act"] = self.demos["act"][:n_envs, ...]
+        self.demos["done"] = self.demos["done"][:n_envs, ...]
         self.demos["rew"] = self.demos["rew"][:n_envs, ...]
         self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
 
@@ -130,7 +131,7 @@ class GAIL(PPO):
         self.storage.data_dict['values'] = values
         self.storage.data_dict['returns'] = returns
 
-    def _sample_batch(self, obs_rollout, actions, batch_size):
+    def _sample_batch(self, obs_rollout, actions, batch_size, dones=None):
         if len(actions.shape) == 2:
             actions = actions.unsqueeze(0)
             obs_rollout = {k: v.unsqueeze(0) for k, v in obs_rollout.items()}
@@ -139,9 +140,27 @@ class GAIL(PPO):
         if length < 2:
             raise ValueError("Rollout length must be >= 2 to sample next_obs")
 
-        # Sample random environment and step indices
-        trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
-        steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
+        if dones is not None:
+            # Ensure shape consistency
+            if len(dones.shape) == 1:
+                dones = dones.unsqueeze(0)
+            assert dones.shape[:2] == (num_trajs, length), f"dones must have shape ({num_trajs}, {length}), got {dones.shape}"
+
+            # Valid steps are those where 'done' is False *and* next step exists
+            valid_mask = ~dones[:, :-1]  # (num_trajs, length-1)
+            valid_indices = valid_mask.nonzero(as_tuple=False)  # (N_valid, 2)
+
+            if len(valid_indices) == 0:
+                raise ValueError("No valid (obs, next_obs) pairs found before dones.")
+
+            # Sample from valid indices
+            sample_idx = torch.randint(0, len(valid_indices), (batch_size,), device=self.device)
+            trajs_idx = valid_indices[sample_idx, 0]
+            steps_idx = valid_indices[sample_idx, 1]
+        else:
+            # Uniform sampling over all steps except last
+            trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
+            steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
 
         obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in obs_rollout.items()}
         act = actions[trajs_idx, steps_idx, :].detach()
@@ -162,7 +181,9 @@ class GAIL(PPO):
             pol_obs, pol_act, pol_next_obs = self._sample_batch(obs, act, self.policy_batch_size)
 
             # sample expert batch
-            exp_obs, exp_act, exp_next_obs = self._sample_batch(self.demos["obs"], self.demos["act"], self.expert_batch_size)
+            exp_obs, exp_act, exp_next_obs = self._sample_batch(
+                self.demos["obs"], self.demos["act"], self.expert_batch_size, dones=self.demos["done"]
+            )
 
             # forward
             pol_input_1, pol_input_2 = self.get_discriminator_inputs(pol_obs, pol_act, pol_next_obs)
@@ -194,13 +215,15 @@ class GAIL(PPO):
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
 
+            print("Collecting experience...")
             self.set_eval()
             self.play_steps()
             self.agent_steps += self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
 
             # discriminator update step(s)
-            print("Training discriminator...")
-            disc_metrics = self.train_discriminator()
+            if self.epoch % self.gail_config.get("disc_update_freq", 1) == 0:
+                print("Training discriminator...")
+                disc_metrics = self.train_discriminator()
 
             print("Training policy...")
             self.set_train()
