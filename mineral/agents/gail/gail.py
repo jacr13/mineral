@@ -173,7 +173,11 @@ class GAIL(PPO):
         act = data['actions']
 
         self.discriminator.train()
-        losses = []
+        losses = {
+            "total": [],
+            "real": [],
+            "fake": [],
+        }
         for _ in range(self.disc_iters):
             # sample policy batch
             pol_obs, pol_act, pol_next_obs = self._sample_batch(obs, act, self.policy_batch_size)
@@ -204,10 +208,16 @@ class GAIL(PPO):
             self.disc_optim.zero_grad()
             loss.backward()
             self.disc_optim.step()
-            losses.append(loss.detach())
+            losses["total"].append(loss.detach())
+            losses["real"].append(loss_real.detach())
+            losses["fake"].append(loss_fake.detach())
 
         self.discriminator.eval()
-        return {"disc_loss": torch.stack(losses).mean() if len(losses) > 0 else torch.tensor(0.0)}
+        return {
+            "discriminator/total": torch.stack(losses["total"]).mean() if len(losses["total"]) > 0 else torch.tensor(0.0),
+            "discriminator/real": torch.stack(losses["real"]).mean() if len(losses["real"]) > 0 else torch.tensor(0.0),
+            "discriminator/fake": torch.stack(losses["fake"]).mean() if len(losses["fake"]) > 0 else torch.tensor(0.0),
+        }
 
     def train(self):
         obs = self.env.reset()

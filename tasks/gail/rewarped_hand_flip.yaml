@@ -1,0 +1,49 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Flip
+    env_suite: dexdeform
+    no_grad: true
+agent:
+  name: RewarpedJumperGAIL
+  network:
+    encoder_kwargs:
+      mlp_keys: "com_q|joint_q"
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+      +critic_mlp_kwargs:
+        units: [256, 256]
+  gail:
+    demos:
+      path: ""
+      n_trajs: 10
+      subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
+    input_type: state_action
+    disc_update_freq: 5
+    discriminator:
+      iters: 1
+      mlp_kwargs:
+        units: [256, 128]
+        norm_type: LayerNorm
+        act_type: SiLU
+      optim:
+        type: Adam
+        kwargs: { lr: 3e-4 }
+    expert_batch_size: 2048
+    policy_batch_size: 2048
+    reward_scale: 1.0
+    label_smooth: 0.0
+logdir: "workdir/DexDeformFlip6M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1400
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
+
+spawner:
+  runtime: "2-00:00:00"
