@@ -1,0 +1,35 @@
+task:
+  name: Rewarped
+  env:
+    env_name: RollingPin
+    env_suite: plasticinelab
+    no_grad: true
+agent:
+  name: RewarpedJumperSAC
+  network:
+    encoder_kwargs:
+      mlp_keys: "com_q|joint_q"
+    actor_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+  sac:
+    target_entropy_scalar: 0.5
+    tau: 0.005
+    max_agent_steps: 4100000
+logdir: "workdir/RewarpedRollingPin4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1200
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
+
+spawner:
+  skip: true
+  runtime: "2-00:00:00"

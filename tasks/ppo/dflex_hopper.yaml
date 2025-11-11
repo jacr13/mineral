@@ -1,0 +1,24 @@
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+agent:
+  name: DFlexAntPPO
+  ppo:
+    max_agent_steps: 10000000
+  network:
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+      critic_mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexHopper10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 130, 140]

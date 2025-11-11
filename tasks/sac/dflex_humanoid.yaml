@@ -1,0 +1,26 @@
+task:
+  name: DFlex
+  env:
+    env_name: humanoid
+    no_grad: true
+agent:
+  name: DFlexAntSAC
+  sac:
+    max_agent_steps: 10000000
+    target_entropy_scalar: 0.5
+    tau: 0.005
+  network:
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [256, 128]
+      critic_mlp_kwargs:
+        units: [128, 128]
+logdir: "workdir/DFlexHumanoid10M-SAC/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 110
+
+sweep:
+  seed: [100, 110, 120, 130, 140]

@@ -1,0 +1,26 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Ant
+    env_suite: dflex
+agent:
+  name: DFlexAntBPTT
+  bptt:
+    max_epochs: 2000
+    max_agent_steps: 4100000
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+logdir: "workdir/RewarpedAnt4M-BPTT/$(date +%Y%m%d-%H%M%S)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1000
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
+
+spawner:
+  runtime: "2-00:00:00"

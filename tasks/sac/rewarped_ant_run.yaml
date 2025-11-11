@@ -1,0 +1,31 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Ant
+    env_suite: dflex
+    no_grad: true
+agent:
+  name: DFlexAntSAC
+  sac:
+    max_agent_steps: 4100000
+    target_entropy_scalar: 0.5
+    tau: 0.005
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/RewarpedAnt4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1000
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
+
+spawner:
+  runtime: "2-00:00:00"
