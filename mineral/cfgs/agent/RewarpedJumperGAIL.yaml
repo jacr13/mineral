@@ -9,7 +9,8 @@ algo: GAIL
 gail:
   demos:
     path: ""
-    num: 10
+    n_trajs: 10
+    subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
   # discriminator network
   input_type: state_action # 'state', 'state_action', or 'state_state'

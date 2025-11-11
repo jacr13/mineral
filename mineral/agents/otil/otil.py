@@ -11,6 +11,7 @@ import torch.nn as nn
 
 from ... import nets
 from ...common import normalizers
+from ...common.demos import get_demos
 from ...common.timer import Timer
 from ...common.tracker import Tracker
 from ..agent import Agent
@@ -40,14 +41,8 @@ class OTIL(Agent):
         self.max_epochs = self.otil_config.get("max_epochs", 0)  # set to 0 to disable and track by max_agent_steps instead
 
         # demos
-        demos_path = self.otil_config.demos.path
-        assert os.path.exists(demos_path), f"Demos path: {demos_path} does not exist"
-        self.demos = torch.load(demos_path, map_location=self.device)
-
-        n_envs = self.otil_config.demos.num
-        self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
-        self.demos["rew"] = self.demos["rew"][:n_envs, :]
-        self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
+        demos_config = self.otil_config.get("demos", {})
+        self.demos = get_demos(self.device, **demos_config)
 
         # --- Normalizers ---
         if self.tanh_clamp:  # legacy
@@ -389,7 +384,7 @@ class OTIL(Agent):
                     f"ep_lengths {mean_episode_lengths:.2f},",
                     f'grad_norm_before_clip/actor {metrics["train_stats/grad_norm_before_clip/actor"]:.2f},',
                     f'grad_norm_after_clip/actor {metrics["train_stats/grad_norm_after_clip/actor"]:.2f},',
-                    f"expected return {self.expert_return:.2f}",
+                    f"expected return {self.demos['expected_return']:.2f}",
                     "\b\b |",
                 )
 

@@ -19,8 +19,10 @@ agent:
   gail:
     demos:
       path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
-      num: 10
+      n_trajs: 10
+      subsample_factor: 20 # 1 means no subsampling, >1 means subsample by this factor
     input_type: state_action
+    disc_update_freq: 5
     discriminator:
       iters: 1
       mlp_kwargs:

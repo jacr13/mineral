@@ -25,7 +25,8 @@ otil:
   num_actors: ${...task.env.numEnvs}
   demos:
     path: ""
-    num: 10
+    n_trajs: 10
+    subsample_factor: 0 # 0 means no subsampling, >1 means subsample by this factor
 
   reward_shaper:
     fn: scale

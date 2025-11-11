@@ -3,6 +3,7 @@ import os
 import torch
 import torch.nn.functional as F
 
+from ...common.demos import get_demos
 from ..ppo.ppo import PPO
 from .models import Discriminator
 
@@ -19,16 +20,8 @@ class GAIL(PPO):
         self.input_type = self.gail_config.input_type
 
         # demos
-        demos_path = self.gail_config.demos.path
-        assert os.path.exists(demos_path), f"Demos path: {demos_path} does not exist"
-        self.demos = torch.load(demos_path, map_location=self.device)
-
-        n_envs = self.gail_config.demos.num
-        self.demos["obs"] = {k: v[:n_envs, ...] for k, v in self.demos["obs"].items()}
-        self.demos["act"] = self.demos["act"][:n_envs, ...]
-        self.demos["done"] = self.demos["done"][:n_envs, ...]
-        self.demos["rew"] = self.demos["rew"][:n_envs, ...]
-        self.expert_return = self.demos["rew"].sum(dim=1).mean().item()
+        demos_config = self.gail_config.get("demos", {})
+        self.demos = get_demos(self.device, **demos_config)
 
         # discriminator
         discriminator_config = self.gail_config.get("discriminator", {})
@@ -133,7 +126,7 @@ class GAIL(PPO):
         self.storage.data_dict['values'] = values
         self.storage.data_dict['returns'] = returns
 
-    def _sample_batch(self, obs_rollout, actions, batch_size, dones=None):
+    def _sample_batch(self, obs_rollout, actions, batch_size, next_obs_rollout=None, dones=None):
         if len(actions.shape) == 2:
             actions = actions.unsqueeze(0)
             obs_rollout = {k: v.unsqueeze(0) for k, v in obs_rollout.items()}
@@ -166,7 +159,10 @@ class GAIL(PPO):
 
         obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in obs_rollout.items()}
         act = actions[trajs_idx, steps_idx, :].detach()
-        next_obs = {k: v[trajs_idx, steps_idx + 1, ...].detach() for k, v in obs_rollout.items()}
+        if next_obs_rollout is None:
+            next_obs = {k: v[trajs_idx, steps_idx + 1, ...].detach() for k, v in obs_rollout.items()}
+        else:
+            next_obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in next_obs_rollout.items()}
 
         return obs, act, next_obs
 
@@ -184,7 +180,11 @@ class GAIL(PPO):
 
             # sample expert batch
             exp_obs, exp_act, exp_next_obs = self._sample_batch(
-                self.demos["obs"], self.demos["act"], self.expert_batch_size, dones=self.demos["done"]
+                self.demos["obs"],
+                self.demos["act"],
+                self.expert_batch_size,
+                dones=self.demos["done"],
+                next_obs_rollout=self.demos["next_obs"],
             )
 
             # forward
@@ -278,6 +278,7 @@ class GAIL(PPO):
                         f'ExploreEnv_time {timings["agent.play_steps/total"] / 60:.1f} min,',
                         f'UpdateRL_time {timings["agent.train_epoch/total"] / 60:.1f} min,',
                         f'SPS {timings["totalrate"]:.2f} |',
+                        f"Expert return: {self.demos['expert_return']:.2f}",
                     )
 
         timings = self.timer.stats(step=self.agent_steps)
