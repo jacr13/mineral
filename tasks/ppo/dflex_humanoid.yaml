@@ -11,7 +11,7 @@ agent:
     actor_critic_kwargs:
       mlp_kwargs:
         units: [256, 128]
-      critic_mlp_kwargs:
+      +critic_mlp_kwargs:
         units: [128, 128]
 logdir: "workdir/DFlexHumanoid10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:

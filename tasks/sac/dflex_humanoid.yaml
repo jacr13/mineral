@@ -7,7 +7,7 @@ agent:
   name: DFlexAntSAC
   sac:
     max_agent_steps: 10000000
-    target_entropy_scalar: 0.5
+    +target_entropy_scalar: 0.5
     tau: 0.005
   network:
     actor_critic_kwargs:

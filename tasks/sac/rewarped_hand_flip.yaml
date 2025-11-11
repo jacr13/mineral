@@ -16,7 +16,7 @@ agent:
       mlp_kwargs:
         units: [256, 256]
   sac:
-    target_entropy_scalar: 0.5
+    +target_entropy_scalar: 0.5
     tau: 0.005
 logdir: "workdir/RewarpedDexDeformFlip6M-SAC/$(date +%Y%m%d-%H%M%S.%2N)"
 num_envs: 32

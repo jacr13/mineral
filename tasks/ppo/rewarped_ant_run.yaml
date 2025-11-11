@@ -12,7 +12,7 @@ agent:
     actor_critic_kwargs:
       mlp_kwargs:
         units: [128, 64, 32]
-      critic_mlp_kwargs:
+      +critic_mlp_kwargs:
         units: [64, 64]
 logdir: "workdir/RewarpedAnt4M-PPO/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
