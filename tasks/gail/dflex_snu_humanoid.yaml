@@ -16,14 +16,14 @@ agent:
   gail:
     demos:
       path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
-      n_trajs: 10
+      n_trajs: 8
       subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
     input_type: state_action
     disc_update_freq: 5
     discriminator:
       iters: 1
       mlp_kwargs:
-        units: [128, 64]
+        units: [256, 256]
         norm_type: LayerNorm
         act_type: SiLU
       optim:
