@@ -209,13 +209,16 @@ def _parse_runtime(runtime: str):
 
 
 def _select_partition(runtime_td, device):
-    partition = CALIBERS[0]["partition"][device]
-    for rule in CALIBERS:
-        rule_td, _ = _parse_runtime(rule["time"])
-        if rule_td <= runtime_td:
-            partition = rule["partition"][device]
-        else:
-            break
+    """Selects the appropriate partition based on the requested runtime and device type."""
+    time_diff = [_parse_runtime(rule["time"])[0] - runtime_td for rule in CALIBERS]
+
+    # Filter for positive values and get their indices
+    positive_indices = [i for i, td in enumerate(time_diff) if td >= timedelta(seconds=0)]
+    try:
+        idx = min(positive_indices, key=lambda i: time_diff[i])
+        partition = CALIBERS[idx]["partition"][device]
+    except ValueError as err:
+        raise ValueError(f"Requested runtime {runtime_td} exceeds maximum allowed limit.") from err
     return partition
 
 

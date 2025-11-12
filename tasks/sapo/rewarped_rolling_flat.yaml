@@ -32,5 +32,5 @@ sweep:
   seed: [100, 110, 120, 130, 140]
 
 spawner:
-  skip: true
+  skip: false
   runtime: "2-00:00:00"
