@@ -307,7 +307,7 @@ def _write_slurm_script(script_path, name, command, args):
     runtime_td, duration = _parse_runtime(args.runtime)
     partition = args.partition or _select_partition(runtime_td, args.device)
     num_workers = 1
-    memory = 32
+    memory = args.memory
 
     modules = ""
     if args.docker:
@@ -538,6 +538,7 @@ if __name__ == "__main__":
         default=None,
         help="override slurm partition (e.g., private-kalousis-gpu)",
     )
+    parser.add_argument("--memory", type=str, default="8", help="specify the cpu memory in gb")
     parser.add_argument("--gpu_memory", type=str, default=None, help="specify the gpu memory in gb")
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
