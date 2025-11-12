@@ -33,8 +33,8 @@ CALIBERS = [
         },
     },
 ]
-
-SBATCH_GPU = "#SBATCH --gres=gpu:1"
+SBATCH_GPU = "#SBATCH --gres=gpu:1{extra_gpu_params}"
+SBATCH_GPU_MEMORY = ",VramPerGpu:{gpu_memory}G"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
@@ -322,13 +322,17 @@ def _write_slurm_script(script_path, name, command, args):
         )
         modules = "export APPTAINERENV_UID=1000\nexport APPTAINERENV_GID=1000"
 
+    extra_gpu_params = ""
+    if args.gpu_memory is not None:
+        extra_gpu_params += SBATCH_GPU_MEMORY.format(gpu_memory=args.gpu_memory)
+
     script_content = SBATCH_FILE_CONTENT.format(
         name=name,
         partition=partition,
         num_workers=num_workers,
         duration=duration,
         memory=memory,
-        extra_params=SBATCH_GPU,
+        extra_params=SBATCH_GPU.format(extra_gpu_params=extra_gpu_params),
         modules=modules,
         command=command,
     )
@@ -534,6 +538,7 @@ if __name__ == "__main__":
         default=None,
         help="override slurm partition (e.g., private-kalousis-gpu)",
     )
+    parser.add_argument("--gpu_memory", type=str, default=None, help="specify the gpu memory in gb")
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")

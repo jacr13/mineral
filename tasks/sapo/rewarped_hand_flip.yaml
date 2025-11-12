@@ -32,3 +32,4 @@ sweep:
 spawner:
   skip: false
   runtime: "2-00:00:00"
+  gpu_memory: 22
