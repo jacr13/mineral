@@ -3,7 +3,7 @@ task:
   env:
     env_name: humanoid
 agent:
-  name: DFlexAntSAPO
+  name: DFlexAntOTIL
   otil:
     max_epochs: 5000
     max_agent_steps: 10000000
