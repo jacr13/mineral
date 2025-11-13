@@ -384,7 +384,7 @@ class OTIL(Agent):
                     f"ep_lengths {mean_episode_lengths:.2f},",
                     f'grad_norm_before_clip/actor {metrics["train_stats/grad_norm_before_clip/actor"]:.2f},',
                     f'grad_norm_after_clip/actor {metrics["train_stats/grad_norm_after_clip/actor"]:.2f},',
-                    f"expected return {self.demos['expected_return']:.2f}",
+                    f"expert return {self.demos['expert_return']:.2f}",
                     "\b\b |",
                 )
 

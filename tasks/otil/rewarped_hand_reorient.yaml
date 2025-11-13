@@ -8,6 +8,9 @@ agent:
   otil:
     max_epochs: 2000
     max_agent_steps: 4100000
+    demos:
+      path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
+      n_trajs: 8
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995

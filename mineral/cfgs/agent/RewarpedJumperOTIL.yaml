@@ -11,6 +11,15 @@ network:
   actor_kwargs:
     weight_init_last_layers: False
 
+  critic: EnsembleCritic
+  critic_kwargs:
+    weight_init: orthogonalg1
+    mlp_kwargs:
+      units: [64, 64]
+      norm_type: LayerNorm
+      act_type: SiLU
+    n_critics: 2
+
 otil:
   max_epochs: 6000
   max_agent_steps: 6.2e6

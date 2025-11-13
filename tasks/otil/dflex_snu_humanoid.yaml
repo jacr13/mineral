@@ -7,6 +7,9 @@ agent:
   otil:
     max_epochs: 5000
     max_agent_steps: 10000000
+    demos:
+      path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+      n_trajs: 8
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995

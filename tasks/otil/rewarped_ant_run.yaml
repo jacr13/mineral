@@ -8,6 +8,9 @@ agent:
   otil:
     max_epochs: 2000
     max_agent_steps: 4100000
+    demos:
+      path: "experts/demos/Rewarped_Ant_demos128_return4893_len1000.pt"
+      n_trajs: 8
   network:
     actor_kwargs:
       mlp_kwargs:
