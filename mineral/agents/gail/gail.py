@@ -164,6 +164,13 @@ class GAIL(PPO):
         else:
             next_obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in next_obs_rollout.items()}
 
+        if self.normalize_input:
+            # print("Normalizing discriminator inputs")
+            # print("Before normalization:")
+            # print(obs['obs'][:2])
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+            next_obs = {k: self.obs_rms[k].normalize(v) for k, v in next_obs.items()}
+
         return obs, act, next_obs
 
     def train_discriminator(self):
@@ -198,6 +205,17 @@ class GAIL(PPO):
             exp_input_1, exp_input_2 = self.get_discriminator_inputs(exp_obs, exp_act, exp_next_obs)
             exp_logits = self.discriminator(exp_input_1, exp_input_2)
 
+            # print(pol_input_1["obs"].shape, pol_input_2.shape)
+            # print(exp_input_1["obs"].shape, exp_input_2.shape)
+
+            # print(pol_input_1["obs"], pol_input_2[:2])
+            # print(exp_input_1["obs"], exp_input_2[:2])
+
+            # print("exp_logits:", exp_logits[:10].detach())
+            # print("pol_logits:", pol_logits[:10].detach())
+
+            # input("continue")
+
             # labels with optional smoothing
             real_label = 1.0 - self.label_smooth
             fake_label = 0.0 + self.label_smooth
@@ -214,9 +232,9 @@ class GAIL(PPO):
 
         self.discriminator.eval()
         return {
-            "discriminator/total": torch.stack(losses["total"]).mean() if len(losses["total"]) > 0 else torch.tensor(0.0),
-            "discriminator/real": torch.stack(losses["real"]).mean() if len(losses["real"]) > 0 else torch.tensor(0.0),
-            "discriminator/fake": torch.stack(losses["fake"]).mean() if len(losses["fake"]) > 0 else torch.tensor(0.0),
+            "discriminator/total": torch.stack(losses["total"]).mean().item() if len(losses["total"]) > 0 else 0.0,
+            "discriminator/real": torch.stack(losses["real"]).mean().item() if len(losses["real"]) > 0 else 0.0,
+            "discriminator/fake": torch.stack(losses["fake"]).mean().item() if len(losses["fake"]) > 0 else 0.0,
         }
 
     def train(self):
@@ -232,6 +250,7 @@ class GAIL(PPO):
             self.play_steps()
             self.agent_steps += self.batch_size if not self.multi_gpu else self.batch_size * self.rank_size
 
+            disc_metrics = {}
             # discriminator update step(s)
             if self.epoch % self.gail_config.get("disc_update_freq", 1) == 0:
                 print("Training discriminator...")
@@ -252,7 +271,6 @@ class GAIL(PPO):
                         'mini_epoch': self.mini_epoch,
                         'last_lr': self.last_lr,
                         'e_clip': self.e_clip,
-                        'disc_loss': disc_metrics["disc_loss"].item(),
                     }
                 )
                 metrics = {f'train_stats/{k}': v for k, v in metrics.items()}
@@ -268,6 +286,7 @@ class GAIL(PPO):
                     'train_scores/episode_lengths': self.metrics.episode_trackers['lengths'].mean(),
                     'train_scores/num_episodes': self.metrics.num_episodes,
                     **self.metrics.result(prefix='train'),
+                    **disc_metrics,
                 }
                 metrics.update(episode_metrics)
 
