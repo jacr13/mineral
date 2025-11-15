@@ -100,16 +100,6 @@ def _quote(value_str: str, deployment: str) -> str:
     return f'\\"{escaped}\\"'
 
 
-def get_gitsha():
-    _gitsha = "gitSHA_{}"
-    try:
-        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
-        gitsha = _gitsha.format(out.strip().decode("ascii"))
-    except OSError:
-        gitsha = "noGitSHA"
-    return gitsha
-
-
 def _format_scalar(value, deployment):
     if isinstance(value, bool):
         return "true" if value else "false"

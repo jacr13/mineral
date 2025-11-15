@@ -147,7 +147,7 @@ def replace_batch_norm_to_global(args):
     return args
 
 
-def create_uuid(*args, **kwargs):
+def create_uuid(*args, gitsha=False, **kwargs):
     """Builds the uuid of the experiment."""
     uuid = uuid_basis(*args, **kwargs)
     config = kwargs.get("config", None)
@@ -162,8 +162,10 @@ def create_uuid(*args, **kwargs):
     assert task is not None, "task must be specified"
 
     # Enrich the uuid with extra information
-    uuid = f"{uuid}.{algo}.{get_gitsha()}.{task}"
-    uuid += f".seed{str(seed).zfill(2)}"
+    uuid = f"{uuid}.{algo}"
+    if gitsha:
+        uuid += f".{get_gitsha()}"
+    uuid += f".{task}.seed{str(seed).zfill(2)}"
     return uuid
 
 
