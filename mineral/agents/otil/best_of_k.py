@@ -72,6 +72,7 @@ class BestOfKConfig:
     huber_delta: float = 1.0
     # Optional action weighting (assume last half are actions)
     action_weight: float = 1.0
+    return_per_step_costs: bool = False
 
 
 # ---------- Criterion base + implementations ----------
@@ -81,7 +82,8 @@ class BestOfKCriterion(nn.Module):
       exp_f: [B, K, T, d_feat]
 
     Return:
-      Lk: [B, K]   (per-crop costs)
+      Either Lk: [B, K]   (per-crop costs)
+      or (Lk, info_dict)
     """
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor) -> torch.Tensor:
@@ -114,16 +116,18 @@ class OTSinkhornCriterion(BestOfKCriterion):
         else:
             return pairwise_sqdist(X, Y)
 
-    def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor) -> torch.Tensor:
+    def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
         # tile sim to [B*K, T, d], flatten exp to same
         sim_f_tiled = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
         exp_f_flat = exp_f.contiguous().view(B * K, T, d)
 
         C = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
-        P = log_sinkhorn(C, eps=self.eps, iters=self.iters).detach()  # [B*K, T, T]
-        Lk = (P * C).sum(dim=(-1, -2)).view(B, K)  # [B, K]
-        return Lk
+        P = log_sinkhorn(C, eps=self.eps, iters=self.iters)  # [B*K, T, T]
+        plan_costs = (P * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
+        Lk = plan_costs.sum(dim=-1)  # [B, K]
+        info = {"per_step_costs": plan_costs}
+        return Lk, info
 
 
 class SequenceRegressionCriterion(BestOfKCriterion):
@@ -297,11 +301,20 @@ class BestOfK(nn.Module):
         exp_f = exp_f.view(B, cfg.K, T, -1)  # [B,K,T,d’]
 
         # ---- Per-crop costs via pluggable criterion ----
-        Lk = self.criterion(sim_f, exp_f)  # [B,K]
+        crit_out = self.criterion(sim_f, exp_f)
+        if isinstance(crit_out, tuple):
+            Lk, crit_info = crit_out
+        else:
+            Lk, crit_info = crit_out, {}
 
         # ---- Softmin over K ----
         tau = cfg.tau
         loss = -tau * torch.logsumexp(-Lk / tau, dim=1).mean()
+        weighted_per_step_costs = None
+        if cfg.return_per_step_costs and "per_step_costs" in crit_info:
+            per_step_costs = crit_info["per_step_costs"]  # [B,K,T]
+            weights = torch.softmax(-Lk / tau, dim=1).unsqueeze(-1)
+            weighted_per_step_costs = (weights * per_step_costs).sum(dim=1)  # [B,T]
 
         info = {
             "Lk": Lk.detach(),
@@ -310,6 +323,8 @@ class BestOfK(nn.Module):
             "starts": starts.detach(),
             "best_idx": Lk.argmin(dim=1).detach(),
         }
+        if weighted_per_step_costs is not None and cfg.return_per_step_costs:
+            info["per_step_costs"] = weighted_per_step_costs
         if expert.dim() == 3 and expert.shape[0] != B:
             info["expert_ids"] = expert_ids.detach() if expert_ids is not None else None
 

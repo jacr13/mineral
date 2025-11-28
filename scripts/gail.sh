@@ -2,7 +2,7 @@ git pull
 
 python spawner.py \
     --task_name gail \
-    --no-docker \
+    --docker \
     --docker_image /home/users/c/candidor/docker/mineral.sif \
     --deployment local  \
     --runtime 12h \
@@ -10,4 +10,4 @@ python spawner.py \
     --no-sweep \
     --sweep_max 10 \
     --set wandb.project=test-rewarped-local \
-    --deploy_now 
+    --no-deploy_now 
