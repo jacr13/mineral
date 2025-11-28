@@ -7,8 +7,8 @@ python spawner.py \
     --deployment local  \
     --runtime 12h \
     --no-cleanup \
-    --no-sweep \
+    --sweep \
     --sweep_max 10 \
-    --set wandb.project=test-rewarped-local \
+    --set wandb.project=test-otil-local \
     --env_bundle dflex \
     --no-deploy_now

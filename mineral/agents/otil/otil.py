@@ -27,7 +27,6 @@ class OTIL(SHAC):
         demos_config = self.otil_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
-        ot_params = dict(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
         bok_params = dict(
             T=self.horizon_len,
             K=8,
@@ -35,6 +34,7 @@ class OTIL(SHAC):
         )
 
         if self.imitation_loss_type == "ot":
+            ot_params = dict(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
             criterion = OTSinkhornCriterion(**ot_params)
         elif self.imitation_loss_type == "l2":
             criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
@@ -253,6 +253,8 @@ class OTIL(SHAC):
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
         returns = self._compute_returns_from_rewards(step_cost, next_vs=next_vs_live)
         info["returns_mean"] = returns.detach().mean()
+
+        info["expert_return"] = self.demos["expert_return"]
 
         actor_loss = -returns.mean()
 
