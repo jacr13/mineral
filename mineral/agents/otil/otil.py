@@ -1,12 +1,13 @@
 import collections
 from copy import deepcopy
+
 import torch
 import torch.nn as nn
 
 from ...common.demos import get_demos
 from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
-from .best_of_k import BestOfK, BestOfKConfig, OTSinkhornCriterion, SequenceCosineCriterion, SequenceRegressionCriterion
+from .best_of_k import BestOfK, OTSinkhornCriterion, SequenceCosineCriterion, SequenceRegressionCriterion
 
 
 class OTIL(SHAC):
@@ -15,42 +16,31 @@ class OTIL(SHAC):
     def __init__(self, full_cfg, **kwargs):
         super().__init__(full_cfg, **kwargs)
         self.otil_config = full_cfg.agent.get("otil", {})
-        self.actor_loss_coef = self.otil_config.get("actor_loss_coef", 1.0)
-        self.actor_value_coef = self.otil_config.get("actor_value_coef", 0.0)
         self.actor_value_return_type = self.otil_config.get("actor_value_return_type", "min")
 
         self.imitation_loss_type = self.otil_config.get("imitation_loss_type", "ot")
 
-        self.critic_reward_reduction = self.otil_config.get("critic_reward_reduction", "min")
+        self.critic_reward_mapping = self.otil_config.get("critic_reward_mapping", "log_exp")
         self.critic_reward_scale = self.otil_config.get("critic_reward_scale", 1.0)
-        self.critic_reward_tau = self.otil_config.get("critic_reward_tau", 0.5)
         self.critic_reward_normalize = self.otil_config.get("critic_reward_normalize", False)
 
         demos_config = self.otil_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
-        cfg_bok = BestOfKConfig(
+        ot_params = dict(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
+        bok_params = dict(
             T=self.horizon_len,
             K=8,
-            eps=0.1,
-            sinkhorn_iters=60,
             tau=0.5,
             use_mlp_features=False,
             feature_dim=self.num_obs,
             embed_dim=64,
-            use_huber=False,
-            huber_delta=1.0,
             action_weight=1.0,
             return_per_step_costs=True,
         )
 
         if self.imitation_loss_type == "ot":
-            criterion = OTSinkhornCriterion(
-                eps=cfg_bok.eps,
-                iters=cfg_bok.sinkhorn_iters,
-                use_huber=cfg_bok.use_huber,
-                huber_delta=cfg_bok.huber_delta,
-            )
+            criterion = OTSinkhornCriterion(**ot_params)
         elif self.imitation_loss_type == "l2":
             criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
         elif self.imitation_loss_type == "cosine":
@@ -58,7 +48,7 @@ class OTIL(SHAC):
         else:
             raise NotImplementedError(self.imitation_loss_type)
 
-        self.loss_fn = BestOfK(cfg_bok, criterion=criterion, device=self.device)
+        self.loss_fn = BestOfK(**bok_params, criterion=criterion)
 
     def update_actor(self):
         results = collections.defaultdict(list)
@@ -275,21 +265,20 @@ class OTIL(SHAC):
         return actor_loss, info
 
     def _build_pseudo_rewards(self, per_step_costs: torch.Tensor) -> torch.Tensor:
-        rewards_method = "exp"
-        if rewards_method == "neg_loss":
+        if self.critic_reward_mapping == "neg":
             rewards = -per_step_costs
-        elif rewards_method == "exp":
+        elif self.critic_reward_mapping == "exp":
             rewards = torch.exp(-per_step_costs)
-        elif rewards_method == "log_exp":
+        elif self.critic_reward_mapping == "log_exp":
             rewards = -torch.log(1 - torch.exp(-per_step_costs) + 1e-10)
         else:
-            raise NotImplementedError(rewards_method)
+            raise NotImplementedError(self.critic_reward_mapping)
+
         if self.critic_reward_normalize:
             mean = rewards.mean(dim=1, keepdim=True)
             std = rewards.std(dim=1, keepdim=True, unbiased=False)
             rewards = (rewards - mean) / (std + 1e-6)
-        rewards = self.reward_shaper(rewards)
-        rewards = rewards * self.critic_reward_scale
+        rewards = self.reward_shaper(rewards) * self.critic_reward_scale
         return rewards
 
     def _compute_returns_from_rewards(

@@ -10,4 +10,5 @@ python spawner.py \
     --no-sweep \
     --sweep_max 10 \
     --set wandb.project=test-rewarped-local \
+    --env_bundle dflex \
     --no-deploy_now

@@ -10,11 +10,8 @@ otil:
     n_trajs: 10
     subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
-  critic_reward_reduction: min
+  critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0
-  critic_reward_tau: 0.5
   critic_reward_normalize: ${..shac.normalize_ret}
   imitation_loss_type: ot # ot | l2 | cosine
-  actor_loss_coef: 1.0
-  actor_value_coef: 1.0
   actor_value_return_type: min

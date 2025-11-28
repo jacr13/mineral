@@ -11,6 +11,8 @@ agent:
     demos:
       path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
       n_trajs: 8
+    critic_reward_mapping: exp
+    imitation_loss_type: ot
   network:
     actor_kwargs:
       mlp_kwargs:

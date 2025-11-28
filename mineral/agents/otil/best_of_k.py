@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
 
 import torch
@@ -52,27 +51,6 @@ class MLPFeat(nn.Module):
     def forward(self, x):
         y = self.net(x)
         return F.layer_norm(y, y.shape[-1:])
-
-
-# ---------- Config ----------
-@dataclass
-class BestOfKConfig:
-    T: int
-    K: int = 8
-    # OT params
-    eps: float = 0.1
-    sinkhorn_iters: int = 60
-    tau: float = 0.5  # softmin temperature over K
-    # Features
-    use_mlp_features: bool = False
-    feature_dim: Optional[int] = None
-    embed_dim: int = 64
-    # Huber option for cost or MSE
-    use_huber: bool = False
-    huber_delta: float = 1.0
-    # Optional action weighting (assume last half are actions)
-    action_weight: float = 1.0
-    return_per_step_costs: bool = False
 
 
 # ---------- Criterion base + implementations ----------
@@ -177,30 +155,37 @@ class SequenceCosineCriterion(BestOfKCriterion):
 
 # ---------- Best-of-K wrapper that uses a criterion ----------
 class BestOfK(nn.Module):
-    def __init__(self, cfg: BestOfKConfig, criterion: Optional[BestOfKCriterion] = None, device=None, dtype=torch.float32):
+    def __init__(
+        self,
+        *,
+        T: int,
+        K: int = 8,
+        tau: float = 0.5,
+        use_mlp_features: bool = False,
+        feature_dim: Optional[int] = None,
+        embed_dim: int = 64,
+        return_per_step_costs: bool = True,
+        criterion: Optional[BestOfKCriterion] = None,
+    ):
         super().__init__()
-        self.cfg = cfg
-        self.device = device
-        self.dtype = dtype
+
+        self.T = T
+        self.K = K
+        self.tau = tau
+        self.use_mlp_features = use_mlp_features
+        self.feature_dim = feature_dim
+        self.embed_dim = embed_dim
+        self.return_per_step_costs = return_per_step_costs
 
         # Features
-        if cfg.use_mlp_features:
-            assert cfg.feature_dim is not None, "Set feature_dim when use_mlp_features=True"
-            self.feat = MLPFeat(cfg.feature_dim, cfg.embed_dim)
+        if use_mlp_features:
+            assert feature_dim is not None, "Set feature_dim when use_mlp_features=True"
+            self.feat = MLPFeat(feature_dim, embed_dim)
         else:
             self.feat = IdentityFeat()
 
-        # Default criterion = OT Sinkhorn
-        self.criterion = (
-            criterion
-            if criterion is not None
-            else OTSinkhornCriterion(
-                eps=cfg.eps,
-                iters=cfg.sinkhorn_iters,
-                use_huber=cfg.use_huber,
-                huber_delta=cfg.huber_delta,
-            )
-        )
+        assert criterion is not None, "Must provide a criterion"
+        self.criterion = criterion
 
     # ---- helpers (unchanged sampling logic) ----
     @torch.no_grad()
@@ -237,33 +222,21 @@ class BestOfK(nn.Module):
         sim_is_window: bool = False,
         sim_start: Optional[int] = None,
     ) -> Tuple[torch.Tensor, dict]:
-        cfg = self.cfg
         device = sim_seq.device
 
         expert = expert.detach()
 
         # Make sim window
         if sim_is_window:
-            assert sim_seq.shape[1] == cfg.T, f"sim_seq must be length T={cfg.T}"
+            assert sim_seq.shape[1] == self.T, f"sim_seq must be length T={self.T}"
             sim_win = sim_seq
         else:
             Ts = sim_seq.shape[1]
-            assert Ts >= cfg.T, f"sim_seq length {Ts} must be >= T={cfg.T}"
+            assert Ts >= self.T, f"sim_seq length {Ts} must be >= T={self.T}"
             s0 = 0 if sim_start is None else int(sim_start)
-            s0 = max(0, min(s0, Ts - cfg.T))
-            sim_win = sim_seq[:, s0 : s0 + cfg.T, :]  # [B,T,d]
+            s0 = max(0, min(s0, Ts - self.T))
+            sim_win = sim_seq[:, s0 : s0 + self.T, :]  # [B,T,d]
         B, T, d_in = sim_win.shape
-
-        # Optional action weighting (assume last half are actions)
-        if getattr(cfg, "action_weight", 1.0) != 1.0:
-            split = d_in // 2
-
-            def weight(sa):
-                s, a = sa[..., :split], sa[..., split:]
-                a = a * cfg.action_weight
-                return torch.cat([s, a], dim=-1)
-
-            sim_win = weight(sim_win)
 
         # Determine expert source
         if expert.dim() == 3 and expert.shape[0] != B:
@@ -278,21 +251,16 @@ class BestOfK(nn.Module):
                 assert expert_lens.shape == (M,), "expert_lens must be [M]"
                 assert (expert_lens <= Nmax).all()
 
-            expert_ids, starts = self._sample_expert_ids_and_starts(B, cfg.K, expert_lens, T, device)
+            expert_ids, starts = self._sample_expert_ids_and_starts(B, self.K, expert_lens, T, device)
             expert_crops = self._gather_crops_from_bank(bank, expert_ids, starts, T)  # [B,K,T,d]
         elif expert.dim() == 3 and expert.shape[0] == B:
             # per-batch experts [B,N,d]
             N = expert.shape[1]
 
-            if getattr(cfg, "action_weight", 1.0) != 1.0:
-                split = d_in // 2
-                s, a = expert[..., :split], expert[..., split:]
-                expert = torch.cat([s, a * cfg.action_weight], dim=-1)
-
-            starts = torch.randint(0, max(N - T, 0) + 1, (B, cfg.K), device=device)
+            starts = torch.randint(0, max(N - T, 0) + 1, (B, self.K), device=device)
             idx_t = torch.arange(T, device=device).view(1, 1, T)
             idx = starts.unsqueeze(-1) + idx_t
-            b_idx = torch.arange(B, device=device).view(B, 1, 1).expand(B, cfg.K, T)
+            b_idx = torch.arange(B, device=device).view(B, 1, 1).expand(B, self.K, T)
             expert_crops = expert[b_idx, idx, :]  # [B,K,T,d]
             expert_ids = None
         else:
@@ -300,8 +268,8 @@ class BestOfK(nn.Module):
 
         # ---- Features ----
         sim_f = self.feat(sim_win)  # [B,T,d’]
-        exp_f = self.feat(expert_crops.view(B * cfg.K, T, -1))  # [B*K,T,d’]
-        exp_f = exp_f.view(B, cfg.K, T, -1)  # [B,K,T,d’]
+        exp_f = self.feat(expert_crops.view(B * self.K, T, -1))  # [B*K,T,d’]
+        exp_f = exp_f.view(B, self.K, T, -1)  # [B,K,T,d’]
 
         # ---- Per-crop costs via pluggable criterion ----
         crit_out = self.criterion(sim_f, exp_f)
@@ -311,12 +279,11 @@ class BestOfK(nn.Module):
             Lk, crit_info = crit_out, {}
 
         # ---- Softmin over K ----
-        tau = cfg.tau
-        loss = -tau * torch.logsumexp(-Lk / tau, dim=1).mean()
+        loss = -self.tau * torch.logsumexp(-Lk / self.tau, dim=1).mean()
         weighted_per_step_costs = None
-        if cfg.return_per_step_costs and "per_step_costs" in crit_info:
+        if self.return_per_step_costs and "per_step_costs" in crit_info:
             per_step_costs = crit_info["per_step_costs"]  # [B,K,T]
-            weights = torch.softmax(-Lk / tau, dim=1).unsqueeze(-1)
+            weights = torch.softmax(-Lk / self.tau, dim=1).unsqueeze(-1)
             weighted_per_step_costs = (weights * per_step_costs).sum(dim=1)  # [B,T]
 
         info = {
@@ -326,7 +293,7 @@ class BestOfK(nn.Module):
             "starts": starts.detach(),
             "best_idx": Lk.argmin(dim=1).detach(),
         }
-        if weighted_per_step_costs is not None and cfg.return_per_step_costs:
+        if weighted_per_step_costs is not None and self.return_per_step_costs:
             info["per_step_costs"] = weighted_per_step_costs
         if expert.dim() == 3 and expert.shape[0] != B:
             info["expert_ids"] = expert_ids.detach() if expert_ids is not None else None
@@ -347,30 +314,47 @@ if __name__ == "__main__":
     expert_bank = torch.randn(M_expert, N, d_in, device=device)
     expert_lens = torch.randint(N - 50, N + 1, (M_expert,), device=device)
 
-    cfg = BestOfKConfig(
+    # --- OT Sinkhorn (default) ---
+    ot_crit = OTSinkhornCriterion(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
+    loss_fn_ot = BestOfK(
         T=T,
         K=8,
-        eps=0.1,
-        sinkhorn_iters=60,
         tau=0.5,
         use_mlp_features=True,
         feature_dim=d_in,
         embed_dim=64,
-    )
-
-    # --- OT Sinkhorn (default) ---
-    loss_fn_ot = BestOfK(cfg, device=device).to(device)
+        return_per_step_costs=True,
+        criterion=ot_crit,
+    ).to(device)
     loss_ot, info_ot = loss_fn_ot(sim_seq, expert_bank, expert_lens=expert_lens, sim_is_window=False)
     print("OT Loss:", loss_ot.item(), "Best (first 5):", info_ot["best_idx"][:5])
 
     # --- MSE (aligned) ---
     mse_crit = SequenceRegressionCriterion(use_huber=False, reduction="mean")
-    loss_fn_mse = BestOfK(cfg, criterion=mse_crit, device=device).to(device)
+    loss_fn_mse = BestOfK(
+        T=T,
+        K=8,
+        tau=0.5,
+        use_mlp_features=True,
+        feature_dim=d_in,
+        embed_dim=64,
+        return_per_step_costs=True,
+        criterion=mse_crit,
+    ).to(device)
     loss_mse, info_mse = loss_fn_mse(sim_seq, expert_bank, expert_lens=expert_lens, sim_is_window=False)
     print("MSE Loss:", loss_mse.item(), "Best (first 5):", info_mse["best_idx"][:5])
 
     # --- Cosine (aligned) ---
     cos_crit = SequenceCosineCriterion()
-    loss_fn_cos = BestOfK(cfg, criterion=cos_crit, device=device).to(device)
+    loss_fn_cos = BestOfK(
+        T=T,
+        K=8,
+        tau=0.5,
+        use_mlp_features=True,
+        feature_dim=d_in,
+        embed_dim=64,
+        return_per_step_costs=True,
+        criterion=cos_crit,
+    ).to(device)
     loss_cos, info_cos = loss_fn_cos(sim_seq, expert_bank, expert_lens=expert_lens, sim_is_window=False)
     print("Cosine Loss:", loss_cos.item(), "Best (first 5):", info_cos["best_idx"][:5])

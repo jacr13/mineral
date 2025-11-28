@@ -124,8 +124,11 @@ def dict_hash(dictionary: Dict[str, Any]) -> str:
 
 def generate_salt(length):
     """Generate a random salt with the specified length."""
+    random_state = random.getstate()
+    random.seed()
     characters = string.ascii_letters + string.digits
     salt = "".join(random.choice(characters) for _ in range(length))
+    random.setstate(random_state)
     return salt
 
 
@@ -149,7 +152,7 @@ def replace_batch_norm_to_global(args):
 
 def create_uuid(*args, gitsha=False, **kwargs):
     """Builds the uuid of the experiment."""
-    uuid = uuid_basis(*args, **kwargs)
+    uuid, uuid_wo_salt = uuid_basis(*args, **kwargs)
     config = kwargs.get("config", None)
     assert config is not None, "config must be specified"
 
@@ -162,11 +165,13 @@ def create_uuid(*args, gitsha=False, **kwargs):
     assert task is not None, "task must be specified"
 
     # Enrich the uuid with extra information
-    uuid = f"{uuid}.{algo}"
-    if gitsha:
-        uuid += f".{get_gitsha()}"
-    uuid += f".{task}.seed{str(seed).zfill(2)}"
-    return uuid
+    def set_extra_info(uuid_str):
+        git_sha_str = f".{get_gitsha()}" if gitsha else ""
+        return f"{uuid_str}.{algo}{git_sha_str}.{task}.seed{str(seed).zfill(2)}"
+
+    uuid = set_extra_info(uuid)
+    uuid_wo_salt = set_extra_info(uuid_wo_salt)
+    return uuid, uuid_wo_salt
 
 
 def uuid_basis(*args, **kwargs):
@@ -183,11 +188,12 @@ def uuid_basis(*args, **kwargs):
     else:
         raise NotImplementedError
 
+    salt_w_dash = ""
     if add_salt:
         salt_len = kwargs.get("salt_len", 4)
         salt = generate_salt(salt_len)
-        uuid = f"{uuid}-{salt}"
-    return uuid
+        salt_w_dash = f"-{salt}"
+    return f"{uuid}{salt_w_dash}", uuid
 
 
 def get_min_config(*args, **kwargs):
@@ -195,8 +201,15 @@ def get_min_config(*args, **kwargs):
     config_default = kwargs.get("config_default", None)
     use_min_config = kwargs.get("use_min_config", False)
     assert config is not None, "config must be specified"
+
+    # keys to remove from config when building min_config
+    config = dict(sorted(config.items()))
+    config["agent"].pop("seed", None)  # remove seed from agent config
+    config.pop("seed", None)  # remove seed from config
+    config.pop("logdir", None)  # remove logdir from config
+
     if not use_min_config:
-        return dict(sorted(config.items()))
+        return config
 
     assert config_default is not None, "config_default must be specified if use_min_config is True"
 

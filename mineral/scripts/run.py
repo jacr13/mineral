@@ -7,14 +7,15 @@ import hydra
 import numpy as np
 import wandb
 import yaml
+from dotenv import load_dotenv
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from termcolor import cprint
 
 from .utils import create_uuid
 
-from dotenv import load_dotenv
 load_dotenv()
+
 
 def make_envs(config):
     from .. import envs
@@ -111,15 +112,10 @@ def main(config: DictConfig):
         if wandb_config.get('project', None) is None:
             wandb_config['project'] = logdir.split('/')[-2]
 
-        if wandb_config.get('group', None) is not None:
-            run_group = wandb_config['group']
-        else:
-            run_group = logdir.split('/')[-2]
-            wandb_config['group'] = run_group
-
         name = wandb_config.get('name', None)
+        uuid_wo_salt = None
         if name is None:
-            uuid = create_uuid(
+            uuid, uuid_wo_salt = create_uuid(
                 method='human_hash',
                 add_salt=True,
                 config=resolved_config,
@@ -128,6 +124,16 @@ def main(config: DictConfig):
             print(f'Generated run name (uuid): {uuid}')
             wandb_config['name'] = uuid
             wandb_config['id'] = uuid
+            wandb_config['group'] = uuid_wo_salt
+
+        if wandb_config.get('group', None) is not None:
+            run_group = wandb_config['group']
+        elif uuid_wo_salt is not None:
+            run_group = uuid_wo_salt
+        else:
+            run_group = logdir.split('/')[-2]
+
+        wandb_config['group'] = run_group
 
         wandb_run = wandb.init(
             **wandb_config,
