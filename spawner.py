@@ -44,7 +44,7 @@ SBATCH_GPU_MEMORY = ",VramPerGpu:{gpu_memory}G"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
-SINGULARITY_CMD = """-n {num_workers} singularity run {cuda} --containall -B $HOME/tmp_asset_dir:/home/noroot/conda/lib/python3.10/site-packages/rewarped/assets/warp_mpm_sga -B {path2code}:/workspace -B $HOME/scratch:/scratch {sing_image} \\
+APPTAINER_CMD = """-n {num_workers} apptainer run {cuda} --containall -B $HOME/tmp_asset_dir:/home/noroot/conda/lib/python3.10/site-packages/rewarped/assets/warp_mpm_sga -B {path2code}:/workspace -B $HOME/scratch:/scratch {apptainer_image} \\
     bash -c "cd /workspace; \\
     {command}"
 """
@@ -308,11 +308,11 @@ def _write_slurm_script(script_path, name, command, args):
     modules = ""
     if args.docker:
         if args.docker_image is None:
-            raise ValueError("Docker image must be specified when using Singularity.")
-        command = SINGULARITY_CMD.format(
+            raise ValueError("Docker image must be specified when using Apptainer.")
+        command = APPTAINER_CMD.format(
             num_workers=num_workers,
             cuda="--nv" if args.device == "gpu" else "",
-            sing_image=args.docker_image,
+            apptainer_image=args.docker_image,
             path2code=os.getcwdb().decode(),
             command=command,
         )
@@ -367,6 +367,7 @@ def run(args):
         raise ValueError(f"Unsupported task entry type: '{task_path}'.")
 
     if args.env_files:
+
         def _norm_str(p):
             return str(p).lstrip("./")
 
