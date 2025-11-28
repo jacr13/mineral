@@ -4,12 +4,13 @@ task:
     env_name: hopper
 agent:
   name: DFlexAntOTIL
+  shac:
+    max_epochs: 5000
+    max_agent_steps: 10000000
   otil:
     demos:
       path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
       n_trajs: 8
-    max_epochs: 5000
-    max_agent_steps: 10000000
   network:
     actor_kwargs:
       mlp_kwargs:

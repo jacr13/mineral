@@ -9,6 +9,12 @@ from pathlib import Path
 
 import yaml
 
+ENV_BUNDLES = {
+    "dflex": ["ant", "hopper", "humanoid", "snu_humanoid"],
+    "rewarped": ["ant_run", "fluid_move", "hand_flip", "hand_reorient", "rolling_flat", "soft_jumper"],
+}
+ENV_BUNDLES["all"] = ENV_BUNDLES["dflex"] + ENV_BUNDLES["rewarped"]
+
 CALIBERS = [
     {
         "time": "0-00:10:00",
@@ -360,6 +366,27 @@ def run(args):
     else:
         raise ValueError(f"Unsupported task entry type: '{task_path}'.")
 
+    if args.env_files:
+        def _norm_str(p):
+            return str(p).lstrip("./")
+
+        allowed_paths = {Path(p) for p in args.env_files}
+        allowed_names = {p.name for p in allowed_paths}
+        allowed_strs = {_norm_str(p) for p in allowed_paths}
+        filtered_configs = []
+        for cfg in configs:
+            rel = None
+            try:
+                rel = cfg.relative_to(base_tasks_root)
+            except ValueError:
+                rel = cfg
+            rel_str = _norm_str(rel)
+            if cfg.name in allowed_names or _norm_str(cfg) in allowed_strs or rel_str in allowed_strs:
+                filtered_configs.append(cfg)
+        configs = filtered_configs
+        if not configs:
+            raise ValueError("No configs matched the provided --env_files filter.")
+
     spawn_root = Path("spawn")
     spawn_root.mkdir(parents=True, exist_ok=True)
 
@@ -503,6 +530,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Job Spawner")
     parser.add_argument("--task_name", type=str, default=None)
     parser.add_argument(
+        "--env_files",
+        nargs="+",
+        default=None,
+        help="Only spawn the listed env/task files (filenames or paths).",
+    )
+    parser.add_argument(
+        "--env_bundle",
+        type=str,
+        choices=list(ENV_BUNDLES.keys()),
+        default="all",
+        help="Env bundle to use for spawning.",
+    )
+
+    parser.add_argument(
         "--deployment",
         type=str,
         choices=["local", "slurm"],
@@ -568,11 +609,24 @@ if __name__ == "__main__":
     )
 
     # args not used yet:
-    parser.add_argument("--env_bundle", type=str, default=None)
     parser.add_argument("--demo_dir", type=str, default=None)
     parser.add_argument("--num_demos", "--list", nargs="+", type=str, default=None)
 
     args = parser.parse_args()
+
+    if not args.env_files:
+        args.env_files = []
+        for env_name in ENV_BUNDLES[args.env_bundle]:
+            sim = ""
+            if env_name in ENV_BUNDLES["dflex"]:
+                sim = "dflex"
+            elif env_name in ENV_BUNDLES["rewarped"]:
+                sim = "rewarped"
+            else:
+                raise ValueError(f"Env '{env_name}' not found in any known sim.")
+
+            assert sim != "", f"Simulation for env '{env_name}' could not be determined."
+            args.env_files.append(f"{sim}_{env_name}.yaml")
 
     # Create (and optionally deploy) the jobs
     run(args)

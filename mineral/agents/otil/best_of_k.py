@@ -158,7 +158,9 @@ class SequenceRegressionCriterion(BestOfKCriterion):
                 Lk = (diff * diff).mean(dim=(2, 3))  # mean over T,d
             else:
                 Lk = (diff * diff).sum(dim=(2, 3))
-        return Lk
+        # Keep per-step costs as mean over features for consistency
+        per_step_costs = (diff * diff).mean(dim=3)
+        return Lk, {"per_step_costs": per_step_costs}
 
 
 class SequenceCosineCriterion(BestOfKCriterion):
@@ -169,7 +171,8 @@ class SequenceCosineCriterion(BestOfKCriterion):
         cos = (sim_n * exp_n).sum(-1)  # [B,K,T]
         # distance = 1 - cosine; mean over time
         Lk = (1.0 - cos).mean(dim=2)  # [B,K]
-        return Lk
+        per_step_costs = 1.0 - cos
+        return Lk, {"per_step_costs": per_step_costs}
 
 
 # ---------- Best-of-K wrapper that uses a criterion ----------

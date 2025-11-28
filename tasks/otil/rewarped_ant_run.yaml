@@ -5,9 +5,10 @@ task:
     env_suite: dflex
 agent:
   name: DFlexAntOTIL
-  otil:
+  shac:
     max_epochs: 2000
     max_agent_steps: 4100000
+  otil:
     demos:
       path: "experts/demos/Rewarped_Ant_demos128_return4893_len1000.pt"
       n_trajs: 8

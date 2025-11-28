@@ -14,15 +14,16 @@ agent:
     critic_kwargs:
       mlp_kwargs:
         units: [256, 256]
-  otil:
-    demos:
-      path: ""
-      n_trajs: 8
+  shac:
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995
     max_agent_steps: 4100000
     max_epochs: 4000
+  otil:
+    demos:
+      path: ""
+      n_trajs: 8
 logdir: "workdir/RewarpedRollingPin4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
 num_envs: 32
 wandb:

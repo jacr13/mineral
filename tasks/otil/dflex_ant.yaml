@@ -4,9 +4,10 @@ task:
     env_name: ant
 agent:
   name: DFlexAntOTIL
-  otil:
+  shac:
     max_epochs: 5000
     max_agent_steps: 10000000
+  otil:
     demos:
       path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
       n_trajs: 8

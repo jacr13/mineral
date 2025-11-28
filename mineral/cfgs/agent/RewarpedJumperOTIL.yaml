@@ -20,7 +20,7 @@ network:
       act_type: SiLU
     n_critics: 2
 
-otil:
+shac:
   max_epochs: 6000
   max_agent_steps: 6.2e6
   # max_epochs: 4000

@@ -5,55 +5,16 @@ defaults:
 algo: OTIL
 
 otil:
-  multi_gpu: ${...multi_gpu}
-  num_actors: ${...task.env.numEnvs}
   demos:
     path: ""
     n_trajs: 10
     subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
-  reward_shaper:
-    fn: scale
-    scale: 1.0
-
-  max_epochs: 2000
-  max_agent_steps: 4.1e6
-  horizon_len: 32
-  num_critic_batches: 4
-
-  gamma: 0.99
-  critic_method: td-lambda # td-lambda | one-step
-  lambda: 0.95
-  critic_iterations: 16
-  target_critic_alpha: 0.995
-  normalize_ret: False
   critic_reward_reduction: min
   critic_reward_scale: 1.0
   critic_reward_tau: 0.5
-  critic_reward_normalize: ${.normalize_ret}
+  critic_reward_normalize: ${..shac.normalize_ret}
+  imitation_loss_type: ot # ot | l2 | cosine
   actor_loss_coef: 1.0
   actor_value_coef: 1.0
   actor_value_return_type: min
-
-  # SAPO specific
-  with_logprobs: False
-  with_autoent: False
-  target_entropy_scalar: 0.5
-  use_distr_ent: True
-  init_alpha: 1.0
-  alpha_optim_kwargs: { lr: 5e-3, betas: [0.7, 0.95] }
-  scale_by_target_entropy: True
-  unscale_entropy_alpha: True
-  offset_by_target_entropy: True
-  entropy_in_return: False
-  entropy_in_targets: False
-
-  optim_type: AdamW
-  actor_optim_kwargs: { lr: 2e-3, betas: [0.7, 0.95] }
-  critic_optim_kwargs: { lr: 5e-4, betas: [0.7, 0.95] }
-  lr_schedule: linear # linear | constant
-  max_grad_norm: 0.5
-  truncate_grads: True
-
-  no_target_critic: True
-  actor_loss_avgcritics: True

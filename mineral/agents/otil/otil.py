@@ -1,35 +1,25 @@
 import collections
 from copy import deepcopy
-
 import torch
 import torch.nn as nn
 
 from ...common.demos import get_demos
 from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
-from .best_of_k import BestOfK, BestOfKConfig
-
-
-def _ensure_shac_cfg(full_cfg):
-    cfg = deepcopy(full_cfg)
-    agent_cfg = getattr(cfg, "agent", None)
-    if agent_cfg is None:
-        return cfg
-    if not hasattr(agent_cfg, "shac") and hasattr(agent_cfg, "otil"):
-        agent_cfg.shac = agent_cfg.otil
-    return cfg
+from .best_of_k import BestOfK, BestOfKConfig, OTSinkhornCriterion, SequenceCosineCriterion, SequenceRegressionCriterion
 
 
 class OTIL(SHAC):
     """OTIL variant that reuses SHAC base functionality."""
 
     def __init__(self, full_cfg, **kwargs):
-        cfg = _ensure_shac_cfg(full_cfg)
-        super().__init__(cfg, **kwargs)
-        self.otil_config = cfg.agent.get("otil", {})
+        super().__init__(full_cfg, **kwargs)
+        self.otil_config = full_cfg.agent.get("otil", {})
         self.actor_loss_coef = self.otil_config.get("actor_loss_coef", 1.0)
         self.actor_value_coef = self.otil_config.get("actor_value_coef", 0.0)
         self.actor_value_return_type = self.otil_config.get("actor_value_return_type", "min")
+
+        self.imitation_loss_type = self.otil_config.get("imitation_loss_type", "ot")
 
         self.critic_reward_reduction = self.otil_config.get("critic_reward_reduction", "min")
         self.critic_reward_scale = self.otil_config.get("critic_reward_scale", 1.0)
@@ -53,7 +43,22 @@ class OTIL(SHAC):
             action_weight=1.0,
             return_per_step_costs=True,
         )
-        self.loss_fn = BestOfK(cfg_bok, device=self.device)
+
+        if self.imitation_loss_type == "ot":
+            criterion = OTSinkhornCriterion(
+                eps=cfg_bok.eps,
+                iters=cfg_bok.sinkhorn_iters,
+                use_huber=cfg_bok.use_huber,
+                huber_delta=cfg_bok.huber_delta,
+            )
+        elif self.imitation_loss_type == "l2":
+            criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
+        elif self.imitation_loss_type == "cosine":
+            criterion = SequenceCosineCriterion()
+        else:
+            raise NotImplementedError(self.imitation_loss_type)
+
+        self.loss_fn = BestOfK(cfg_bok, criterion=criterion, device=self.device)
 
     def update_actor(self):
         results = collections.defaultdict(list)
@@ -247,7 +252,7 @@ class OTIL(SHAC):
         exp_z = self.actor_encoder(obs_exp).detach()
         loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=False)
         if "per_step_costs" not in info:
-            raise ValueError("BestOfK info missing per_step_costs for OTILMinimal")
+            raise ValueError("BestOfK info missing per_step_costs for OTIL")
         per_step_costs = info.pop("per_step_costs")  # [B,T]
         per_step_rewards = self._build_pseudo_rewards(per_step_costs)
         info["pseudo_reward_mean"] = per_step_rewards.detach().mean()
@@ -261,7 +266,7 @@ class OTIL(SHAC):
             self.rew_buf.copy_(step_rewards.detach())
         # use live next_values for actor gradients; buffers stay detached for critic use
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
-        returns = self._compute_returns_from_rewards(step_rewards, step_cost=step_cost, next_vs=next_vs_live)
+        returns = self._compute_returns_from_rewards(step_cost, next_vs=next_vs_live)
         info["returns_mean"] = returns.detach().mean()
 
         actor_loss = -returns.mean()
@@ -289,12 +294,10 @@ class OTIL(SHAC):
 
     def _compute_returns_from_rewards(
         self,
-        rewards: torch.Tensor,
         step_cost: torch.Tensor | None = None,
         next_vs: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if step_cost is not None:
-            rewards = -step_cost
+        rewards = -step_cost
 
         # rewards: [T, B]
         returns = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
