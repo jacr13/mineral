@@ -21,7 +21,7 @@ agent:
     critic_kwargs:
       mlp_kwargs:
         units: [64, 64]
-logdir: "workdir/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+logdir: "workdir/DFlexHumanoid10M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
   project: rewarped

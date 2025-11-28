@@ -31,11 +31,6 @@ class OTIL(SHAC):
         bok_params = dict(
             T=self.horizon_len,
             K=8,
-            tau=0.5,
-            use_mlp_features=False,
-            feature_dim=self.num_obs,
-            embed_dim=64,
-            action_weight=1.0,
             return_per_step_costs=True,
         )
 
