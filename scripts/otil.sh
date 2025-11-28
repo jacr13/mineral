@@ -5,10 +5,10 @@ python spawner.py \
     --docker \
     --docker_image /home/users/c/candidor/docker/mineral.sif \
     --deployment slurm  \
-    --runtime 12h \
+    --runtime 4h \
     --no-cleanup \
     --sweep \
     --sweep_max 10 \
     --set wandb.project=test-otil-slurm \
     --env_bundle dflex \
-    --no-deploy_now
+    --deploy_now
