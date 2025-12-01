@@ -10,5 +10,6 @@ python spawner.py \
     --no-sweep \
     --sweep_max 10 \
     --set wandb.project=test-otil-slurm \
+    --set agent.gail.expert_batch_size=516 \
     --env_bundle dflex \
     --deploy_now
