@@ -4,7 +4,7 @@ python spawner.py \
     --task_name gail \
     --docker \
     --docker_image /home/users/c/candidor/docker/mineral.sif \
-    --deployment local  \
+    --deployment slurm  \
     --runtime 4h \
     --no-cleanup \
     --no-sweep \
