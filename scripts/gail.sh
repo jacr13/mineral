@@ -5,9 +5,10 @@ python spawner.py \
     --docker \
     --docker_image /home/users/c/candidor/docker/mineral.sif \
     --deployment local  \
-    --runtime 12h \
+    --runtime 4h \
     --no-cleanup \
     --no-sweep \
     --sweep_max 10 \
-    --set wandb.project=test-rewarped-local \
-    --no-deploy_now 
+    --set wandb.project=test-otil-slurm \
+    --env_bundle dflex \
+    --deploy_now
