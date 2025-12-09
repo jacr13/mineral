@@ -10,6 +10,11 @@ otil:
     n_trajs: 10
     subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
+  input_type: state # state | state_state
+  loss_use_huber_speedup: true
+  loss_use_mlp_features: true
+  loss_use_detached_prev_obs: true
+
   critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0
   critic_reward_normalize: ${..shac.normalize_ret}

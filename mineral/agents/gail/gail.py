@@ -271,6 +271,7 @@ class GAIL(PPO):
                         'mini_epoch': self.mini_epoch,
                         'last_lr': self.last_lr,
                         'e_clip': self.e_clip,
+                        'expert_return': self.demos["expert_return"],
                     }
                 )
                 metrics = {f'train_stats/{k}': v for k, v in metrics.items()}

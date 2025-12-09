@@ -19,6 +19,7 @@ class OTIL(SHAC):
         self.actor_value_return_type = self.otil_config.get("actor_value_return_type", "min")
 
         self.imitation_loss_type = self.otil_config.get("imitation_loss_type", "ot")
+        self.input_type = self.otil_config.get("input_type", "state")
 
         self.critic_reward_mapping = self.otil_config.get("critic_reward_mapping", "log_exp")
         self.critic_reward_scale = self.otil_config.get("critic_reward_scale", 1.0)
@@ -27,23 +28,48 @@ class OTIL(SHAC):
         demos_config = self.otil_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
-        bok_params = dict(
-            T=self.horizon_len,
-            K=8,
-            return_per_step_costs=True,
-        )
+        self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
+        self.loss_use_mlp_features = self.otil_config.get("loss_use_mlp_features", True)
+        self.loss_use_detached_prev_obs = self.otil_config.get("loss_use_detached_prev_obs", True)
 
-        if self.imitation_loss_type == "ot":
-            ot_params = dict(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
-            criterion = OTSinkhornCriterion(**ot_params)
-        elif self.imitation_loss_type == "l2":
-            criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
-        elif self.imitation_loss_type == "cosine":
-            criterion = SequenceCosineCriterion()
+        if self.imitation_loss_type in ["ot", "l2", "cosine"]:
+            if self.imitation_loss_type == "ot":
+                ot_params = dict(
+                    eps=0.1,
+                    iters=60,
+                    use_huber=False,
+                    huber_delta=1.0,
+                    use_huber_speedup=self.loss_use_huber_speedup,
+                )
+                criterion = OTSinkhornCriterion(**ot_params)
+            elif self.imitation_loss_type == "l2":
+                criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
+            elif self.imitation_loss_type == "cosine":
+                criterion = SequenceCosineCriterion()
+            else:
+                raise NotImplementedError(self.imitation_loss_type)
+
+            obs_dim = self.num_obs
+            if self.network_config.get("encoder", None) is not None:
+                obs_dim = self.encoder.out_dim
+
+            bok_params = dict(
+                T=self.horizon_len if self.input_type == "state" else self.horizon_len + 1,
+                K=8,
+                input_type=self.input_type,
+                detach_prev_obs=self.loss_use_detached_prev_obs,
+                use_mlp_features=self.loss_use_mlp_features,
+                feature_dim=obs_dim,
+                return_per_step_costs=True,
+                device=self.device,
+            )
+            self.loss_fn = BestOfK(**bok_params, criterion=criterion)
+        elif self.imitation_loss_type == "chamfer":
+            from .chamfer_loss import ChamferImitationLoss
+
+            self.loss_fn = ChamferImitationLoss()
         else:
-            raise NotImplementedError(self.imitation_loss_type)
-
-        self.loss_fn = BestOfK(**bok_params, criterion=criterion)
+            raise NotImplementedError("Adversarial imitation not yet supported for OTIL")
 
     def update_actor(self):
         results = collections.defaultdict(list)
@@ -131,6 +157,9 @@ class OTIL(SHAC):
         obs = self._convert_obs(obs)
 
         obs_window = {k: [] for k in obs.keys()}
+        if self.input_type == "state_state":
+            obs_window = {k: [v] for k, v in obs.items()}
+
         next_values = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         avg_next_values = torch.zeros_like(next_values)
 
@@ -165,6 +194,8 @@ class OTIL(SHAC):
 
             with torch.no_grad():
                 self.episode_rewards += raw_rew
+                self.episode_discounted_rewards += self.episode_gamma * raw_rew
+                self.episode_gamma *= self.gamma
                 self.episode_lengths += 1
 
             if self.obs_rms is not None:
@@ -198,10 +229,12 @@ class OTIL(SHAC):
                 if self.obs_rms is not None:
                     terminal_obs = {k: obs_rms[k].normalize(v) for k, v in terminal_obs.items()}
                 self.episode_rewards_tracker.update(self.episode_rewards[done_env_ids])
+                self.episode_discounted_rewards_tracker.update(self.episode_discounted_rewards[done_env_ids])
                 self.episode_lengths_tracker.update(self.episode_lengths[done_env_ids])
                 self.num_episodes += len(done_env_ids)
                 for done_env_id in done_env_ids:
                     self.episode_rewards_hist.append(self.episode_rewards[done_env_id].item())
+                    self.episode_discounted_rewards_hist.append(self.episode_discounted_rewards[done_env_id].item())
                     self.episode_lengths_hist.append(self.episode_lengths[done_env_id].item())
                     real_obs_term = {k: v[done_env_id : done_env_id + 1] for k, v in terminal_obs.items()}
                     nan_obs = False
@@ -216,7 +249,9 @@ class OTIL(SHAC):
                         real_next_values = self.critic_target(real_z_target, return_type="min").squeeze(-1)
                         next_values[i + 1, done_env_id] = real_next_values
                     self.episode_rewards[done_env_id] = 0.0
+                    self.episode_discounted_rewards[done_env_id] = 0.0
                     self.episode_lengths[done_env_id] = 0
+                    self.episode_gamma[done_env_id] = 1.0
 
             if i < self.horizon_len - 1:
                 self.done_mask[i] = done.to(dtype=torch.float32)
@@ -235,7 +270,7 @@ class OTIL(SHAC):
 
         obs_z = self.actor_encoder(obs_window)
         exp_z = self.actor_encoder(obs_exp).detach()
-        loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=False)
+        loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=True)
         if "per_step_costs" not in info:
             raise ValueError("BestOfK info missing per_step_costs for OTIL")
         per_step_costs = info.pop("per_step_costs")  # [B,T]
@@ -243,15 +278,20 @@ class OTIL(SHAC):
         info["pseudo_reward_mean"] = per_step_rewards.detach().mean()
         info["pseudo_reward_std"] = per_step_rewards.detach().std(unbiased=False)
         info["imitation_loss"] = loss.detach()
+        info["per_step_cost_mean"] = per_step_costs.detach().mean()
+        info["per_step_cost_std"] = per_step_costs.detach().std(unbiased=False)
 
         step_rewards = per_step_rewards.transpose(0, 1)  # [T,B]
-        step_cost = per_step_costs.transpose(0, 1)  # [T,B]
+        # step_cost = per_step_costs.transpose(0, 1)  # [T,B]
 
         with torch.no_grad():
             self.rew_buf.copy_(step_rewards.detach())
         # use live next_values for actor gradients; buffers stay detached for critic use
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
-        returns = self._compute_returns_from_rewards(step_cost, next_vs=next_vs_live)
+        returns = self._compute_returns_from_rewards(
+            step_rewards=step_rewards,
+            next_vs=next_vs_live,
+        )
         info["returns_mean"] = returns.detach().mean()
 
         info["expert_return"] = self.demos["expert_return"]
@@ -261,15 +301,27 @@ class OTIL(SHAC):
         self.agent_steps += self.horizon_len * self.num_envs
         return actor_loss, info
 
-    def _build_pseudo_rewards(self, per_step_costs: torch.Tensor) -> torch.Tensor:
+    def _build_pseudo_rewards(self, per_step_costs: torch.Tensor, add_cost: bool = True) -> torch.Tensor:
         if self.critic_reward_mapping == "neg":
             rewards = -per_step_costs
         elif self.critic_reward_mapping == "exp":
             rewards = torch.exp(-per_step_costs)
+        elif self.critic_reward_mapping == "log":
+            rewards = -torch.log(per_step_costs + 1e-7)
         elif self.critic_reward_mapping == "log_exp":
-            rewards = -torch.log(1 - torch.exp(-per_step_costs) + 1e-10)
+            rewards = -torch.log(1 - torch.exp(-per_step_costs) + 1e-7)
+        elif self.critic_reward_mapping == "1_over_1_plus_loss":
+            rewards = 1.0 / (1.0 + per_step_costs)
         else:
             raise NotImplementedError(self.critic_reward_mapping)
+
+        # allows gradients to flow through cost when loss is high and exp goes to 0
+        if add_cost and self.critic_reward_mapping in [
+            "neg",
+            "log_exp",
+            "1_over_1_plus_loss",
+        ]:
+            rewards = rewards - per_step_costs
 
         if self.critic_reward_normalize:
             mean = rewards.mean(dim=1, keepdim=True)
@@ -280,10 +332,11 @@ class OTIL(SHAC):
 
     def _compute_returns_from_rewards(
         self,
-        step_cost: torch.Tensor | None = None,
+        step_rewards: torch.Tensor,
         next_vs: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        rewards = -step_cost
+        """Compute returns from per-step costs and rewards, stopping bootstrapping at window boundaries."""
+        rewards = step_rewards
 
         # rewards: [T, B]
         returns = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
@@ -291,6 +344,7 @@ class OTIL(SHAC):
         gamma = torch.ones_like(returns)
         if next_vs is None:
             next_vs = self.avg_next_values if self.actor_loss_avgcritics else self.next_values
+
         for i in range(self.horizon_len):
             rew_acc = rew_acc + gamma * rewards[i]
             done = self.done_mask[i]

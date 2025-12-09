@@ -1,0 +1,11 @@
+defaults:
+  - DFlexAntSAPO
+  - _self_
+
+algo: ILD
+
+ild:
+  demos:
+    path: ""
+    n_trajs: 10
+    subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor

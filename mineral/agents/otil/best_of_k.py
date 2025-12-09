@@ -73,26 +73,32 @@ class OTSinkhornCriterion(BestOfKCriterion):
         self,
         eps: float = 0.1,
         iters: int = 60,
+        use_huber_speedup: bool = False,
         use_huber: bool = False,
         huber_delta: float = 1.0,
     ):
         super().__init__()
         self.eps = eps
         self.iters = iters
+        self.use_huber_speedup = use_huber_speedup
         self.use_huber = use_huber
         self.huber_delta = huber_delta
 
-    def _cost_matrix(self, X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+    def _cost_matrix(
+        self, X: torch.Tensor, Y: torch.Tensor, use_huber: bool | None = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        use_huber = use_huber or self.use_huber
+
         # X, Y: [BK, T, d]
-        if self.use_huber:
+        if use_huber:
             C2 = pairwise_sqdist(X, Y).clamp_min(1e-12)
             C = torch.sqrt(C2 + 1e-12)
             delta = self.huber_delta
             quad = 0.5 * C2
             lin = delta * (C - 0.5 * delta)
-            return torch.where(C <= delta, quad, lin)
+            return torch.where(C <= delta, quad, lin), C2
         else:
-            return pairwise_sqdist(X, Y)
+            return pairwise_sqdist(X, Y), None
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
@@ -100,9 +106,15 @@ class OTSinkhornCriterion(BestOfKCriterion):
         sim_f_tiled = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
         exp_f_flat = exp_f.contiguous().view(B * K, T, d)
 
-        C = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
-        P = log_sinkhorn(C, eps=self.eps, iters=self.iters)  # [B*K, T, T]
-        plan_costs = (P * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
+        if not self.use_huber and self.use_huber_speedup:
+            # use huber cost for sinkhorn speedup, but final cost is l2
+            C_huber, C = self._cost_matrix(sim_f_tiled, exp_f_flat, use_huber=True)  # [B*K, T, T]
+            P = log_sinkhorn(C_huber, eps=self.eps, iters=self.iters)  # [B*K, T, T]
+        else:
+            C, _ = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
+            P = log_sinkhorn(C, eps=self.eps, iters=self.iters)  # [B*K, T, T]
+
+        plan_costs = (P.detach() * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
         Lk = plan_costs.sum(dim=-1)  # [B, K]
         info = {"per_step_costs": plan_costs}
         return Lk, info
@@ -165,27 +177,50 @@ class BestOfK(nn.Module):
         feature_dim: Optional[int] = None,
         embed_dim: int = 64,
         return_per_step_costs: bool = True,
+        input_type: Literal["state", "state_state"] = "state",
+        detach_prev_obs: bool = False,
         criterion: Optional[BestOfKCriterion] = None,
+        device: Optional[torch.device] = None,
     ):
         super().__init__()
 
         self.T = T
         self.K = K
         self.tau = tau
+        self.input_type = input_type
+        self.detach_prev_obs = detach_prev_obs
         self.use_mlp_features = use_mlp_features
         self.feature_dim = feature_dim
         self.embed_dim = embed_dim
         self.return_per_step_costs = return_per_step_costs
+        self.device = device
+
+        if self.input_type not in ("state", "state_state"):
+            raise ValueError(f"Invalid input_type: {self.input_type}")
 
         # Features
         if use_mlp_features:
             assert feature_dim is not None, "Set feature_dim when use_mlp_features=True"
-            self.feat = MLPFeat(feature_dim, embed_dim)
+            in_dim = feature_dim * 2 if self.input_type == "state_state" else feature_dim
+            self.feat = MLPFeat(in_dim, embed_dim).to(device=device)
         else:
             self.feat = IdentityFeat()
 
         assert criterion is not None, "Must provide a criterion"
         self.criterion = criterion
+
+    def _stack_consecutive_states(self, seq: torch.Tensor) -> torch.Tensor:
+        """If configured, stack consecutive states along the feature dimension."""
+        if self.input_type == "state":
+            return seq, seq.shape[-2], seq.shape[-1]
+        elif self.input_type == "state_state":
+            obs = seq[..., :-1, :]  # [B, T-1, D]
+            next_obs = seq[..., 1:, :]  # [B, T-1, D]
+            if self.detach_prev_obs:
+                obs = obs.detach()
+            return torch.cat([obs, next_obs], dim=-1), obs.shape[-2], obs.shape[-1] * 2  # [B, T-1, 2D]
+        else:
+            raise ValueError(f"Invalid input_type: {self.input_type}")
 
     # ---- helpers (unchanged sampling logic) ----
     @torch.no_grad()
@@ -267,6 +302,8 @@ class BestOfK(nn.Module):
             raise ValueError("expert must be either [B,N,d] or bank [M,Nmax,d]")
 
         # ---- Features ----
+        sim_win, T, d_in = self._stack_consecutive_states(sim_win)
+        expert_crops, _, d_e = self._stack_consecutive_states(expert_crops)
         sim_f = self.feat(sim_win)  # [B,T,d’]
         exp_f = self.feat(expert_crops.view(B * self.K, T, -1))  # [B*K,T,d’]
         exp_f = exp_f.view(B, self.K, T, -1)  # [B,K,T,d’]
