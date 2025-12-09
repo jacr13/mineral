@@ -113,9 +113,9 @@ def main(config: DictConfig):
             wandb_config['project'] = logdir.split('/')[-2]
 
         name = wandb_config.get('name', None)
-        uuid_wo_salt = None
+        uuid_no_salt_no_seed = None
         if name is None:
-            uuid, uuid_wo_salt = create_uuid(
+            uuid, uuid_no_salt_no_seed = create_uuid(
                 method='human_hash',
                 add_salt=True,
                 config=resolved_config,
@@ -124,12 +124,12 @@ def main(config: DictConfig):
             print(f'Generated run name (uuid): {uuid}')
             wandb_config['name'] = uuid
             wandb_config['id'] = uuid
-            wandb_config['group'] = uuid_wo_salt
+            wandb_config['group'] = uuid_no_salt_no_seed
 
         if wandb_config.get('group', None) is not None:
             run_group = wandb_config['group']
-        elif uuid_wo_salt is not None:
-            run_group = uuid_wo_salt
+        elif uuid_no_salt_no_seed is not None:
+            run_group = uuid_no_salt_no_seed
         else:
             run_group = logdir.split('/')[-2]
 

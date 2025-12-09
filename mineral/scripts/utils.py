@@ -152,7 +152,7 @@ def replace_batch_norm_to_global(args):
 
 def create_uuid(*args, gitsha=False, **kwargs):
     """Builds the uuid of the experiment."""
-    uuid, uuid_wo_salt = uuid_basis(*args, **kwargs)
+    uuid, uuid_no_salt_no_seed = uuid_basis(*args, **kwargs)
     config = kwargs.get("config", None)
     assert config is not None, "config must be specified"
 
@@ -167,11 +167,11 @@ def create_uuid(*args, gitsha=False, **kwargs):
     # Enrich the uuid with extra information
     def set_extra_info(uuid_str):
         git_sha_str = f".{get_gitsha()}" if gitsha else ""
-        return f"{uuid_str}.{algo}{git_sha_str}.{task}.seed{str(seed).zfill(2)}"
+        return f"{uuid_str}.{algo}{git_sha_str}.{task}"
 
-    uuid = set_extra_info(uuid)
-    uuid_wo_salt = set_extra_info(uuid_wo_salt)
-    return uuid, uuid_wo_salt
+    uuid = f"{set_extra_info(uuid)}.seed{str(seed).zfill(2)}"
+    uuid_no_salt_no_seed = set_extra_info(uuid_no_salt_no_seed)
+    return uuid, uuid_no_salt_no_seed
 
 
 def uuid_basis(*args, **kwargs):
