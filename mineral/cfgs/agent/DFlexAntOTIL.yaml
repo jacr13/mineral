@@ -14,6 +14,7 @@ otil:
   loss_use_huber_speedup: true
   loss_use_mlp_features: true
   loss_use_detached_prev_obs: true
+  loss_mlp_embed_dim: 64
 
   critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0

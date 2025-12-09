@@ -31,6 +31,7 @@ class OTIL(SHAC):
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_use_mlp_features = self.otil_config.get("loss_use_mlp_features", True)
         self.loss_use_detached_prev_obs = self.otil_config.get("loss_use_detached_prev_obs", True)
+        self.loss_mlp_embed_dim = self.otil_config.get("loss_mlp_embed_dim", 128)
 
         if self.imitation_loss_type in ["ot", "l2", "cosine"]:
             if self.imitation_loss_type == "ot":
@@ -59,6 +60,7 @@ class OTIL(SHAC):
                 input_type=self.input_type,
                 detach_prev_obs=self.loss_use_detached_prev_obs,
                 use_mlp_features=self.loss_use_mlp_features,
+                embed_dim=self.loss_mlp_embed_dim,
                 feature_dim=obs_dim,
                 return_per_step_costs=True,
                 device=self.device,
