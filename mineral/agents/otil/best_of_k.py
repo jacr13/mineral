@@ -367,7 +367,7 @@ if __name__ == "__main__":
     expert_lens = torch.randint(N - 50, N + 1, (M_expert,), device=device)
 
     # --- OT Sinkhorn (default) ---
-    ot_crit = OTSinkhornCriterion(eps=0.1, iters=60, use_huber=False, huber_delta=1.0)
+    ot_crit = OTSinkhornCriterion(eps=0.1, iters=60, cost_type="l2", huber_delta=1.0)
     loss_fn_ot = BestOfK(
         T=T,
         K=8,

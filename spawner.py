@@ -512,7 +512,7 @@ def run(args):
             overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
 
-            print(f"[{id_config}/{len(configs)}] Created task script: {script_path}")
+            print(f"[{id_config}/{len(configs)}-{sweep_index}/{len(variant_entries)}] Created task script: {script_path}")
             if effective_args.deployment == "slurm":
                 _write_slurm_script(script_path, job_name, command, effective_args)
                 if effective_args.deploy_now:
@@ -526,6 +526,7 @@ def run(args):
             if effective_args.cleanup:
                 script_path.unlink()
 
+    return len(created_scripts)
 
 if __name__ == "__main__":
     # Parse the arguments
@@ -631,4 +632,5 @@ if __name__ == "__main__":
             args.env_files.append(f"{sim}_{env_name}.yaml")
 
     # Create (and optionally deploy) the jobs
-    run(args)
+    total_spawned = run(args)
+    print(f"Total spawned experiments: {total_spawned}")

@@ -40,7 +40,7 @@ class OTIL(SHAC):
                 ot_params = dict(
                     eps=0.1,
                     iters=60,
-                    use_huber=False,
+                    cost_type=self.loss_ot_cost_type,
                     huber_delta=1.0,
                     use_huber_speedup=self.loss_use_huber_speedup,
                 )
