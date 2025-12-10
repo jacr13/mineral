@@ -31,9 +31,9 @@ seed: 100
 
 sweep:
   seed: [100, 110, 120]
-  # agent.otil.critic_reward_mapping: [log_exp, exp]
-  # agent.otil.imitation_loss_type: [ot, l2]
-  agent.otil.loss_use_huber_speedup: [true, false]
-  # agent.otil.loss_use_mlp_features: true
+  agent.otil.critic_reward_mapping: [log_exp, exp]
+  agent.otil.imitation_loss_type: [ot, l2]
+  agent.otil.loss_use_huber_speedup: false
+  agent.otil.loss_use_mlp_features: [true, false]
   agent.otil.loss_use_detached_prev_obs: [true, false]
-  agent.otil.loss_mlp_embed_dim: [16, 32, 128]
+  agent.otil.loss_mlp_embed_dim: [16, 32, 64, 128]

@@ -8,7 +8,7 @@ python spawner.py \
     --runtime 4h \
     --no-cleanup \
     --sweep \
-    --sweep_max 100 \
-    --set wandb.project=sweep-dflex_humanoid-slurm \
-    --env_files dflex_humanoid.yaml \
+    --sweep_max 150 \
+    --set wandb.project=sweep-dflex_snu_humanoid-slurm \
+    --env_files dflex_snu_humanoid.yaml \
     --deploy_now

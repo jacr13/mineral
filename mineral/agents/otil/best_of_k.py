@@ -11,6 +11,14 @@ def pairwise_sqdist(X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
     YY = (Y**2).sum(-1, keepdim=True).transpose(-2, -1)
     return (XX + YY - 2 * X @ Y.transpose(-2, -1)).clamp_min(0.0)
 
+def pairwise_cosine_distance(X: torch.Tensor, Y: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    # X, Y: [BK, T, d]
+    Xn = X / (X.norm(dim=-1, keepdim=True) + eps)
+    Yn = Y / (Y.norm(dim=-1, keepdim=True) + eps)
+    # sim: [BK, T, T]
+    sim = torch.bmm(Xn, Yn.transpose(1, 2))
+    # distance in [0, 2]
+    return 1.0 - sim
 
 def log_sinkhorn(C: torch.Tensor, eps: float = 0.1, iters: int = 60) -> torch.Tensor:
     B, T, _ = C.shape
@@ -74,20 +82,23 @@ class OTSinkhornCriterion(BestOfKCriterion):
         eps: float = 0.1,
         iters: int = 60,
         use_huber_speedup: bool = False,
-        use_huber: bool = False,
+        cost_type: Literal["huber", "l2", "cosine"] = "l2",
         huber_delta: float = 1.0,
     ):
         super().__init__()
         self.eps = eps
         self.iters = iters
         self.use_huber_speedup = use_huber_speedup
-        self.use_huber = use_huber
+        self.cost_type = cost_type
         self.huber_delta = huber_delta
 
     def _cost_matrix(
-        self, X: torch.Tensor, Y: torch.Tensor, use_huber: bool | None = None
+        self,
+        X: torch.Tensor,
+        Y: torch.Tensor,
+        use_huber: bool | None = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        use_huber = use_huber or self.use_huber
+        use_huber = use_huber or (self.cost_type == "huber")
 
         # X, Y: [BK, T, d]
         if use_huber:
@@ -97,16 +108,20 @@ class OTSinkhornCriterion(BestOfKCriterion):
             quad = 0.5 * C2
             lin = delta * (C - 0.5 * delta)
             return torch.where(C <= delta, quad, lin), C2
-        else:
+        elif self.cost_type == "cosine":
+            C = pairwise_cosine_distance(X, Y)
+            return C, None
+        elif self.cost_type == "l2":
             return pairwise_sqdist(X, Y), None
+        else:
+            raise ValueError(f"Invalid cost_type: {self.cost_type}")
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
-        # tile sim to [B*K, T, d], flatten exp to same
         sim_f_tiled = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
         exp_f_flat = exp_f.contiguous().view(B * K, T, d)
 
-        if not self.use_huber and self.use_huber_speedup:
+        if not self.cost_type == "huber" and self.use_huber_speedup:
             # use huber cost for sinkhorn speedup, but final cost is l2
             C_huber, C = self._cost_matrix(sim_f_tiled, exp_f_flat, use_huber=True)  # [B*K, T, T]
             P = log_sinkhorn(C_huber, eps=self.eps, iters=self.iters)  # [B*K, T, T]

@@ -28,10 +28,12 @@ class OTIL(SHAC):
         demos_config = self.otil_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
+        self.loss_ot_cost_type = self.otil_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_use_mlp_features = self.otil_config.get("loss_use_mlp_features", True)
         self.loss_use_detached_prev_obs = self.otil_config.get("loss_use_detached_prev_obs", True)
         self.loss_mlp_embed_dim = self.otil_config.get("loss_mlp_embed_dim", 128)
+        
 
         if self.imitation_loss_type in ["ot", "l2", "cosine"]:
             if self.imitation_loss_type == "ot":
