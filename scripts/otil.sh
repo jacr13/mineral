@@ -9,6 +9,6 @@ python spawner.py \
     --no-cleanup \
     --sweep \
     --sweep_max 50 \
-    --set wandb.project=sweep-dflex_ant-slurm \
-    --env_files dflex_ant.yaml \
+    --set wandb.project=sweep-dflex_humanoid-slurm \
+    --env_files dflex_humanoid.yaml \
     --deploy_now
