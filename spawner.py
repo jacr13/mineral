@@ -247,9 +247,10 @@ def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
     for key in keys:
         values = sweep_spec[key]
         if not isinstance(values, list):
-            raise ValueError(
-                f"Sweep entry '{key}' must be a list, got '{type(values).__name__}'.",
-            )
+            values = [values]
+            # raise ValueError(
+            #     f"Sweep entry '{key}' must be a list, got '{type(values).__name__}'.",
+            # )
         options.append(values)
 
     combinations = list(product(*options))
@@ -393,7 +394,7 @@ def run(args):
 
     created_scripts = []
 
-    for config_path in configs:
+    for id_config, config_path in enumerate(configs, start=1):
         try:
             rel_path = config_path.relative_to(base_tasks_root)
         except ValueError:
@@ -511,7 +512,7 @@ def run(args):
             overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
 
-            print(f"Created task script: {script_path}")
+            print(f"[{id_config}/{len(configs)}] Created task script: {script_path}")
             if effective_args.deployment == "slurm":
                 _write_slurm_script(script_path, job_name, command, effective_args)
                 if effective_args.deploy_now:
