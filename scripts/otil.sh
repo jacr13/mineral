@@ -5,7 +5,7 @@ python spawner.py \
     --docker \
     --docker_image /home/users/c/candidor/docker/mineral.sif \
     --deployment slurm \
-    --runtime 4h \
+    --runtime 6h \
     --no-cleanup \
     --sweep \
     --sweep_max 150 \
