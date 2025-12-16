@@ -11,11 +11,10 @@ otil:
     subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
   input_type: state # state | state_state
-  loss_ot_cost_type: l2  # l2 | huber | cosine
+  loss_ot_cost_type: l2 # l2 | huber | cosine
   loss_use_huber_speedup: true
-  loss_use_mlp_features: true
+  loss_mlp_features_dim: 64
   loss_use_detached_prev_obs: true
-  loss_mlp_embed_dim: 64
 
   critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0

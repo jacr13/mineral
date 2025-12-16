@@ -34,6 +34,5 @@ sweep:
   # agent.otil.imitation_loss_type: [ot, l2]
   agent.otil.loss_ot_cost_type: [l2, cosine]
   agent.otil.loss_use_huber_speedup: false
-  agent.otil.loss_use_mlp_features: [true, false]
+  agent.otil.loss_mlp_features_dim: [16, 32, 64, 128]
   agent.otil.loss_use_detached_prev_obs: [true, false]
-  agent.otil.loss_mlp_embed_dim: [32, 64, 128]

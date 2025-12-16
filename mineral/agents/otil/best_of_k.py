@@ -11,6 +11,7 @@ def pairwise_sqdist(X: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
     YY = (Y**2).sum(-1, keepdim=True).transpose(-2, -1)
     return (XX + YY - 2 * X @ Y.transpose(-2, -1)).clamp_min(0.0)
 
+
 def pairwise_cosine_distance(X: torch.Tensor, Y: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     # X, Y: [BK, T, d]
     Xn = X / (X.norm(dim=-1, keepdim=True) + eps)
@@ -19,6 +20,7 @@ def pairwise_cosine_distance(X: torch.Tensor, Y: torch.Tensor, eps: float = 1e-8
     sim = torch.bmm(Xn, Yn.transpose(1, 2))
     # distance in [0, 2]
     return 1.0 - sim
+
 
 def log_sinkhorn(C: torch.Tensor, eps: float = 0.1, iters: int = 60) -> torch.Tensor:
     B, T, _ = C.shape
@@ -188,9 +190,8 @@ class BestOfK(nn.Module):
         T: int,
         K: int = 8,
         tau: float = 0.5,
-        use_mlp_features: bool = False,
+        mlp_features_dim: Optional[int] = None,  # if set, use MLP features
         feature_dim: Optional[int] = None,
-        embed_dim: int = 64,
         return_per_step_costs: bool = True,
         input_type: Literal["state", "state_state"] = "state",
         detach_prev_obs: bool = False,
@@ -204,9 +205,8 @@ class BestOfK(nn.Module):
         self.tau = tau
         self.input_type = input_type
         self.detach_prev_obs = detach_prev_obs
-        self.use_mlp_features = use_mlp_features
+        self.mlp_features_dim = mlp_features_dim
         self.feature_dim = feature_dim
-        self.embed_dim = embed_dim
         self.return_per_step_costs = return_per_step_costs
         self.device = device
 
@@ -214,10 +214,10 @@ class BestOfK(nn.Module):
             raise ValueError(f"Invalid input_type: {self.input_type}")
 
         # Features
-        if use_mlp_features:
+        if self.mlp_features_dim is not None:
             assert feature_dim is not None, "Set feature_dim when use_mlp_features=True"
             in_dim = feature_dim * 2 if self.input_type == "state_state" else feature_dim
-            self.feat = MLPFeat(in_dim, embed_dim).to(device=device)
+            self.feat = MLPFeat(in_dim, self.mlp_features_dim).to(device=device)
         else:
             self.feat = IdentityFeat()
 
@@ -372,9 +372,8 @@ if __name__ == "__main__":
         T=T,
         K=8,
         tau=0.5,
-        use_mlp_features=True,
+        mlp_features_dim=64,
         feature_dim=d_in,
-        embed_dim=64,
         return_per_step_costs=True,
         criterion=ot_crit,
     ).to(device)
@@ -387,9 +386,8 @@ if __name__ == "__main__":
         T=T,
         K=8,
         tau=0.5,
-        use_mlp_features=True,
+        mlp_features_dim=64,
         feature_dim=d_in,
-        embed_dim=64,
         return_per_step_costs=True,
         criterion=mse_crit,
     ).to(device)
@@ -402,9 +400,8 @@ if __name__ == "__main__":
         T=T,
         K=8,
         tau=0.5,
-        use_mlp_features=True,
+        mlp_features_dim=64,
         feature_dim=d_in,
-        embed_dim=64,
         return_per_step_costs=True,
         criterion=cos_crit,
     ).to(device)

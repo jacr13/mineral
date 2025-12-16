@@ -14,7 +14,7 @@ agent:
     critic_reward_mapping: exp
     imitation_loss_type: ot
     input_type: state_state
-    loss_use_mlp_features: true
+    loss_mlp_features_dim: 64
   network:
     actor_kwargs:
       mlp_kwargs:
@@ -34,6 +34,5 @@ sweep:
   agent.otil.critic_reward_mapping: [log_exp, exp]
   agent.otil.imitation_loss_type: [ot, l2]
   agent.otil.loss_use_huber_speedup: false
-  agent.otil.loss_use_mlp_features: [true, false]
+  agent.otil.loss_mlp_features_dim: [16, 32, 64, 128]
   agent.otil.loss_use_detached_prev_obs: [true, false]
-  agent.otil.loss_mlp_embed_dim: [16, 32, 64, 128]
