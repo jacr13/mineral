@@ -136,8 +136,8 @@ def main(config: DictConfig):
         wandb_config['group'] = run_group
 
         job_id = os.environ.get("SLURM_JOB_ID")
-        if job_id is not None:
-            wandb_config['slurm_job_id'] = job_id
+        print(f'SLURM_JOB_ID: {job_id}')
+        resolved_config['slurm_job_id'] = job_id
 
         wandb_run = wandb.init(
             **wandb_config,
@@ -147,9 +147,6 @@ def main(config: DictConfig):
         run_name, run_id = wandb_run.name, wandb_run.id
         print(f'run_group: {run_group}, run_name: {run_name}, run_id: {run_id}')
         save_run_metadata(logdir, run_name, run_id, resolved_config)
-
-        if job_id is not None:
-            wandb.run.summary["slurm_job_id"] = job_id
 
     # generate random seeds (deterministically given config.seed)
     # should be same across workers since each worker should add its global rank
