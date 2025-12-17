@@ -14,7 +14,7 @@ agent:
     critic_reward_mapping: exp
     imitation_loss_type: ot
     input_type: state_state
-    loss_mlp_features_dim: 64
+    loss_mlp_features_dim: null
   network:
     actor_kwargs:
       mlp_kwargs:
