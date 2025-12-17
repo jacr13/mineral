@@ -62,6 +62,15 @@ SBATCH_FILE_CONTENT = """#!/usr/bin/env bash
 
 {modules}
 
+# Explicitly set UID and GID inside the container for non-root user
+export APPTAINERENV_UID=1000
+export APPTAINERENV_GID=1000
+
+# Forward all SLURM_* environment variables into the Apptainer container
+for v in $(env | awk -F= '/^SLURM_/ {print $1}'); do
+  export APPTAINERENV_$v="${!v}"
+done
+
 srun {command}
 """
 
@@ -317,7 +326,7 @@ def _write_slurm_script(script_path, name, command, args):
             path2code=os.getcwdb().decode(),
             command=command,
         )
-        modules = "export APPTAINERENV_UID=1000\nexport APPTAINERENV_GID=1000"
+        modules = ""
 
     extra_gpu_params = ""
     if args.gpu_memory is not None:
@@ -527,6 +536,7 @@ def run(args):
                 script_path.unlink()
 
     return len(created_scripts)
+
 
 if __name__ == "__main__":
     # Parse the arguments
