@@ -67,12 +67,13 @@ export APPTAINERENV_UID=1000
 export APPTAINERENV_GID=1000
 
 # Forward all SLURM_* environment variables into the Apptainer container
-for v in $(env | awk -F= '/^SLURM_/ {print $1}'); do
-  export APPTAINERENV_$v="${!v}"
+for v in $(env | awk -F= '/^SLURM_/ {{print $1}}'); do
+  export APPTAINERENV_$v="${{!v}}"
 done
 
 srun {command}
 """
+
 
 DOCKER_CMD = """docker run \\
     -v $(pwd):/workspace \\
