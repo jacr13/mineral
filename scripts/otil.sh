@@ -2,12 +2,13 @@
 set -euo pipefail
 
 LOG_FILE="run_$(date +%Y%m%d_%H%M%S).log"
-
-# Log everything (stdout + stderr) to file AND console
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 USER="candidor"
 POLL_SECONDS=60
+MAX_JOBS=60
+BATCH_JOBS=""          # empty = unknown until first submit
+SETTLE_SECONDS=5       # give slurm time to show new jobs
 
 ENVS=(
   "dflex_ant"
@@ -26,30 +27,37 @@ PARAMS_OT_COST_TYPE=(
   "agent.otil.loss_ot_cost_type=cosine"
 )
 
-PARAMS_MLP_FEATURES_DIM=(
-  "agent.otil.loss_mlp_features_dim=[32,64]"
-  "agent.otil.loss_mlp_features_dim=null"
-)
+job_count() {
+  squeue -h -u "$USER" | wc -l | tr -d ' '
+}
 
-wait_for_jobs_to_finish() {
+wait_until_room_for_next_batch() {
+  local max_jobs="$1"
+  local batch_jobs="$2"
+
+  local threshold=$(( max_jobs - batch_jobs ))
+  if [[ "$threshold" -lt 0 ]]; then
+    threshold=0
+  fi
+
   while true; do
-    count="$(squeue -u "$USER" | grep -wc "$USER" || true)"
-    if [[ "$count" -eq 0 ]]; then
-      echo "No jobs detected for $USER. Continuing."
+    local n
+    n="$(job_count)"
+    if [[ "$n" -le "$threshold" ]]; then
+      echo "Queue size ${n} <= threshold ${threshold}. Room for another batch."
       break
     fi
-    echo "Jobs still running for $USER: $count. Sleeping ${POLL_SECONDS}s..."
+    echo "Queue size ${n} > ${threshold}. Sleeping ${POLL_SECONDS}s..."
     sleep "$POLL_SECONDS"
   done
 }
 
 # Sanity: all param arrays must have same length
 N="${#PARAMS_CRITIC_RM[@]}"
-if [[ "${#PARAMS_OT_COST_TYPE[@]}" -ne "$N" || "${#PARAMS_MLP_FEATURES_DIM[@]}" -ne "$N" ]]; then
+if [[ "${#PARAMS_OT_COST_TYPE[@]}" -ne "$N" ]]; then
   echo "ERROR: PARAMS_* arrays must have the same length." >&2
   echo "  PARAMS_CRITIC_RM=${#PARAMS_CRITIC_RM[@]}" >&2
   echo "  PARAMS_OT_COST_TYPE=${#PARAMS_OT_COST_TYPE[@]}" >&2
-  echo "  PARAMS_MLP_FEATURES_DIM=${#PARAMS_MLP_FEATURES_DIM[@]}" >&2
   exit 1
 fi
 
@@ -57,6 +65,7 @@ for env in "${ENVS[@]}"; do
   echo "============================================================"
   echo "Launching env: ${env}"
   echo "WandB project: sweep-${env}-slurm-new"
+  echo "MAX_JOBS=${MAX_JOBS}"
   echo "============================================================"
 
   git pull
@@ -64,17 +73,18 @@ for env in "${ENVS[@]}"; do
   for ((i=0; i<N; i++)); do
     critic_rm="${PARAMS_CRITIC_RM[$i]}"
     ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
-    mlp_dim="${PARAMS_MLP_FEATURES_DIM[$i]}"
-
-    # Optional readable tag for W&B name
-    batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}__mlp_$(echo "${mlp_dim##*=}" | tr -d '[] ,')"
+    batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}"
 
     echo "------------------------------------------------------------"
-    echo "Submitting paired config $((i+1))/${N}: ${batch_tag}"
+    echo "Config $((i+1))/${N}: ${batch_tag}"
     echo "  ${critic_rm}"
     echo "  ${ot_cost}"
-    echo "  ${mlp_dim}"
     echo "------------------------------------------------------------"
+
+    # If we already know how many jobs one batch creates, wait until there is room.
+    if [[ -n "$BATCH_JOBS" ]]; then
+      wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
+    fi
 
     python spawner.py \
       --task_name otil \
@@ -88,11 +98,21 @@ for env in "${ENVS[@]}"; do
       --set "wandb.project=sweep-${env}-slurm-new" \
       --set "${critic_rm}" \
       --set "${ot_cost}" \
-      --set "${mlp_dim}" \
       --env_files "${env}.yaml" \
       --deploy_now
 
-    echo "Waiting for SLURM jobs to finish before next paired config..."
-    wait_for_jobs_to_finish
+    # Learn batch size from the first ever submission (since you start from 0 jobs).
+    if [[ -z "$BATCH_JOBS" ]]; then
+      sleep "$SETTLE_SECONDS"
+      BATCH_JOBS="$(job_count)"
+      echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
+
+      if [[ "$BATCH_JOBS" -eq 0 ]]; then
+        echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
+      fi
+      if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
+        echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
+      fi
+    fi
   done
 done
