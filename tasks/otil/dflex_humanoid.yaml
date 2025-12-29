@@ -29,10 +29,10 @@ run: train_eval
 seed: 110
 
 sweep:
-  seed: [100, 110, 120]
-  agent.otil.critic_reward_mapping: [log_exp, exp]
-  # agent.otil.imitation_loss_type: [ot, l2]
-  agent.otil.loss_ot_cost_type: [l2, cosine]
+  seed: [1000, 1100, 1200]
+  agent.otil.critic_reward_mapping: exp #[log_exp, exp]
+  agent.otil.imitation_loss_type: [ot, l2]
+  agent.otil.loss_ot_cost_type: l2 #[l2, cosine]
   agent.otil.loss_use_huber_speedup: false
   agent.otil.loss_mlp_features_dim: [null, 32, 64]
   agent.otil.loss_use_detached_prev_obs: [true, false]
