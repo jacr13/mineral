@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+LOG_FILE="run_$(date +%Y%m%d_%H%M%S).log"
+
+# Log everything (stdout + stderr) to file AND console
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 USER="candidor"
 POLL_SECONDS=60
 
