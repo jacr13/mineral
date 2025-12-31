@@ -27,3 +27,4 @@ seed: 140
 
 sweep:
   seed: [100, 110, 120]
+  agent.shac.horizon_len: [5, 10]
