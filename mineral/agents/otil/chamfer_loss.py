@@ -43,9 +43,8 @@ class ChamferImitationLoss(nn.Module):
         # similar to the paper code we apply a tanh to the loss
         # https://github.com/sail-sg/ILD/blob/df699447bfe025a3e7e4e2fda5342b49c3942a0d/policy/brax_task/train_on_policy.py#L390
         # https://github.com/sail-sg/ILD/blob/df699447bfe025a3e7e4e2fda5342b49c3942a0d/policy/brax_task/train_multi_traj.py#L367
-        # print("Chamfer Loss before tanh:", loss.item())
+        # Finally, we don't apply it prevents the model from learning on higher loss values
         # loss = torch.tanh(loss)
-        # print("Chamfer Loss after tanh:", loss.item())
 
         # Per-step deviation reshaped back to [B, T]
         per_step = min_d2_s_to_e.view(B, T)
