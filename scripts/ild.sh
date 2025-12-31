@@ -66,7 +66,7 @@ for env in "${ENVS[@]}"; do
         --sweep \
         --sweep_max 150 \
         --set "wandb.project=ild-sweep-${env}-slurm" \
-        --set "agent.ppo.max_agent_steps=100000000" \
+        --set "agent.shac.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \
         --deploy_now
 
