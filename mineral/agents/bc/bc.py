@@ -145,6 +145,12 @@ class BC(Agent):
         self.train_dataloader = self.dataloader(self.datasets['train'], split='train')
         while self.epoch < self.max_epochs:
             self.epoch += 1
+            if self.job_clock is not None:
+                _, safe_stop = self.job_clock.step(check_safe_stop=True)
+                if safe_stop:
+                    print("Not enough time left for another step. Exiting cleanly.")
+                    break
+
             self.set_train()
 
             for _i, batch in enumerate(self.train_dataloader):

@@ -210,6 +210,11 @@ class DDPG(Agent):
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
+            if self.job_clock is not None:
+                _, safe_stop = self.job_clock.step(check_safe_stop=True)
+                if safe_stop:
+                    print("Not enough time left for another step. Exiting cleanly.")
+                    break
             self.set_eval()
             trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, sample=True)
             self.agent_steps += steps

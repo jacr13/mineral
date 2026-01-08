@@ -518,6 +518,8 @@ def run(args):
             effective_config = deepcopy(variant_config)
             for key, value in cli_overrides:
                 _set_nested_value(effective_config, key.split("."), value)
+            if effective_args.runtime and "max_runtime" not in effective_config:
+                effective_config["max_runtime"] = effective_args.runtime
 
             overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)

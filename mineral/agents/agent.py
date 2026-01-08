@@ -11,12 +11,13 @@ from ..common.writer import TensorboardWriter, WandbWriter, Writer
 
 
 class Agent:
-    def __init__(self, full_cfg, logdir=None, accelerator=None, datasets=None, env=None):
+    def __init__(self, full_cfg, logdir=None, accelerator=None, datasets=None, env=None, job_clock=None):
         assert getattr(self, 'network_config', False)
         assert getattr(self, 'num_actors', False)
 
         self.full_cfg = full_cfg
         self.logdir = logdir
+        self.job_clock = job_clock
 
         # --- Device ---
         self.rank = -1

@@ -71,6 +71,58 @@ class Actor(nn.Module):
         return mu, sigma, distr
 
 
+class InverseModel(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        action_dim,
+        fixed_sigma=None,
+        mlp_kwargs=None,
+        dist_kwargs=None,
+        weight_init=None,
+    ):
+        if mlp_kwargs is None:
+            mlp_kwargs = {"units": [512, 256, 128], "act_type": "ELU"}
+        if dist_kwargs is None:
+            dist_kwargs = {}
+        super().__init__()
+        self.fixed_sigma = fixed_sigma
+
+        self.mlp = MLP(input_dim, **mlp_kwargs)
+        self.mu = nn.Linear(self.mlp.out_dim, action_dim)
+        if self.fixed_sigma:
+            self.sigma = nn.Parameter(torch.zeros(action_dim, dtype=torch.float32), requires_grad=True)
+        else:
+            self.sigma = nn.Linear(self.mlp.out_dim, action_dim)
+        self.dist = Dist(**dist_kwargs)
+
+        self.weight_init = weight_init
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if self.weight_init is None:
+            pass
+        elif self.weight_init == "orthogonal":
+            self.apply(weight_init_orthogonal_)
+        elif self.weight_init == "uniform":
+            self.apply(weight_init_uniform_)
+            nn.init.uniform_(self.mu.weight, -0.003, 0.003)
+        else:
+            raise NotImplementedError(self.weight_init)
+
+    def forward(self, x):
+        if isinstance(x, dict):
+            x = x["z"]
+        x = self.mlp(x)
+        mu = self.mu(x)
+        if self.fixed_sigma:
+            sigma = self.sigma
+        else:
+            sigma = self.sigma(x)
+        mu, sigma, distr = self.dist(mu, sigma)
+        return mu, sigma, distr
+
+
 class EnsembleQ(nn.Module):
     def __init__(
         self,

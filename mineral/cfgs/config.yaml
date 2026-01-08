@@ -62,6 +62,7 @@ multi_gpu: False
 run: 'train'  # train | eval | train_eval
 ckpt: ''  # ckpt file to load
 ckpt_keys: ''  # set to '' to load all ckpt keys
+max_runtime: null  # e.g. "2-00:00:00" or "6h"
 
 seed: 42
 torch_deterministic: False  # force the usage of deterministic algorithms in PyTorch

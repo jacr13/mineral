@@ -244,6 +244,11 @@ class GAIL(PPO):
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
+            if self.job_clock is not None:
+                _, safe_stop = self.job_clock.step(check_safe_stop=True)
+                if safe_stop:
+                    print("Not enough time left for another step. Exiting cleanly.")
+                    break
 
             print("Collecting experience...")
             self.set_eval()

@@ -12,6 +12,7 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from termcolor import cprint
 
+from ..common.job_clock import JobClock
 from .utils import create_uuid
 
 load_dotenv()
@@ -170,7 +171,9 @@ def main(config: DictConfig):
 
     AgentCls = getattr(agents, config.agent.algo)
     print(f'AgentCls: {AgentCls}', '\n')
-    agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env)
+    job_clock = JobClock(config.get("max_runtime", None))
+    job_clock.arm()
+    agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env, job_clock=job_clock)
 
     if config.ckpt:
         print(f'Loading checkpoint: {config.ckpt}')
