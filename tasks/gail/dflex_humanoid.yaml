@@ -46,3 +46,6 @@ sweep:
   agent.gail.disc_update_freq: [5, 10]
   agent.gail.policy_batch_size: [2048, 4096]
   agent.gail.expert_batch_size: [512, 1024, 2048]
+
+spawner:
+  runtime: "7h"

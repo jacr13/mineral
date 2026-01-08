@@ -1,44 +1,65 @@
 import os
 import time
 
-
+import re
 from datetime import timedelta
 
+
+_DURATION_RE = re.compile(r"(\d+)([smhd])")
+
+
 def parse_runtime(runtime: str) -> int:
-    runtime = runtime.strip()
+    runtime = runtime.strip().lower().replace(" ", "")
 
     if not runtime:
         raise ValueError("Runtime value cannot be empty.")
 
-    # Format: D-HH:MM:SS
-    if "-" in runtime:
-        days_part, hms = runtime.split("-", 1)
-        hours_str, minutes_str, seconds_str = hms.split(":")
+    # Format: HH:MM:SS or D-HH:MM:SS
+    if ":" in runtime:
+        if "-" in runtime:
+            days_part, hms = runtime.split("-", 1)
+            days = int(days_part)
+        else:
+            days = 0
+            hms = runtime
 
+        parts = hms.split(":")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid clock format: {runtime}")
+
+        hours, minutes, seconds = map(int, parts)
         td = timedelta(
-            days=int(days_part),
-            hours=int(hours_str),
-            minutes=int(minutes_str),
-            seconds=int(seconds_str),
+            days=days,
+            hours=hours,
+            minutes=minutes,
+            seconds=seconds,
         )
         return int(td.total_seconds())
 
-    # Format: <amount><suffix>
-    suffix = runtime[-1]
-    amount = int(runtime[:-1])
-
-    if suffix == "s":
-        td = timedelta(seconds=amount)
-    elif suffix == "m":
-        td = timedelta(minutes=amount)
-    elif suffix == "h":
-        td = timedelta(hours=amount)
-    elif suffix == "d":
-        td = timedelta(days=amount)
-    else:
+    # Format: composite suffixes (e.g. 2h30m)
+    matches = _DURATION_RE.findall(runtime)
+    if not matches:
+        raise ValueError(f"Invalid runtime format: {runtime}")
+    parsed = "".join(f"{n}{u}" for n, u in matches)
+    if parsed != runtime:
         raise ValueError(f"Invalid runtime format: {runtime}")
 
+    kwargs = {"days": 0, "hours": 0, "minutes": 0, "seconds": 0}
+
+    for amount, suffix in matches:
+        amount = int(amount)
+        if suffix == "s":
+            kwargs["seconds"] += amount
+        elif suffix == "m":
+            kwargs["minutes"] += amount
+        elif suffix == "h":
+            kwargs["hours"] += amount
+        elif suffix == "d":
+            kwargs["days"] += amount
+
+    td = timedelta(**kwargs)
     return int(td.total_seconds())
+
 
 class JobClock:
     def __init__(self, max_runtime, factor=3.0):

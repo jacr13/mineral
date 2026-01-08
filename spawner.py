@@ -6,6 +6,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from itertools import product
 from pathlib import Path
+import re
 
 import yaml
 
@@ -179,39 +180,68 @@ def _build_overrides(config, deployment, indent="\t\t"):
     return overrides
 
 
-def _parse_runtime(runtime: str):
-    runtime = runtime.strip()
-    if "-" in runtime:
-        days_part, hms = runtime.split("-", 1)
-        hours_str, minutes_str, seconds_str = hms.split(":")
-        days = int(days_part)
-        hours = int(hours_str)
-        minutes = int(minutes_str)
-        seconds = int(seconds_str)
-        formatted = f"{days}-{hours:02d}:{minutes:02d}:{seconds:02d}"
-        return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds), formatted
+_DURATION_RE = re.compile(r"(\d+)([smhd])")
 
+def _format_d_hms(td: timedelta) -> str:
+    total_seconds = int(td.total_seconds())
+    if total_seconds < 0:
+        raise ValueError("Runtime must be non-negative.")
+
+    days, rem = divmod(total_seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return f"{days}-{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _parse_runtime(runtime: str):
+    runtime = runtime.strip().lower()
     if not runtime:
         raise ValueError("Runtime value cannot be empty.")
 
-    suffix = runtime[-1]
-    amount = int(runtime[:-1])
-    if suffix == "s":
-        duration_td = timedelta(seconds=amount)
-        formatted = f"0-00:00:{amount:02d}"
-    elif suffix == "m":
-        duration_td = timedelta(minutes=amount)
-        formatted = f"0-00:{amount:02d}:00"
-    elif suffix == "h":
-        duration_td = timedelta(hours=amount)
-        formatted = f"0-{amount:02d}:00:00"
-    elif suffix == "d":
-        duration_td = timedelta(days=amount)
-        formatted = f"{amount}-00:00:00"
-    else:
+    # Clock format: HH:MM:SS or D-HH:MM:SS
+    if ":" in runtime:
+        if "-" in runtime:
+            days_part, hms = runtime.split("-", 1)
+            days = int(days_part)
+        else:
+            days = 0
+            hms = runtime
+
+        parts = hms.split(":")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid clock format: {runtime}")
+
+        hours, minutes, seconds = map(int, parts)
+        td = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+        return td, _format_d_hms(td)
+
+    # Composite suffix format: e.g. 2h30m, 1d2h, 15m10s
+    matches = _DURATION_RE.findall(runtime)
+    if not matches:
         raise ValueError(f"Invalid runtime format: {runtime}")
 
-    return duration_td, formatted
+    # Enforce full consumption to reject inputs like "2h30" (trailing number w/out unit)
+    consumed = "".join(f"{n}{u}" for n, u in matches)
+    if consumed != runtime:
+        raise ValueError(f"Invalid runtime format: {runtime}")
+
+    days = hours = minutes = seconds = 0
+    for amount_str, suffix in matches:
+        amount = int(amount_str)
+        if suffix == "d":
+            days += amount
+        elif suffix == "h":
+            hours += amount
+        elif suffix == "m":
+            minutes += amount
+        elif suffix == "s":
+            seconds += amount
+        else:
+            raise ValueError(f"Invalid runtime format: {runtime}")
+
+    td = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+    return td, _format_d_hms(td)
+
 
 
 def _select_partition(runtime_td, device):
