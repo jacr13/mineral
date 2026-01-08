@@ -43,6 +43,6 @@ seed: 130
 sweep:
   seed: [100, 110, 120]
   agent.gail.demos.subsample_factor: [1, 20]
-  agent.gail.disc_update_freq: [1, 5, 10]
+  agent.gail.disc_update_freq: [5, 10]
   agent.gail.policy_batch_size: [2048, 4096]
   agent.gail.expert_batch_size: [512, 1024, 2048]
