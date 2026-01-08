@@ -171,7 +171,8 @@ def main(config: DictConfig):
 
     AgentCls = getattr(agents, config.agent.algo)
     print(f'AgentCls: {AgentCls}', '\n')
-    job_clock = JobClock(config.get("max_runtime", None))
+
+    job_clock = JobClock(config.get("max_runtime"))
     job_clock.arm()
     agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env, job_clock=job_clock)
 

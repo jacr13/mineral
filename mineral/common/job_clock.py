@@ -2,45 +2,52 @@ import os
 import time
 
 
-def parse_runtime(value):
-    if value is None:
-        return None
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    value = str(value).strip()
-    if not value:
-        return None
-    if value.isdigit():
-        return int(value) * 60
+from datetime import timedelta
 
-    days = 0
-    if "-" in value:
-        days_part, value = value.split("-", 1)
-        if days_part:
-            days = int(days_part)
+def parse_runtime(runtime: str) -> int:
+    runtime = runtime.strip()
 
-    parts = value.split(":")
-    if len(parts) == 3:
-        hours, minutes, seconds = (int(p) for p in parts)
-    elif len(parts) == 2:
-        hours = 0
-        minutes, seconds = (int(p) for p in parts)
-    elif len(parts) == 1:
-        hours = 0
-        minutes = 0
-        seconds = int(parts[0])
+    if not runtime:
+        raise ValueError("Runtime value cannot be empty.")
+
+    # Format: D-HH:MM:SS
+    if "-" in runtime:
+        days_part, hms = runtime.split("-", 1)
+        hours_str, minutes_str, seconds_str = hms.split(":")
+
+        td = timedelta(
+            days=int(days_part),
+            hours=int(hours_str),
+            minutes=int(minutes_str),
+            seconds=int(seconds_str),
+        )
+        return int(td.total_seconds())
+
+    # Format: <amount><suffix>
+    suffix = runtime[-1]
+    amount = int(runtime[:-1])
+
+    if suffix == "s":
+        td = timedelta(seconds=amount)
+    elif suffix == "m":
+        td = timedelta(minutes=amount)
+    elif suffix == "h":
+        td = timedelta(hours=amount)
+    elif suffix == "d":
+        td = timedelta(days=amount)
     else:
-        return None
+        raise ValueError(f"Invalid runtime format: {runtime}")
 
-    return days * 86400 + hours * 3600 + minutes * 60 + seconds
-
+    return int(td.total_seconds())
 
 class JobClock:
-    def __init__(self, max_runtime=None, factor=3.0):
+    def __init__(self, max_runtime, factor=3.0):
         if factor <= 0.0:
             raise ValueError("factor must be > 0.")
 
-        self.max_runtime_seconds = parse_runtime(max_runtime)
+        self.max_runtime_seconds = (
+            parse_runtime(max_runtime) if max_runtime is not None else None
+        )
         self.factor = factor
 
         self.start_time = None
