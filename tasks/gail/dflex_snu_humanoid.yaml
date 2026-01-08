@@ -48,4 +48,4 @@ sweep:
   agent.gail.expert_batch_size: [512, 1024, 2048]
 
 spawner:
-  runtime: "7h"
+  runtime: "7h30m"

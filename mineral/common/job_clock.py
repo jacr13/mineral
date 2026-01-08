@@ -60,16 +60,15 @@ def parse_runtime(runtime: str) -> int:
     td = timedelta(**kwargs)
     return int(td.total_seconds())
 
-
 class JobClock:
-    def __init__(self, max_runtime, factor=3.0):
-        if factor <= 0.0:
-            raise ValueError("factor must be > 0.")
+    def __init__(self, max_runtime, buffer_minutes: float = 30.0):
+        if buffer_minutes < 0.0:
+            raise ValueError("buffer_minutes must be >= 0.")
 
         self.max_runtime_seconds = (
             parse_runtime(max_runtime) if max_runtime is not None else None
         )
-        self.factor = factor
+        self.buffer_seconds = float(buffer_minutes) * 60.0
 
         self.start_time = None
         self._step_start = None
@@ -113,16 +112,13 @@ class JobClock:
         return sum(self._step_durations) / len(self._step_durations)
 
     def should_safe_stop(self):
-        """Stop if we likely cannot finish another step safely."""
+        """Stop when we're within the configured buffer before max runtime."""
         remaining = self.remaining_time()
-        mean_step = self.mean_step_duration()
-
-        if remaining is None or mean_step is None:
+        if remaining is None:
             return False
+        return remaining <= self.buffer_seconds
 
-        return remaining <= self.factor * mean_step
-
-    def step(self, check_safe_stop=False):
+    def step(self, check_safe_stop: bool = False):
         """Record step duration.
 
         If check_safe_stop=True, also return safe_stop.
