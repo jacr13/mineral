@@ -4,7 +4,7 @@ task:
     env_name: Ant
     env_suite: dflex
 agent:
-  name: DFlexAntBPTT
+  name: BPTT/DFlexAnt
   bptt:
     max_epochs: 2000
     max_agent_steps: 4100000

@@ -5,7 +5,7 @@ set -e
 
 # SAPO - Hopper
 python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper \
+task=DFlex agent=SAPO/DFlexAnt task.env.env_name=hopper \
 logdir="workdir_check/DFlexHopper10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=10e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
@@ -15,7 +15,7 @@ run=train_eval seed=130
 
 # SAPO - Ant
 python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=ant \
+task=DFlex agent=SAPO/DFlexAnt task.env.env_name=ant \
 logdir="workdir_check/DFlexAnt10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=10e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
@@ -25,7 +25,7 @@ run=train_eval seed=100
 
 # SAPO - Humanoid
 python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=humanoid \
+task=DFlex agent=SAPO/DFlexAnt task.env.env_name=humanoid \
 logdir="workdir_check/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=10e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
@@ -37,7 +37,7 @@ run=train_eval seed=110
 
 # SAPO - SNUHumanoid
 python -m mineral.scripts.run \
-task=DFlex agent=DFlexAntSAPO task.env.env_name=snu_humanoid \
+task=DFlex agent=SAPO/DFlexAnt task.env.env_name=snu_humanoid \
 logdir="workdir_check/DFlexSNUHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=10e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \
@@ -51,7 +51,7 @@ run=train_eval seed=120
 # Rewarped
 # AntRun - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=DFlexAntSAPO task.env.env_name=Ant task.env.env_suite=dflex \
+task=Rewarped agent=SAPO/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
 logdir="workdir_check/RewarpedAnt4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=4.1e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[128,64,32\] \
@@ -61,7 +61,7 @@ run=train_eval seed=1000
 
 # HandReorient - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=DFlexAntSAPO task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+task=Rewarped agent=SAPO/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
 logdir="workdir_check/RewarpedAllegroHand4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 agent.shac.max_epochs=5 agent.shac.max_agent_steps=4.1e6 \
 agent.network.actor_kwargs.mlp_kwargs.units=\[512,256\] \
@@ -73,7 +73,7 @@ run=train_eval seed=1100
 
 # RollingFlat - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
 logdir="workdir_check/RewarpedRollingPin4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|joint_q' \
@@ -87,7 +87,7 @@ run=train_eval seed=1200
 
 # SoftJumper - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Jumper task.env.env_suite=gradsim \
+task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
 logdir="workdir_check/RewarpedJumper6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|com_qd|actions' \
@@ -101,7 +101,7 @@ run=train_eval seed=1300
 
 # HandFlip - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Flip task.env.env_suite=dexdeform \
+task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
 logdir="workdir_check/RewarpedDexDeformFlip6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|joint_q' \
@@ -115,7 +115,7 @@ run=train_eval seed=1400
 
 # FluidMove - SAPO
 python -m mineral.scripts.run \
-task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Transport task.env.env_suite=softgym \
+task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
 logdir="workdir_check/RewarpedSoftgymTransport4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|joint_q|target_q' \

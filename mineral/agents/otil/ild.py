@@ -31,6 +31,7 @@ class ILD(SHAC):
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
             if self.max_epochs > 0 and self.epoch >= self.max_epochs:
+                print("Reached max epochs. Exiting cleanly.")
                 break
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
@@ -64,7 +65,9 @@ class ILD(SHAC):
             actor_results = self.update_actor()
             self.timer.end("train/update_actor")
 
-            actor_metrics = {k: torch.mean(torch.stack(v)).item() for k, v in actor_results.items() if k not in ["mu", "sigma"]}
+            actor_metrics = {
+                k: torch.mean(torch.stack(v)).item() for k, v in actor_results.items() if k not in ["mu", "sigma"]
+            }
             actor_metrics.update({k: torch.mean(torch.cat(actor_results[k]), 0).cpu().numpy() for k in ["mu", "sigma"]})
             actor_metrics.update({"epoch": self.epoch, "lr": lr})
 

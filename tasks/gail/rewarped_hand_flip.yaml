@@ -5,7 +5,7 @@ task:
     env_suite: dexdeform
     no_grad: true
 agent:
-  name: RewarpedJumperGAIL
+  name: GAIL/RewarpedJumper
   network:
     encoder_kwargs:
       mlp_keys: "com_q|joint_q"

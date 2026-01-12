@@ -2,7 +2,7 @@
 # set default task and default training config based on task
 defaults:
   - task: Cartpole
-  - agent: ${task}PPO
+  - agent: PPO/${task}
   - _self_
 
   # - hydra/job_logging: disabled

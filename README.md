@@ -78,10 +78,10 @@ Use `CUDA_VISIBLE_DEVICES=1 python ...` to run on a specific GPU.
 
 Use `python ... run=eval task.env.render=True ckpt="workdir/<exp>/<run>/ckpt/final.pth"` to load checkpoints and visualize agents (trajectories are saved as USDs).
 For example:
-`python -m mineral.scripts.run task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper run=eval task.env.render=True ckpt="workdir/DFlexHopper10M-SAPO/20251017-232851.65/ckpt/final.pth"`
+`python -m mineral.scripts.run task=DFlex agent=SAPO/DFlexAnt task.env.env_name=hopper run=eval task.env.render=True ckpt="workdir/DFlexHopper10M-SAPO/20251017-232851.65/ckpt/final.pth"`
 
 `python -m mineral.scripts.run \
-task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Jumper task.env.env_suite=gradsim \
+task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
 logdir="eval/RewarpedJumper6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
 num_envs=32 \
 agent.network.encoder_kwargs.mlp_keys='com_q|com_qd|actions' \

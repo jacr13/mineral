@@ -1,5 +1,5 @@
 ﻿defaults:
-  - DFlexAntPPO
+  - PPO/DFlexAnt
 
 seed: ${..seed}
 algo: GAIL

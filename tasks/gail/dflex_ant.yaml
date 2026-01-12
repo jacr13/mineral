@@ -5,7 +5,7 @@
     no_grad: True
 
 agent:
-  name: DFlexAntGAIL
+  name: GAIL/DFlexAnt
   ppo:
     max_agent_steps: 10000000
   network:

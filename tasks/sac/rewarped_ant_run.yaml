@@ -5,7 +5,7 @@ task:
     env_suite: dflex
     no_grad: true
 agent:
-  name: DFlexAntSAC
+  name: SAC/DFlexAnt
   sac:
     max_agent_steps: 4100000
     +target_entropy_scalar: 0.5

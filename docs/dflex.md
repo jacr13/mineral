@@ -7,7 +7,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntPPO task.env.env_name=hopper \
+    task=DFlex agent=PPO/DFlexAnt task.env.env_name=hopper \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexHopper10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -26,7 +26,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAC task.env.env_name=hopper \
+    task=DFlex agent=SAC/DFlexAnt task.env.env_name=hopper \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexHopper10M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -47,7 +47,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntBPTT task.env.env_name=hopper \
+    task=DFlex agent=BPTT/DFlexAnt task.env.env_name=hopper \
     \
     logdir="workdir/DFlexHopper10M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=5000 agent.bptt.max_agent_steps=10e6 \
@@ -64,7 +64,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC task.env.env_name=hopper \
+    task=DFlex agent=SHAC/DFlexAnt task.env.env_name=hopper \
     \
     logdir="workdir/DFlexHopper10M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -82,7 +82,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC2 task.env.env_name=hopper \
+    task=DFlex agent=SHAC2/DFlexAnt task.env.env_name=hopper \
     \
     logdir="workdir/DFlexHopper10M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -100,7 +100,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAPO task.env.env_name=hopper \
+    task=DFlex agent=SAPO/DFlexAnt task.env.env_name=hopper \
     \
     logdir="workdir/DFlexHopper10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -120,7 +120,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntPPO task.env.env_name=ant \
+    task=DFlex agent=PPO/DFlexAnt task.env.env_name=ant \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexAnt10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -139,7 +139,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAC task.env.env_name=ant \
+    task=DFlex agent=SAC/DFlexAnt task.env.env_name=ant \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexAnt10M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -160,7 +160,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntBPTT task.env.env_name=ant \
+    task=DFlex agent=BPTT/DFlexAnt task.env.env_name=ant \
     \
     logdir="workdir/DFlexAnt10M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=5000 agent.bptt.max_agent_steps=10e6 \
@@ -177,7 +177,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC task.env.env_name=ant \
+    task=DFlex agent=SHAC/DFlexAnt task.env.env_name=ant \
     \
     logdir="workdir/DFlexAnt10M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -195,7 +195,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC2 task.env.env_name=ant \
+    task=DFlex agent=SHAC2/DFlexAnt task.env.env_name=ant \
     \
     logdir="workdir/DFlexAnt10M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -213,7 +213,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAPO task.env.env_name=ant \
+    task=DFlex agent=SAPO/DFlexAnt task.env.env_name=ant \
     \
     logdir="workdir/DFlexAnt10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -231,7 +231,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntOTIL task.env.env_name=ant \
+    task=DFlex agent=OTIL/DFlexAntSAPO task.env.env_name=ant \
     \
     logdir="workdir/DFlexAnt10M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -250,7 +250,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntPPO task.env.env_name=humanoid \
+    task=DFlex agent=PPO/DFlexAnt task.env.env_name=humanoid \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexHumanoid10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -269,7 +269,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAC task.env.env_name=humanoid \
+    task=DFlex agent=SAC/DFlexAnt task.env.env_name=humanoid \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexHumanoid10M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -290,7 +290,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntBPTT task.env.env_name=humanoid \
+    task=DFlex agent=BPTT/DFlexAnt task.env.env_name=humanoid \
     \
     logdir="workdir/DFlexHumanoid10M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=5000 agent.bptt.max_agent_steps=10e6 \
@@ -307,7 +307,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC task.env.env_name=humanoid \
+    task=DFlex agent=SHAC/DFlexAnt task.env.env_name=humanoid \
     \
     logdir="workdir/DFlexHumanoid10M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -327,7 +327,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC2 task.env.env_name=humanoid \
+    task=DFlex agent=SHAC2/DFlexAnt task.env.env_name=humanoid \
     \
     logdir="workdir/DFlexHumanoid10M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -347,7 +347,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAPO task.env.env_name=humanoid \
+    task=DFlex agent=SAPO/DFlexAnt task.env.env_name=humanoid \
     \
     logdir="workdir/DFlexHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -369,7 +369,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntPPO task.env.env_name=snu_humanoid \
+    task=DFlex agent=PPO/DFlexAnt task.env.env_name=snu_humanoid \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexSNUHumanoid10M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -388,7 +388,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAC task.env.env_name=snu_humanoid \
+    task=DFlex agent=SAC/DFlexAnt task.env.env_name=snu_humanoid \
     task.env.no_grad=True \
     \
     logdir="workdir/DFlexSNUHumanoid10M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -409,7 +409,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntBPTT task.env.env_name=snu_humanoid \
+    task=DFlex agent=BPTT/DFlexAnt task.env.env_name=snu_humanoid \
     \
     logdir="workdir/DFlexSNUHumanoid10M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=5000 agent.bptt.max_agent_steps=10e6 \
@@ -426,7 +426,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC task.env.env_name=snu_humanoid \
+    task=DFlex agent=SHAC/DFlexAnt task.env.env_name=snu_humanoid \
     \
     logdir="workdir/DFlexSNUHumanoid10M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -446,7 +446,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSHAC2 task.env.env_name=snu_humanoid \
+    task=DFlex agent=SHAC2/DFlexAnt task.env.env_name=snu_humanoid \
     \
     logdir="workdir/DFlexSNUHumanoid10M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \
@@ -466,7 +466,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=DFlex agent=DFlexAntSAPO task.env.env_name=snu_humanoid \
+    task=DFlex agent=SAPO/DFlexAnt task.env.env_name=snu_humanoid \
     \
     logdir="workdir/DFlexSNUHumanoid10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=5000 agent.shac.max_agent_steps=10e6 \

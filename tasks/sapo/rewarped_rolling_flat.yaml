@@ -4,7 +4,7 @@ task:
     env_name: RollingPin
     env_suite: plasticinelab
 agent:
-  name: RewarpedJumperSAPO
+  name: SAPO/RewarpedJumper
   network:
     encoder_kwargs:
       mlp_keys: "com_q|joint_q"

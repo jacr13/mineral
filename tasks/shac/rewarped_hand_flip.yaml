@@ -4,7 +4,7 @@ task:
     env_name: Flip
     env_suite: dexdeform
 agent:
-  name: RewarpedJumperSHAC
+  name: SHAC/RewarpedJumper
   network:
     encoder_kwargs:
       mlp_keys: "com_q|joint_q"

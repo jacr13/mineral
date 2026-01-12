@@ -1,5 +1,5 @@
 ﻿defaults:
-  - RewarpedJumperPPO
+  - PPO/RewarpedJumper
   - PointNet
   - _self_
 

@@ -6,7 +6,7 @@ task:
     no_grad: True
 
 agent:
-  name: RewarpedJumperGAIL
+  name: GAIL/RewarpedJumper
   network:
     encoder_kwargs:
       mlp_keys: "com_q|com_qd|actions"

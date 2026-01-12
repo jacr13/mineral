@@ -1,5 +1,5 @@
 defaults:
-  - DFlexAntSAPO
+  - SAPO/DFlexAnt
   - _self_
 
 algo: OTIL

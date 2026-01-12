@@ -3,7 +3,7 @@ task:
   env:
     env_name: ant
 agent:
-  name: DFlexAntSHAC2
+  name: SHAC2/DFlexAnt
   shac:
     max_epochs: 5000
     max_agent_steps: 10000000

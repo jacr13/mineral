@@ -7,7 +7,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntPPO task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=PPO/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedAnt4M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -25,7 +25,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSAC task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=SAC/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedAnt4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -45,7 +45,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntBPTT task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=BPTT/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     \
     logdir="workdir/RewarpedAnt4M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=2000 agent.bptt.max_agent_steps=4.1e6 \
@@ -61,7 +61,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSHAC task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=SHAC/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     \
     logdir="workdir/RewarpedAnt4M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -78,7 +78,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSHAC2 task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=SHAC2/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     \
     logdir="workdir/RewarpedAnt4M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -95,7 +95,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSAPO task.env.env_name=Ant task.env.env_suite=dflex \
+    task=Rewarped agent=SAPO/DFlexAnt task.env.env_name=Ant task.env.env_suite=dflex \
     \
     logdir="workdir/RewarpedAnt4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -114,7 +114,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntPPO task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=PPO/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedAllegroHand4M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -132,7 +132,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSAC task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=SAC/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedAllegroHand4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -152,7 +152,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntBPTT task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=BPTT/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     \
     logdir="workdir/RewarpedAllegroHand4M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     agent.bptt.max_epochs=2000 agent.bptt.max_agent_steps=4.1e6 \
@@ -168,7 +168,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSHAC task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=SHAC/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     \
     logdir="workdir/RewarpedAllegroHand4M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -187,7 +187,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSHAC2 task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=SHAC2/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     \
     logdir="workdir/RewarpedAllegroHand4M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -206,7 +206,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=DFlexAntSAPO task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
+    task=Rewarped agent=SAPO/DFlexAnt task.env.env_name=AllegroHand task.env.env_suite=isaacgymenvs \
     \
     logdir="workdir/RewarpedAllegroHand4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     agent.shac.max_epochs=2000 agent.shac.max_agent_steps=4.1e6 \
@@ -227,7 +227,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperPPO task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=PPO/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedRollingPin4M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -248,7 +248,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAC task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=SAC/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedRollingPin4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -271,7 +271,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperBPTT task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=BPTT/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     \
     logdir="workdir/RewarpedRollingPin4M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     num_envs=32 \
@@ -290,7 +290,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=SHAC/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     \
     logdir="workdir/RewarpedRollingPin4M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -312,7 +312,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC2 task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=SHAC2/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     \
     logdir="workdir/RewarpedRollingPin4M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -334,7 +334,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
+    task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=RollingPin task.env.env_suite=plasticinelab \
     \
     logdir="workdir/RewarpedRollingPin4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -358,7 +358,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperPPO task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=PPO/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedJumper6M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -377,7 +377,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAC task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=SAC/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedJumper6M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -398,7 +398,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperBPTT task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=BPTT/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     \
     logdir="workdir/RewarpedJumper6M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     num_envs=32 \
@@ -415,7 +415,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=SHAC/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     \
     logdir="workdir/RewarpedJumper6M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -435,7 +435,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC2 task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=SHAC2/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     \
     logdir="workdir/RewarpedJumper6M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -455,7 +455,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Jumper task.env.env_suite=gradsim \
+    task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Jumper task.env.env_suite=gradsim \
     \
     logdir="workdir/RewarpedJumper6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -477,7 +477,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperPPO task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=PPO/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     task.env.no_grad=True \
     \
     logdir="workdir/DexDeformFlip6M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -496,7 +496,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAC task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=SAC/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedDexDeformFlip6M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -517,7 +517,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperBPTT task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=BPTT/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     \
     logdir="workdir/RewarpedDexDeformFlip6M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     num_envs=32 \
@@ -534,7 +534,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=SHAC/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     \
     logdir="workdir/RewarpedDexDeformFlip6M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -554,7 +554,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC2 task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=SHAC2/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     \
     logdir="workdir/RewarpedDexDeformFlip6M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -574,7 +574,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Flip task.env.env_suite=dexdeform \
+    task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Flip task.env.env_suite=dexdeform \
     \
     logdir="workdir/RewarpedDexDeformFlip6M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -596,7 +596,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperPPO task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=PPO/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedSoftgymTransport4M-PPO/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -617,7 +617,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAC task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=SAC/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     task.env.no_grad=True \
     \
     logdir="workdir/RewarpedSoftgymTransport4M-SAC/$(date +%Y%m%d-%H%M%S.%2N)" \
@@ -640,7 +640,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperBPTT task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=BPTT/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     \
     logdir="workdir/RewarpedSoftgymTransport4M-BPTT/$(date +%Y%m%d-%H%M%S)" \
     num_envs=32 \
@@ -659,7 +659,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=SHAC/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     \
     logdir="workdir/RewarpedSoftgymTransport4M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -681,7 +681,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSHAC2 task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=SHAC2/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     \
     logdir="workdir/RewarpedSoftgymTransport4M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \
@@ -703,7 +703,7 @@
     <br>
 
     python -m mineral.scripts.run \
-    task=Rewarped agent=RewarpedJumperSAPO task.env.env_name=Transport task.env.env_suite=softgym \
+    task=Rewarped agent=SAPO/RewarpedJumper task.env.env_name=Transport task.env.env_suite=softgym \
     \
     logdir="workdir/Exp12W-RewarpedSoftgymTransport4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)" \
     num_envs=32 \

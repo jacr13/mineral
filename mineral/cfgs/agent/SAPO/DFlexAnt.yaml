@@ -1,5 +1,5 @@
 defaults:
-  - DFlexAntSHAC2
+  - SHAC2/DFlexAnt
   - _self_
 
 shac:

@@ -4,7 +4,7 @@ task:
     env_name: hopper
     no_grad: true
 agent:
-  name: DFlexAntGAIL
+  name: GAIL/DFlexAnt
   ppo:
     max_agent_steps: 10000000
   network:

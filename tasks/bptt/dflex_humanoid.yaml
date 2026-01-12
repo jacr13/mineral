@@ -3,7 +3,7 @@ task:
   env:
     env_name: humanoid
 agent:
-  name: DFlexAntBPTT
+  name: BPTT/DFlexAnt
   bptt:
     max_epochs: 5000
     max_agent_steps: 10000000

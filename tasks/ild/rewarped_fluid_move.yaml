@@ -4,7 +4,7 @@ task:
     env_name: Transport
     env_suite: softgym
 agent:
-  name: RewarpedJumperILD
+  name: ILD/RewarpedJumper
   network:
     encoder_kwargs:
       mlp_keys: "com_q|joint_q|target_q"

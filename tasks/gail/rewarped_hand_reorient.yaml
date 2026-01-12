@@ -5,7 +5,7 @@ task:
     env_suite: isaacgymenvs
     no_grad: true
 agent:
-  name: DFlexAntGAIL
+  name: GAIL/DFlexAnt
   ppo:
     max_agent_steps: 4100000
   network:
