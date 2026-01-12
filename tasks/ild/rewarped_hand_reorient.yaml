@@ -4,7 +4,7 @@ task:
     env_name: AllegroHand
     env_suite: isaacgymenvs
 agent:
-  name: ILD/DFlexAnt
+  name: ILD/DFlexAntSAPO
   shac:
     max_epochs: 2000
     max_agent_steps: 4100000

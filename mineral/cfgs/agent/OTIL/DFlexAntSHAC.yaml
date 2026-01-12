@@ -1,0 +1,23 @@
+defaults:
+  - SHAC/DFlexAnt
+  - _self_
+
+algo: OTIL
+
+otil:
+  demos:
+    path: ""
+    n_trajs: 10
+    subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
+
+  input_type: state # state | state_state
+  loss_ot_cost_type: l2 # l2 | huber | cosine
+  loss_use_huber_speedup: true
+  loss_mlp_features_dim: null
+  loss_use_detached_prev_obs: true
+
+  critic_reward_mapping: log_exp # neg | exp | log_exp
+  critic_reward_scale: 1.0
+  critic_reward_normalize: ${..shac.normalize_ret}
+  imitation_loss_type: ot # ot | l2 | cosine
+  actor_value_return_type: min
