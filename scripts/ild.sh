@@ -69,7 +69,7 @@ for env in "${ENVS[@]}"; do
         --set "agent.shac.max_agent_steps=100000000" \
         --set "agent.shac.max_epochs=50000" \
         --env_files "${env}.yaml" \
-        --deploy_now
+        --no-deploy_now
 
     # Learn batch size from the first ever submission (since you start from 0 jobs).
     if [[ -z "$BATCH_JOBS" ]]; then
