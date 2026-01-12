@@ -1,9 +1,7 @@
 import os
-import time
-
 import re
+import time
 from datetime import timedelta
-
 
 _DURATION_RE = re.compile(r"(\d+)([smhd])")
 
@@ -60,19 +58,35 @@ def parse_runtime(runtime: str) -> int:
     td = timedelta(**kwargs)
     return int(td.total_seconds())
 
+
 class JobClock:
     def __init__(self, max_runtime, buffer_minutes: float = 30.0):
         if buffer_minutes < 0.0:
             raise ValueError("buffer_minutes must be >= 0.")
 
-        self.max_runtime_seconds = (
-            parse_runtime(max_runtime) if max_runtime is not None else None
-        )
+        self.max_runtime_seconds = parse_runtime(max_runtime) if max_runtime is not None else None
         self.buffer_seconds = float(buffer_minutes) * 60.0
 
         self.start_time = None
         self._step_start = None
         self._step_durations = []
+
+    def print_info(self):
+        if self.max_runtime_seconds is None:
+            print("[JobClock] No max runtime configured.")
+            return
+        print("[JobClock] Info:")
+        print(f"  Max Runtime: {self.max_runtime_seconds} seconds")
+        print(f"  Buffer: {self.buffer_seconds} seconds")
+        elapsed = self.elapsed()
+        if elapsed is not None:
+            print(f"  Elapsed Time: {elapsed:.2f} seconds")
+        remaining = self.remaining_time()
+        if remaining is not None:
+            print(f"  Remaining Time: {remaining:.2f} seconds")
+        mean_duration = self.mean_step_duration()
+        if mean_duration is not None:
+            print(f"  Mean Step Duration: {mean_duration:.4f} seconds")
 
     def arm(self):
         if self.start_time is not None:

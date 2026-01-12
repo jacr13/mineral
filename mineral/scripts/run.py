@@ -174,6 +174,7 @@ def main(config: DictConfig):
 
     job_clock = JobClock(config.get("max_runtime"))
     job_clock.arm()
+    job_clock.print_info()
     agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env, job_clock=job_clock)
 
     if config.ckpt:
