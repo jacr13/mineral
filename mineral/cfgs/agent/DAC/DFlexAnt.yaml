@@ -1,84 +1,28 @@
+defaults:
+  - SAC/DFlexAnt
+
 seed: ${..seed}
 algo: DAC
 
-print_every: 10
-ckpt_every: 1000
-
-tracker_len: 100
-metrics_kwargs:
-  save_video_every: 0
-  save_video_consecutive: 0
-
-network:
-  normalize_input: True
-  encoder: null
-
-  actor: Actor
-  actor_kwargs:
-    mlp_kwargs:
-      units: [512, 256, 128]
-      norm_type: LayerNorm
-      act_type: SiLU
-    weight_init: orthogonal
-
-    tanh_policy: False
-    fixed_sigma: False
-    dist_kwargs: { dist_type: squashed_normal, minlogstd: -5.0, maxlogstd: 2.0 }
-
-  critic: EnsembleQ
-  critic_kwargs:
-    n_critics: 2
-    mlp_kwargs:
-      units: [512, 256, 128]
-      norm_type: LayerNorm
-      act_type: SiLU
-    weight_init: orthogonal
-
-sac:
-  multi_gpu: ${...multi_gpu}
-  num_actors: ${...task.env.numEnvs}
-
-  reward_shaper:
-    fn: scale
-    scale: 1.0
-
-  max_agent_steps: 4.1e6
-  horizon_len: 32
-  batch_size: 2048
-  tau: 0.01
-  memory_size: 1e6
-  nstep: 3
-  gamma: 0.99
-  warm_up: 32
-  no_tgt_actor: True
-  handle_timeout: True
-
-  update_actor_interval: 1
-  update_targets_interval: 1
-  mini_epochs: 8
-
-  init_alpha: 1.0
-  alpha: null
-  alpha_optim_kwargs:
-    lr: 5e-3
-  backup_entropy: True
-
-  optim_type: AdamW
-  actor_optim_kwargs: { lr: 5e-4 }
-  critic_optim_kwargs: { lr: 5e-4 }
-  max_grad_norm: 0.5
-
 dac:
-   demos:
+  demos:
     path: ""
-    n_trajs: 10
-    subsample_factor: 0 # 0 means no subsampling, >1 means subsample by this factor
-  discriminator_mlp:
-    units: [256, 256]
-    norm_type: LayerNorm
-    act_type: SiLU
-  discriminator_optim: { type: Adam, kwargs: { lr: 3e-4 } }
-  discriminator_iters: 1
+    n_trajs: 8
+    subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
+
+  input_type: state_action # 'state', 'state_action', or 'state_state'
+  disc_update_freq: 1
+  discriminator:
+    iters: 1
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    encoder_kwargs: null
+    optim:
+      type: Adam
+      kwargs: { lr: 3e-4 }
+
   expert_batch_size: 2048
   policy_batch_size: 2048
   reward_scale: 1.0
