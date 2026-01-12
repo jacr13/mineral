@@ -68,7 +68,7 @@ for env in "${ENVS[@]}"; do
         --set "wandb.project=ild-sweep-${env}-slurm" \
         --set "agent.shac.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \
-        --no-deploy_now
+        --deploy_now
 
     # Learn batch size from the first ever submission (since you start from 0 jobs).
     if [[ -z "$BATCH_JOBS" ]]; then
