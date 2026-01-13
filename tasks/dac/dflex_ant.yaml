@@ -49,7 +49,7 @@ sweep:
   agent.dac.demos.subsample_factor: [1, 20]
   agent.dac.disc_update_freq: [5, 10]
   agent.dac.expert_batch_size: [1024, 2048]
-  agent.dac.discriminator.mlp_kwargs.units: [[64, 64], [128, 128], [256, 256]]
+  agent.dac.discriminator.mlp_kwargs.units: [[128, 128], [256, 256]]
   agent.dac.inverse_model.enabled: true
   agent.dac.inverse_model.reg_coef: [1, 10]
   agent.dac.inverse_model.batch_size: 512
