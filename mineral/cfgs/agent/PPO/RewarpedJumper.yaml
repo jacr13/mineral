@@ -1,6 +1,6 @@
 defaults:
-  - PPO/DFlexAnt
-  - PointNet
+  - /agent/PPO/DFlexAnt@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 network:

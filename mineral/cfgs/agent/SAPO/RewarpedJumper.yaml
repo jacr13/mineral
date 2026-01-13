@@ -1,6 +1,6 @@
 defaults:
-  - SAPO/DFlexAnt
-  - PointNet
+  - /agent/SAPO/DFlexAnt@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 network:

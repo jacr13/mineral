@@ -1,6 +1,6 @@
 defaults:
-  - BPTT/DFlexAnt
-  - PointNet
+  - /agent/BPTT/DFlexAnt@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 network:

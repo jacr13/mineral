@@ -1,6 +1,6 @@
 ﻿defaults:
-  - PPO/RewarpedJumper
-  - PointNet
+  - /agent/PPO/RewarpedJumper@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 seed: ${..seed}

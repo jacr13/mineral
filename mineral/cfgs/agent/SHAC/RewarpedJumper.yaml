@@ -1,6 +1,6 @@
 defaults:
-  - SHAC/DFlexAnt
-  - PointNet
+  - /agent/SHAC/DFlexAnt@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 network:

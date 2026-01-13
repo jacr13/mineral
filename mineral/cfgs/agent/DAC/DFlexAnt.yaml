@@ -1,6 +1,5 @@
 defaults:
-  - SAC/DFlexAnt
-
+  - /agent/SAC/DFlexAnt@_here_
 seed: ${..seed}
 algo: DAC
 
@@ -27,3 +26,16 @@ dac:
   policy_batch_size: 2048
   reward_scale: 1.0
   label_smooth: 0.0
+
+  inverse_model:
+    enabled: true
+    reg_coef: 0.1
+    update_freq: 1
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    encoder_kwargs: null
+    optim:
+      type: Adam
+      kwargs: { lr: 3e-4 }

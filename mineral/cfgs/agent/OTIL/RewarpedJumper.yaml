@@ -1,6 +1,6 @@
 defaults:
-  - OTIL/DFlexAntSAPO
-  - PointNet
+  - /agent/OTIL/DFlexAntSAPO@_here_
+  - /agent/PointNet@_here_
   - _self_
 
 network:

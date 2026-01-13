@@ -1,5 +1,5 @@
 defaults:
-  - SHAC/DFlexAnt
+  - /agent/SHAC/DFlexAnt@_here_
   - _self_
 
 algo: OTIL
