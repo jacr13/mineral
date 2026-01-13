@@ -13,7 +13,7 @@ gail:
     subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
 
   # discriminator network
-  input_type: state_action # 'state', 'state_action', or 'state_state'
+  input_type: state_state # 'state', 'state_action', or 'state_state'
   disc_update_freq: 3 # frequency (in epochs) to update discriminator
   discriminator:
     iters: 1
@@ -29,3 +29,20 @@ gail:
   policy_batch_size: 2048
   reward_scale: 1.0
   label_smooth: 0.0
+
+  inverse_model:
+    enabled: false
+    reg_coef: 0.1
+    update_freq: 1
+    batch_size: 256
+    iters: 1
+    patience: 0 # 0 disables early stop
+    min_delta: 0.0
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    encoder_kwargs: null
+    optim:
+      type: Adam
+      kwargs: { lr: 3e-4 }

@@ -21,7 +21,7 @@ agent:
       path: ""
       n_trajs: 8
       subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
-    input_type: state_action
+    input_type: state_state
     disc_update_freq: 5
     discriminator:
       iters: 1

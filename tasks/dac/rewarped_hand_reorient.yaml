@@ -5,16 +5,19 @@ task:
     env_suite: isaacgymenvs
     no_grad: true
 agent:
-  name: GAIL/DFlexAnt
-  ppo:
+  name: DAC/DFlexAnt
+  sac:
     max_agent_steps: 4100000
+    +target_entropy_scalar: 0.5
+    tau: 0.005
   network:
-    actor_critic_kwargs:
+    actor_kwargs:
       mlp_kwargs:
         units: [512, 256]
-      +critic_mlp_kwargs:
+    critic_kwargs:
+      mlp_kwargs:
         units: [256, 256]
-  gail:
+  dac:
     demos:
       path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
       n_trajs: 8
@@ -34,7 +37,7 @@ agent:
     policy_batch_size: 2048
     reward_scale: 1.0
     label_smooth: 0.0
-logdir: "workdir/RewarpedAllegroHand4M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+logdir: "workdir/RewarpedAllegroHand4M-DAC/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
   project: rewarped

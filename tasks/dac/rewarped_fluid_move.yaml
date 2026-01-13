@@ -1,22 +1,27 @@
 task:
   name: Rewarped
   env:
-    env_name: AllegroHand
-    env_suite: isaacgymenvs
+    env_name: Transport
+    env_suite: softgym
     no_grad: true
 agent:
-  name: GAIL/DFlexAnt
-  ppo:
-    max_agent_steps: 4100000
+  name: DAC/RewarpedJumper
   network:
-    actor_critic_kwargs:
+    encoder_kwargs:
+      mlp_keys: "com_q|joint_q|target_q"
+    actor_kwargs:
       mlp_kwargs:
         units: [512, 256]
-      +critic_mlp_kwargs:
+    critic_kwargs:
+      mlp_kwargs:
         units: [256, 256]
-  gail:
+  sac:
+    +target_entropy_scalar: 0.5
+    tau: 0.005
+    max_agent_steps: 4100000
+  dac:
     demos:
-      path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
+      path: ""
       n_trajs: 8
       subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
     input_type: state_state
@@ -34,15 +39,17 @@ agent:
     policy_batch_size: 2048
     reward_scale: 1.0
     label_smooth: 0.0
-logdir: "workdir/RewarpedAllegroHand4M-GAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+logdir: "workdir/RewarpedSoftgymTransport4M-DAC/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
 wandb:
   mode: online
   project: rewarped
 run: train_eval
-seed: 1100
+seed: 1500
 
 sweep:
   seed: [100, 110, 120, 130, 140]
 
 spawner:
+  skip: true
   runtime: "2-00:00:00"

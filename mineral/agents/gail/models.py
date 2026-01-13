@@ -6,9 +6,7 @@ from ..ppo.models import weight_init_
 
 
 class Discriminator(nn.Module):
-    def __init__(
-        self, obs_space, act_dim, input_type='state_action', discriminator_kwargs=None, encoder=None, encoder_kwargs=None
-    ):
+    def __init__(self, obs_space, act_dim, input_type, discriminator_kwargs=None, encoder=None, encoder_kwargs=None):
         super().__init__()
         if discriminator_kwargs is None:
             discriminator_kwargs = {}

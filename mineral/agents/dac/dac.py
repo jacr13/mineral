@@ -1,9 +1,12 @@
+import collections
 import os
 
 import torch
 import torch.nn.functional as F
 
 from ...common.demos import get_demos
+from ..ddpg.models import InverseModel
+from ..ddpg.utils import soft_update
 from ..gail.models import Discriminator
 from ..sac.sac import SAC
 
@@ -54,7 +57,34 @@ class DAC(SAC):
         self.label_smooth = float(self.dac_config.get("label_smooth", 0.0))
         self.disc_update_freq = int(self.dac_config.get("disc_update_freq", 1))
 
+        inv_config = self.dac_config.get("inverse_model", {})
+        self.inv_reg_coef = float(inv_config.get("reg_coef", 0.0))
+        self.inv_update_freq = int(inv_config.get("update_freq", 1))
+        self.inv_batch_size = int(inv_config.get("batch_size", self.sac_config.batch_size))
+        self.inv_train_iters = int(inv_config.get("iters", 1))
+        inv_patience = inv_config.get("patience", 0)
+        self.inv_patience = 0 if inv_patience is None else int(inv_patience)
+        self.inv_min_delta = float(inv_config.get("min_delta", 0.0))
+        self.inverse_model = None
+        self.inv_optim = None
+        if inv_config.get("enabled", self.inv_reg_coef > 0.0):
+            inv_mlp_kwargs = inv_config.get("mlp_kwargs", None)
+            inv_encoder_kwargs = inv_config.get("encoder_kwargs", None)
+            if inv_encoder_kwargs is None:
+                inv_encoder_kwargs = self.network_config.get("encoder_kwargs", {})
+            self.inverse_model = InverseModel(
+                obs_space=self.obs_space,
+                action_dim=self.action_dim,
+                mlp_kwargs=inv_mlp_kwargs,
+                encoder_kwargs=inv_encoder_kwargs,
+            ).to(self.device)
+            inv_optim_kwargs = inv_config.get("optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
+            InvOptim = getattr(torch.optim, inv_optim_kwargs.get("type", "Adam"))
+            self.inv_optim = InvOptim(self.inverse_model.parameters(), **inv_optim_kwargs.get("kwargs", {}))
+
         self.discriminator.eval()
+        if self.inverse_model is not None:
+            self.inverse_model.eval()
 
     def get_discriminator_inputs(self, obs, actions, next_obs):
         if self.input_type == "state":
@@ -169,6 +199,11 @@ class DAC(SAC):
 
         return obs, act, next_obs
 
+    def _normalize_obs_dict(self, obs):
+        if self.normalize_input:
+            return {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        return obs
+
     def train_discriminator(self, memory):
         if memory.cur_capacity < self.policy_batch_size:
             return {
@@ -220,6 +255,77 @@ class DAC(SAC):
             "discriminator/real": torch.stack(losses["real"]).mean().item() if len(losses["real"]) > 0 else 0.0,
             "discriminator/fake": torch.stack(losses["fake"]).mean().item() if len(losses["fake"]) > 0 else 0.0,
         }
+
+    def update_actor(self, obs, next_obs=None):
+        self.critic.requires_grad_(False)
+        obs = self._normalize_obs_dict(obs)
+        z = self.encoder(obs)
+        if self.sac_config.get("actor_detach_encoder", False):
+            z = {k: v.detach() for k, v in z.items()} if isinstance(z, dict) else z.detach()
+        actions, _, log_prob = self.get_actions(z=z, logprob=True)
+        Q = self.critic.get_q_min(z, actions)
+        actor_loss = (self.get_alpha() * log_prob - Q).mean()
+
+        inv_reg_loss = None
+        if self.inverse_model is not None and next_obs is not None and self.inv_reg_coef > 0.0:
+            next_obs = self._normalize_obs_dict(next_obs)
+            with torch.no_grad():
+                inv_pred = self.inverse_model(obs, next_obs)
+            inv_reg_loss = F.mse_loss(actions, inv_pred)
+            actor_loss = actor_loss + self.inv_reg_coef * inv_reg_loss
+
+        grad_norm = self.optimizer_update(self.actor_optim, actor_loss)
+        self.critic.requires_grad_(True)
+
+        entropy = -log_prob
+        alpha_loss = None
+        if self.sac_config.alpha is None:
+            alpha_loss = (self.get_alpha(detach=False) * (entropy - self.target_entropy).detach()).mean()
+            self.optimizer_update(self.alpha_optim, alpha_loss)
+        return actor_loss, alpha_loss, entropy.mean(), grad_norm, inv_reg_loss
+
+    def update_net(self, memory):
+        results = collections.defaultdict(list)
+        for _i in range(self.sac_config.mini_epochs):
+            self.mini_epoch += 1
+            obs, action, reward, next_obs, done = memory.sample_batch(self.sac_config.batch_size, device=self.device)
+
+            critic_loss, critic_grad_norm, target_values = self.update_critic(obs, action, reward, next_obs, done)
+            results["loss/critic"].append(critic_loss)
+            results["grad_norm/critic"].append(critic_grad_norm)
+            for k, v in target_values.items():
+                results[k].append(v)
+
+            if self.inverse_model is not None and self.mini_epoch % self.inv_update_freq == 0:
+                normalizer = self.obs_rms if self.normalize_input else None
+                inv_loss = self.inverse_model.train_on_replay(
+                    memory,
+                    self.inv_optim,
+                    batch_size=self.inv_batch_size,
+                    device=self.device,
+                    iters=self.inv_train_iters,
+                    normalizer=normalizer,
+                    patience=self.inv_patience,
+                    min_delta=self.inv_min_delta,
+                )
+                if inv_loss is not None:
+                    results["loss/inverse_model"].append(inv_loss)
+
+            if self.mini_epoch % self.sac_config.update_actor_interval == 0:
+                actor_loss, alpha_loss, entropy, actor_grad_norm, inv_reg_loss = self.update_actor(obs, next_obs)
+                results["loss/actor"].append(actor_loss)
+                if alpha_loss is not None:
+                    results["loss/alpha"].append(alpha_loss)
+                results["entropy"].append(entropy)
+                results["grad_norm/actor"].append(actor_grad_norm)
+                if inv_reg_loss is not None:
+                    results["loss/inv_reg"].append(inv_reg_loss)
+
+            if self.mini_epoch % self.sac_config.update_targets_interval == 0:
+                soft_update(self.critic_target, self.critic, self.sac_config.tau)
+                if not self.sac_config.no_tgt_actor:
+                    soft_update(self.actor_target, self.actor, self.sac_config.tau)
+        return results
 
     def train(self):
         obs = self.env.reset()

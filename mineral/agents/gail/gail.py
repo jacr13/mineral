@@ -1,10 +1,14 @@
+import collections
 import os
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from ...common.demos import get_demos
-from ..ppo.ppo import PPO
+from ..ddpg.models import InverseModel
+from ..ppo.ppo import PPO, actor_loss, bounds_loss, critic_loss, policy_kl
+from ..ppo.utils import adjust_learning_rate_cos
 from .models import Discriminator
 
 
@@ -17,7 +21,7 @@ class GAIL(PPO):
         # GAIL-specific config
         self.gail_config = full_cfg.agent.get("gail", {})
 
-        self.input_type = self.gail_config.input_type
+        self.input_type = self.gail_config.get("input_type", "state_action")
 
         # demos
         demos_config = self.gail_config.get("demos", {})
@@ -46,6 +50,34 @@ class GAIL(PPO):
         self.reward_scale = float(self.gail_config.get("reward_scale", 1.0))
         self.label_smooth = float(self.gail_config.get("label_smooth", 0.0))
 
+        inv_config = self.gail_config.get("inverse_model", {})
+        self.inv_reg_coef = float(inv_config.get("reg_coef", 0.0))
+        self.inv_update_freq = int(inv_config.get("update_freq", 1))
+        self.inv_batch_size = int(inv_config.get("batch_size", self.minibatch_size))
+        self.inv_train_iters = int(inv_config.get("iters", 1))
+        inv_patience = inv_config.get("patience", 0)
+        self.inv_patience = 0 if inv_patience is None else int(inv_patience)
+        self.inv_min_delta = float(inv_config.get("min_delta", 0.0))
+        self.inverse_model = None
+        self.inv_optim = None
+        if inv_config.get("enabled", self.inv_reg_coef > 0.0):
+            inv_mlp_kwargs = inv_config.get("mlp_kwargs", None)
+            inv_encoder_kwargs = inv_config.get("encoder_kwargs", None)
+            if inv_encoder_kwargs is None:
+                inv_encoder_kwargs = full_cfg.agent.network.get("encoder_kwargs", {})
+            self.inverse_model = InverseModel(
+                obs_space=self.obs_space,
+                action_dim=self.action_dim,
+                mlp_kwargs=inv_mlp_kwargs,
+                encoder_kwargs=inv_encoder_kwargs,
+            ).to(self.device)
+            inv_optim_kwargs = inv_config.get("optim", {"type": "Adam", "kwargs": {"lr": 3e-4}})
+            InvOptim = getattr(torch.optim, inv_optim_kwargs.get("type", "Adam"))
+            self.inv_optim = InvOptim(self.inverse_model.parameters(), **inv_optim_kwargs.get("kwargs", {}))
+
+        if self.inverse_model is not None:
+            self.inverse_model.eval()
+
     def get_discriminator_inputs(self, obs, actions, next_obs):
         if self.input_type == "state":
             input_1, input_2 = obs, None
@@ -57,6 +89,79 @@ class GAIL(PPO):
             raise NotImplementedError
 
         return input_1, input_2
+
+    def _normalize_obs_dict(self, obs):
+        if self.normalize_input:
+            return {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        return obs
+
+    def _mask_obs_dict(self, obs, mask, mask_cpu):
+        masked = {}
+        for k, v in obs.items():
+            use_mask = mask_cpu if v.device.type == "cpu" else mask
+            masked[k] = v[use_mask]
+        return masked
+
+    def _next_obs_from_indices(self, flat_indices):
+        # Map flattened indices back to (step, env) for next_obs lookup.
+        steps_per_env = self.storage.transitions_per_env
+        flat_indices = flat_indices.long()
+        env_idx = torch.div(flat_indices, steps_per_env, rounding_mode="floor")
+        step_idx = flat_indices % steps_per_env
+        next_step_idx = torch.clamp(step_idx + 1, max=steps_per_env - 1)
+
+        dones = self.storage.storage_dict["dones"][step_idx, env_idx].bool()
+        valid = (step_idx < (steps_per_env - 1)) & (~dones)
+
+        next_obs = {}
+        for k, v in self.storage.storage_dict["obses"].items():
+            idx_env = env_idx.to(v.device)
+            idx_step = next_step_idx.to(v.device)
+            next_obs[k] = v[idx_step, idx_env]
+        return next_obs, valid
+
+    def _train_inverse_model(self):
+        data = self.storage.data_dict
+        if data is None or self.inverse_model is None:
+            return None
+        total = data["actions"].shape[0]
+        if total < self.inv_batch_size:
+            return None
+
+        self.inverse_model.train()
+        losses = []
+        best_loss = None
+        bad_count = 0
+        normalizer = self.obs_rms if self.normalize_input else None
+
+        for _ in range(self.inv_train_iters):
+            indices = torch.randint(0, total, (self.inv_batch_size,), device=self.device)
+            obs = {k: v[indices] for k, v in data["obses"].items()}
+            next_obs, valid_mask = self._next_obs_from_indices(indices)
+            if not valid_mask.any():
+                continue
+            mask_cpu = valid_mask.cpu()
+            obs = self._mask_obs_dict(obs, valid_mask, mask_cpu)
+            next_obs = self._mask_obs_dict(next_obs, valid_mask, mask_cpu)
+            actions = data["actions"][indices][valid_mask]
+
+            loss = self.inverse_model.train_batch(obs, actions, next_obs, self.inv_optim, normalizer=normalizer)
+            losses.append(loss)
+
+            if self.inv_patience > 0:
+                loss_val = float(loss.item())
+                if best_loss is None or (best_loss - loss_val) > self.inv_min_delta:
+                    best_loss = loss_val
+                    bad_count = 0
+                else:
+                    bad_count += 1
+                    if bad_count >= self.inv_patience:
+                        break
+
+        self.inverse_model.eval()
+        if len(losses) == 0:
+            return None
+        return torch.stack(losses).mean().detach()
 
     @torch.no_grad()
     def gail_reward(self, obs, actions, next_obs):
@@ -320,3 +425,131 @@ class GAIL(PPO):
         print(timings)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
+
+    def train_epoch(self):
+        results = collections.defaultdict(list)
+        for mini_ep in range(0, self.mini_epochs):
+            self.mini_epoch += 1
+            ep_kls = []
+
+            if self.inverse_model is not None and self.mini_epoch % self.inv_update_freq == 0:
+                inv_loss = self._train_inverse_model()
+                if inv_loss is not None:
+                    results["loss/inverse_model"].append(inv_loss)
+
+            for i in range(len(self.storage)):
+                value_preds, old_action_log_probs, advantage, old_mu, old_sigma, returns, actions, obs_dict = self.storage[i]
+                if not isinstance(obs_dict, dict):
+                    obs_dict = {'obs': obs_dict}
+
+                if self.normalize_input:
+                    input_dict = {}
+                    for k, v in obs_dict.items():
+                        self.obs_rms[k].update(v)
+                        input_dict[k] = self.obs_rms[k].normalize(v)
+                else:
+                    input_dict = obs_dict
+                batch_dict = {
+                    'prev_actions': actions,
+                    **input_dict,
+                }
+
+                model_out = self.model(batch_dict)
+                action_log_probs = model_out['prev_neglogp']
+                values = model_out['values']
+                entropy = model_out['entropy']
+                mu = model_out['mu']
+                sigma = model_out['sigma']
+
+                a_loss, clip_frac = actor_loss(
+                    old_action_log_probs, action_log_probs, advantage, self.e_clip, self.use_smooth_clamp
+                )
+                c_loss, explained_var = critic_loss(value_preds, values, self.e_clip, returns, self.clip_value_loss)
+                b_loss = bounds_loss(mu, self.bounds_type)
+
+                a_loss, c_loss, entropy, b_loss = [torch.mean(loss) for loss in [a_loss, c_loss, entropy, b_loss]]
+
+                loss = a_loss + 0.5 * c_loss * self.critic_coef - entropy * self.entropy_coef + b_loss * self.bounds_loss_coef
+
+                inv_reg_loss = None
+                if self.inverse_model is not None and self.inv_reg_coef > 0.0:
+                    start, end = self.storage.last_range
+                    flat_indices = torch.arange(start, end, device=self.device)
+                    next_obs, valid_mask = self._next_obs_from_indices(flat_indices)
+                    if valid_mask.any():
+                        mask_cpu = valid_mask.cpu()
+                        obs_inv = self._mask_obs_dict(obs_dict, valid_mask, mask_cpu)
+                        next_obs_inv = self._mask_obs_dict(next_obs, valid_mask, mask_cpu)
+                        obs_inv = self._normalize_obs_dict(obs_inv)
+                        next_obs_inv = self._normalize_obs_dict(next_obs_inv)
+                        with torch.no_grad():
+                            inv_pred = self.inverse_model(obs_inv, next_obs_inv)
+                        inv_reg_loss = F.mse_loss(mu[valid_mask], inv_pred)
+                        loss = loss + self.inv_reg_coef * inv_reg_loss
+
+                if self.dapg_config is not None:
+                    demo_actor_loss, demo_nll_loss = self.update_dapg()
+                    loss += demo_actor_loss
+
+                self.optim.zero_grad()
+                loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
+
+                if self.truncate_grads:
+                    if not self.multi_gpu:
+                        grad_norm_all = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                    else:
+                        assert self.accelerator.sync_gradients
+                        grad_norm_all = self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+                self.optim.step()
+
+                with torch.no_grad():
+                    kl_dist = policy_kl(mu.detach(), sigma.detach(), old_mu, old_sigma)
+
+                if self.multi_gpu:
+                    metrics = (kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma)
+                    metrics = self.accelerator.gather_for_metrics(metrics)
+                    kl_dist, loss, a_loss, c_loss, b_loss, entropy, clip_frac, explained_var, mu, sigma = metrics
+
+                    if self.dapg_config is not None:
+                        demo_actor_loss, demo_nll_loss = self.accelerator.gather_for_metrics((demo_actor_loss, demo_nll_loss))
+
+                self.storage.update_mu_sigma(mu.detach(), sigma.detach())
+                ep_kls.append(kl_dist)
+
+                results['loss/total'].append(loss)
+                results['loss/actor'].append(a_loss)
+                results['loss/critic'].append(c_loss)
+                results['loss/bounds'].append(b_loss)
+                results['loss/entropy'].append(entropy)
+                results['clip_frac'].append(clip_frac)
+                results['explained_var'].append(explained_var)
+                results['mu'].append(mu.detach())
+                results['sigma'].append(sigma.detach())
+                if inv_reg_loss is not None:
+                    results['loss/inv_reg'].append(inv_reg_loss.detach())
+                if self.truncate_grads:
+                    results['grad_norm/all'].append(grad_norm_all)
+
+                if self.dapg_config is not None:
+                    results['dapg/demo_nll_loss'].append(demo_nll_loss)
+                    results['dapg/demo_actor_loss'].append(demo_actor_loss)
+                    results['dapg/lambda'].append(torch.tensor(self.dapg_lambda))
+                    self.update_dapg_lambda()
+
+            avg_kl = torch.mean(torch.stack(ep_kls))
+            results['avg_kl'].append(avg_kl)
+
+            if self.lr_schedule == 'kl':
+                self.last_lr = self.scheduler.update(self.last_lr, avg_kl.item())
+            elif self.lr_schedule == 'cos':
+                self.last_lr = adjust_learning_rate_cos(
+                    self.init_lr, mini_ep, self.mini_epochs, self.agent_steps, self.max_agent_steps
+                )
+
+            for param_group in self.optim.param_groups:
+                param_group['lr'] = self.last_lr
+
+        if self.lr_schedule == 'linear':
+            self.last_lr = self.scheduler.update(self.agent_steps)
+
+        return results
