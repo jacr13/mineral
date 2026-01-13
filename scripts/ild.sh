@@ -11,6 +11,7 @@ BATCH_JOBS="96"          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
 ENVS=(
+  "dflex_ant"
   "dflex_hopper"
   "dflex_humanoid"
   "dflex_snu_humanoid"
