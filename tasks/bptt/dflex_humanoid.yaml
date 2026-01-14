@@ -8,7 +8,7 @@ agent:
     max_epochs: 5000
     max_agent_steps: 10000000
   network:
-    actor_critic_kwargs:
+    actor_kwargs:
       mlp_kwargs:
         units: [256, 128]
 logdir: "workdir/DFlexHumanoid10M-BPTT/$(date +%Y%m%d-%H%M%S)"

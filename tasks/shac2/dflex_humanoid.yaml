@@ -11,10 +11,11 @@ agent:
       lr: 0.0005
     target_critic_alpha: 0.995
   network:
-    actor_critic_kwargs:
+    actor_kwargs:
       mlp_kwargs:
         units: [256, 128]
-      critic_mlp_kwargs:
+    critic_kwargs:
+      mlp_kwargs:
         units: [128, 128]
 logdir: "workdir/DFlexHumanoid10M-SHAC2/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
