@@ -50,8 +50,8 @@ sweep:
   agent.dac.expert_batch_size: 512
   agent.dac.discriminator.iters: [1, 5]
   agent.dac.discriminator.mlp_kwargs.units: [[64, 64], [128, 128]]
-  agent.dac.inverse_model.enabled: true
-  agent.dac.inverse_model.reg_coef: 1
+  agent.dac.inverse_model.enabled: false
+  agent.dac.inverse_model.reg_coef: 0
   agent.dac.inverse_model.batch_size: 512
   agent.dac.inverse_model.iters: 100
 
