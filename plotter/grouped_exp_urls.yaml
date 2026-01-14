@@ -1,0 +1,36 @@
+hopper:
+  FOCUS-l2: https://wandb.ai/jacr/sweep-dflex_hopper-slurm-new/groups/emma-blue-london-crazy-batman.OTIL.DFlex_hopper_64/workspace
+  FOCUS-OT-l2: https://wandb.ai/jacr/sweep-dflex_hopper-slurm-new/groups/six-tennis-maine-asparagus-sad.OTIL.DFlex_hopper_64/workspace
+  FOCUS-OT-cos: https://wandb.ai/jacr/sweep-dflex_hopper-slurm-new/groups/september-eleven-charlie-low-happy.OTIL.DFlex_hopper_64/workspace
+  ILD: null
+  SAMfO/DACfO: null
+  OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_hopper-slurm/groups/freddie-mars-mobile-four-high.DAC.DFlex_hopper_64/workspace
+  GAILfO: null
+  MAAD: null
+ant:
+  FOCUS-l2: https://wandb.ai/jacr/sweep-dflex_ant-slurm-new/groups/india-floor-tennessee-quiet-blue.OTIL.DFlex_ant_64/workspace
+  FOCUS-ot-l2: https://wandb.ai/jacr/sweep-dflex_ant-slurm-new/groups/two-robert-kitten-papa-moon.OTIL.DFlex_ant_64/workspace
+  FOCUS-ot-cos: https://wandb.ai/jacr/sweep-dflex_ant-slurm-new/groups/william-delaware-autumn-venus-iowa.OTIL.DFlex_ant_64/workspace
+  SAMfO/DACfO: null
+  ILD: null
+  OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_ant-slurm/groups/yellow-six-freddie-hot-hawaii.DAC.DFlex_ant_64/workspace
+  GAILfO: null
+  MAAD: null
+humanoid:
+  FOCUS-l2: https://wandb.ai/jacr/sweep-dflex_humanoid-slurm-new/groups/skylark-cola-thirteen-edward-finch.OTIL.DFlex_humanoid_64/workspace
+  FOCUS-ot-l2: https://wandb.ai/jacr/sweep-dflex_humanoid-slurm-new/groups/moon-vegan-north-oscar-comet.OTIL.DFlex_humanoid_64/workspace
+  FOCUS-ot-cos: https://wandb.ai/jacr/sweep-dflex_humanoid-slurm-new/groups/mirror-minnesota-seven-alanine-magazine.OTIL.DFlex_humanoid_64/workspace
+  ILD: null
+  SAMfO/DACfO: null
+  OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_humanoid-slurm/groups/freddie-wyoming-december-cardinal-artist.DAC.DFlex_humanoid_64/workspace
+  GAILfO: null
+  MAAD: null
+snu_humanoid:
+  FOCUS-l2: https://wandb.ai/jacr/sweep-dflex_snu_humanoid-slurm-new/groups/mango-magnesium-friend-pizza-crazy.OTIL.DFlex_snu_humanoid_64/workspace
+  FOCUS-ot-l2: https://wandb.ai/jacr/sweep-dflex_snu_humanoid-slurm-new/groups/earth-golf-echo-aspen-comet.OTIL.DFlex_snu_humanoid_64/workspace
+  FOCUS-ot-cos: https://wandb.ai/jacr/sweep-dflex_snu_humanoid-slurm-new/groups/texas-cold-bluebird-video-winner.OTIL.DFlex_snu_humanoid_64/workspace
+  ILD: null
+  SAMfO/DACfO: null
+  OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_snu_humanoid-slurm/groups/eight-sodium-tennessee-zulu-cup.DAC.DFlex_snu_humanoid_64/workspace
+  GAILfO: null
+  MAAD: null

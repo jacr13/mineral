@@ -1,0 +1,169 @@
+hopper:
+  FOCUS-l2:
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_12
+    seed: 1000
+    run_id: emma-blue-london-crazy-batman-spsg.OTIL.DFlex_hopper_64.seed1000
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_36
+    seed: 1200
+    run_id: emma-blue-london-crazy-batman-dYZQ.OTIL.DFlex_hopper_64.seed1200
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_24
+    seed: 1100
+    run_id: emma-blue-london-crazy-batman-K25r.OTIL.DFlex_hopper_64.seed1100
+  FOCUS-OT-l2:
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_5
+    seed: 1000
+    run_id: six-tennis-maine-asparagus-sad-S67U.OTIL.DFlex_hopper_64.seed1000
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_29
+    seed: 1200
+    run_id: six-tennis-maine-asparagus-sad-YUWQ.OTIL.DFlex_hopper_64.seed1200
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_180742/sweep_17
+    seed: 1100
+    run_id: six-tennis-maine-asparagus-sad-0M58.OTIL.DFlex_hopper_64.seed1100
+  FOCUS-OT-cos:
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_190446/sweep_13
+    seed: 1100
+    run_id: september-eleven-charlie-low-happy-LPql.OTIL.DFlex_hopper_64.seed1100
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_190445/sweep_1
+    seed: 1000
+    run_id: september-eleven-charlie-low-happy-rIpZ.OTIL.DFlex_hopper_64.seed1000
+  - logdir: workdir/DFlexHopper10M-OTIL_20251229_190446/sweep_25
+    seed: 1200
+    run_id: september-eleven-charlie-low-happy-su27.OTIL.DFlex_hopper_64.seed1200
+ant:
+  FOCUS-l2:
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160817/sweep_12
+    seed: 1000
+    run_id: india-floor-tennessee-quiet-blue-4WLU.OTIL.DFlex_ant_64.seed1000
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160818/sweep_36
+    seed: 1200
+    run_id: india-floor-tennessee-quiet-blue-5QM5.OTIL.DFlex_ant_64.seed1200
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160818/sweep_24
+    seed: 1100
+    run_id: india-floor-tennessee-quiet-blue-kDBT.OTIL.DFlex_ant_64.seed1100
+  FOCUS-ot-l2:
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125325/sweep_18
+    seed: 100
+    run_id: two-robert-kitten-papa-moon-rOsG.OTIL.DFlex_ant_64.seed100
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125326/sweep_66
+    seed: 120
+    run_id: two-robert-kitten-papa-moon-xaaK.OTIL.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125326/sweep_42
+    seed: 110
+    run_id: two-robert-kitten-papa-moon-YVe7.OTIL.DFlex_ant_64.seed110
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160818/sweep_18
+    seed: 1100
+    run_id: two-robert-kitten-papa-moon-Fajy.OTIL.DFlex_ant_64.seed1100
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160818/sweep_30
+    seed: 1200
+    run_id: two-robert-kitten-papa-moon-LTet.OTIL.DFlex_ant_64.seed1200
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160817/sweep_6
+    seed: 1000
+    run_id: two-robert-kitten-papa-moon-zNxw.OTIL.DFlex_ant_64.seed1000
+  FOCUS-ot-cos:
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125325/sweep_8
+    seed: 100
+    run_id: william-delaware-autumn-venus-iowa-EtOn.OTIL.DFlex_ant_64.seed100
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125326/sweep_56
+    seed: 120
+    run_id: william-delaware-autumn-venus-iowa-P4nX.OTIL.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-OTIL_20251218_125325/sweep_32
+    seed: 110
+    run_id: william-delaware-autumn-venus-iowa-gACx.OTIL.DFlex_ant_64.seed110
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160823/sweep_2
+    seed: 1000
+    run_id: william-delaware-autumn-venus-iowa-ahUa.OTIL.DFlex_ant_64.seed1000
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160823/sweep_14
+    seed: 1100
+    run_id: william-delaware-autumn-venus-iowa-QzW8.OTIL.DFlex_ant_64.seed1100
+  - logdir: workdir/DFlexAnt10M-OTIL_20251229_160824/sweep_26
+    seed: 1200
+    run_id: william-delaware-autumn-venus-iowa-uxsK.OTIL.DFlex_ant_64.seed1200
+humanoid:
+  FOCUS-l2:
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195250/sweep_8
+    seed: 1000
+    run_id: skylark-cola-thirteen-edward-finch-0Sio.OTIL.DFlex_humanoid_64.seed1000
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195251/sweep_32
+    seed: 1200
+    run_id: skylark-cola-thirteen-edward-finch-EJq9.OTIL.DFlex_humanoid_64.seed1200
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195251/sweep_20
+    seed: 1100
+    run_id: skylark-cola-thirteen-edward-finch-uTqz.OTIL.DFlex_humanoid_64.seed1100
+  FOCUS-ot-l2:
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000740/sweep_38
+    seed: 110
+    run_id: moon-vegan-north-oscar-comet-clVk.OTIL.DFlex_humanoid_64.seed110
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000741/sweep_62
+    seed: 120
+    run_id: moon-vegan-north-oscar-comet-JpM6.OTIL.DFlex_humanoid_64.seed120
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000740/sweep_14
+    seed: 100
+    run_id: moon-vegan-north-oscar-comet-MnuD.OTIL.DFlex_humanoid_64.seed100
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195251/sweep_26
+    seed: 1200
+    run_id: moon-vegan-north-oscar-comet-ayaG.OTIL.DFlex_humanoid_64.seed1200
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195250/sweep_2
+    seed: 1000
+    run_id: moon-vegan-north-oscar-comet-eypl.OTIL.DFlex_humanoid_64.seed1000
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195250/sweep_14
+    seed: 1100
+    run_id: moon-vegan-north-oscar-comet-TZQD.OTIL.DFlex_humanoid_64.seed1100
+  FOCUS-ot-cos:
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000740/sweep_31
+    seed: 110
+    run_id: mirror-minnesota-seven-alanine-magazine-ah7j.OTIL.DFlex_humanoid_64.seed110
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000741/sweep_55
+    seed: 120
+    run_id: mirror-minnesota-seven-alanine-magazine-BEBM.OTIL.DFlex_humanoid_64.seed120
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251222_000740/sweep_7
+    seed: 100
+    run_id: mirror-minnesota-seven-alanine-magazine-oNr5.OTIL.DFlex_humanoid_64.seed100
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_211257/sweep_25
+    seed: 1200
+    run_id: mirror-minnesota-seven-alanine-magazine-k6Ro.OTIL.DFlex_humanoid_64.seed1200
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_211257/sweep_1
+    seed: 1000
+    run_id: mirror-minnesota-seven-alanine-magazine-pFWB.OTIL.DFlex_humanoid_64.seed1000
+  - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_211257/sweep_13
+    seed: 1100
+    run_id: mirror-minnesota-seven-alanine-magazine-uBSr.OTIL.DFlex_humanoid_64.seed1100
+snu_humanoid:
+  FOCUS-l2:
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_000707/sweep_12
+    seed: 1000
+    run_id: mango-magnesium-friend-pizza-crazy-2wbV.OTIL.DFlex_snu_humanoid_64.seed1000
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_000708/sweep_36
+    seed: 1200
+    run_id: mango-magnesium-friend-pizza-crazy-micd.OTIL.DFlex_snu_humanoid_64.seed1200
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_000708/sweep_24
+    seed: 1100
+    run_id: mango-magnesium-friend-pizza-crazy-SzKf.OTIL.DFlex_snu_humanoid_64.seed1100
+  FOCUS-ot-l2:
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251216_230613/sweep_4
+    seed: 100
+    run_id: earth-golf-echo-aspen-comet-kQ2e.OTIL.DFlex_snu_humanoid_64.seed100
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251216_230614/sweep_36
+    seed: 110
+    run_id: earth-golf-echo-aspen-comet-szyu.OTIL.DFlex_snu_humanoid_64.seed110
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251216_230614/sweep_68
+    seed: 120
+    run_id: earth-golf-echo-aspen-comet-cTKJ.OTIL.DFlex_snu_humanoid_64.seed120
+  FOCUS-ot-cos:
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251217_152121/sweep_12
+    seed: 110
+    run_id: texas-cold-bluebird-video-winner-cNNl.OTIL.DFlex_snu_humanoid_64.seed110
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251217_152121/sweep_20
+    seed: 120
+    run_id: texas-cold-bluebird-video-winner-ER4T.OTIL.DFlex_snu_humanoid_64.seed120
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251217_152121/sweep_4
+    seed: 100
+    run_id: texas-cold-bluebird-video-winner-Mnow.OTIL.DFlex_snu_humanoid_64.seed100
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_024318/sweep_14
+    seed: 1100
+    run_id: texas-cold-bluebird-video-winner-HiVX.OTIL.DFlex_snu_humanoid_64.seed1100
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_024319/sweep_26
+    seed: 1200
+    run_id: texas-cold-bluebird-video-winner-jQqM.OTIL.DFlex_snu_humanoid_64.seed1200
+  - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_024318/sweep_2
+    seed: 1000
+    run_id: texas-cold-bluebird-video-winner-PLpI.OTIL.DFlex_snu_humanoid_64.seed1000

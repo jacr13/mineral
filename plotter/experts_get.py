@@ -2,7 +2,6 @@ import os
 
 import torch
 
-
 def get_demos(device, path="", n_trajs=None, subsample_factor=1):
     """Load and optionally subsample demonstration data from a given path.
 
@@ -79,5 +78,24 @@ def get_demos(device, path="", n_trajs=None, subsample_factor=1):
     # Mean expert return over selected trajectories (no subsampling, but first n_trajs)
     rew = _slice(demos_raw["rew"].to(device))
     demos["expert_return"] = rew.sum(dim=1).mean().item()
-
+    demos["expert_return_std"] = rew.sum(dim=1).std().item()
     return demos
+
+
+experts_path = {
+    "hopper": "/home/joao/workspace/github/mineral/experts/demos/DFlex_hopper_demos128_return4812_len1000.pt",
+    "ant": "/home/joao/workspace/github/mineral/experts/demos/DFlex_ant_demos128_return9318_len1000.pt",
+    "humanoid": "/home/joao/workspace/github/mineral/experts/demos/DFlex_humanoid_demos128_return8116_len984.pt",
+    "snu_humanoid":"/home/joao/workspace/github/mineral/experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+}
+
+expp = {}
+for env, path in experts_path.items():
+    demos = get_demos("cuda", path=path, n_trajs=8)
+
+    expp[env] = {
+        "mean": demos["expert_return"],
+        "std": demos["expert_return_std"]
+    }
+
+print(expp)
