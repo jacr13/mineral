@@ -47,12 +47,12 @@ sweep:
   agent.gail.demos.subsample_factor: [1, 20]
   agent.gail.disc_update_freq: [5, 10]
   agent.gail.policy_batch_size: 2048
-  agent.dac.discriminator.iters: [1, 5]
+  agent.gail.discriminator.iters: [1, 5]
   agent.gail.expert_batch_size: [512, 1024, 2048]
-  agent.dac.inverse_model.enabled: true
-  agent.dac.inverse_model.reg_coef: 1
-  agent.dac.inverse_model.batch_size: 512
-  agent.dac.inverse_model.iters: 100
+  agent.gail.inverse_model.enabled: true
+  agent.gail.inverse_model.reg_coef: 1
+  agent.gail.inverse_model.batch_size: 512
+  agent.gail.inverse_model.iters: 100
 
 spawner:
   runtime: "4h"
