@@ -6,14 +6,14 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 
 USER="candidor"
 POLL_SECONDS=60
-MAX_JOBS=75
-BATCH_JOBS=""          # empty = unknown until first submit
+MAX_JOBS=100
+BATCH_JOBS="72"          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
 ENVS=(
   "dflex_ant"
-  "dflex_hopper"
   "dflex_humanoid"
+  "dflex_hopper"
   "dflex_snu_humanoid"
 )
 
