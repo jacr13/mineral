@@ -1,25 +1,33 @@
-from pathlib import Path
 import math
-import numpy as np
-import matplotlib.pyplot as plt
+import os
+from pathlib import Path
 
-from utils import load_yaml, save_yaml, load_json, sync_exp_from_remote
-from wandb_api import get_group_runs
+import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+from utils import load_yaml, save_yaml, sync_exp_from_remote
+from wandb_api import get_group_runs
 
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
 
 EXPERTS = {
-    'hopper': {'mean': 4812.96875, 'std': 7.324751853942871}, 'ant': {'mean': 9329.505859375, 'std': 37.58782196044922}, 'humanoid': {'mean': 8225.2177734375, 'std': 81.0524673461914}, 'snu_humanoid': {'mean': 6748.921875, 'std': 49.13310623168945},}
-
-ENV_NAMES = {
-    "hopper": "Hopper",
-    "ant": "Ant",
-    "humanoid": "Humanoid",
-    "snu_humanoid": "SNU Humanoid"
+    'hopper': {'mean': 4812.96875, 'std': 7.324751853942871},
+    'ant': {'mean': 9329.505859375, 'std': 37.58782196044922},
+    'humanoid': {'mean': 8225.2177734375, 'std': 81.0524673461914},
+    'snu_humanoid': {'mean': 6748.921875, 'std': 49.13310623168945},
 }
+
+MAX_STEPS_PER_ENV = {
+    "hopper": 10_000_000,
+    "ant": 10_000_000,
+    "humanoid": 10_000_000,
+    "snu_humanoid": 10_000_000,
+}
+
+ENV_NAMES = {"hopper": "Hopper", "ant": "Ant", "humanoid": "Humanoid", "snu_humanoid": "SNU Humanoid"}
 
 COLOR = {
     "Expert": "#616161",
@@ -45,17 +53,10 @@ ALGOS = [
     "FOCUS-OT-cos",
 ]
 
-ALGO_DISPLAY = {
-    "SAMfO/DACfO": "SAMfO/DACfO$^\\dag$",
-    "OPOLO": "OPOLO$^\\dag$",
-    "GAIfO": "GAIfO$^\\dag$",
-}
+ALGO_DISPLAY = {}
 
 ALGO_INDEX = {algo: idx for idx, algo in enumerate(ALGOS)}
 
-import math
-import numpy as np
-import matplotlib.pyplot as plt
 
 def normalize_algo_key(algo_key):
     key_lower = algo_key.lower()
@@ -65,13 +66,16 @@ def normalize_algo_key(algo_key):
             return f"{parts[0]}-OT-{parts[2]}"
     return algo_key
 
+
 def get_algo_display(algo_key, ALGO_DISPLAY):
     normalized = normalize_algo_key(algo_key)
     return ALGO_DISPLAY.get(normalized, normalized)
 
+
 def algo_sort_key(algo_key, ALGO_INDEX, ALGO_DISPLAY):
     disp = get_algo_display(algo_key, ALGO_DISPLAY)
     return ALGO_INDEX.get(disp, ALGO_INDEX.get(normalize_algo_key(algo_key), 10**9))
+
 
 def get_linestyle(algo_disp):
     if algo_disp == "Expert":
@@ -80,6 +84,7 @@ def get_linestyle(algo_disp):
     # Example:
     # if algo_disp.startswith("OPOLO"): return "-."
     return "-"
+
 
 def plot_results_like_first(
     data,
@@ -90,17 +95,15 @@ def plot_results_like_first(
     ALGO_INDEX,
     EXPERTS=None,
     *,
-    normalize_expert=True,      # divide by expert mean per env
-    add_expert_line=True,       # plot dashed expert line from EXPERTS
-    shared_legend=True,         # one legend for the whole figure
+    normalize_expert=True,  # divide by expert mean per env
+    add_expert_line=True,  # plot dashed expert line from EXPERTS
+    shared_legend=True,  # one legend for the whole figure
     n_cols=4,
     ylim_bottom=0.0,
 ):
-    """
-    data[env][algo] = {
+    """data[env][algo] = {
         "data": [np.array(n_points), ...]  # per-seed
         "agent_steps": [...],
-        "epochs": [...]
     }
     """
     if not data:
@@ -125,18 +128,21 @@ def plot_results_like_first(
 
         # Determine common x
         n_points = None
-        max_steps = 0
+        max_steps = MAX_STEPS_PER_ENV.get(env_name)
         for algo_data in env_data.values():
             if algo_data["data"] and n_points is None:
                 n_points = algo_data["data"][0].shape[0]
             if algo_data.get("agent_steps"):
-                max_steps = max(max_steps, max(algo_data["agent_steps"]))
+                for steps in algo_data["agent_steps"]:
+                    if steps is None or len(steps) == 0:
+                        continue
+                    max_steps = max(max_steps or 0, float(np.max(steps)))
 
         if n_points is None:
             ax.set_visible(False)
             continue
 
-        if max_steps > 0:
+        if max_steps is not None and max_steps > 0:
             x = np.linspace(0, max_steps, num=n_points)
             x_label = "Steps"
         else:
@@ -151,6 +157,7 @@ def plot_results_like_first(
             expert_std = float(EXPERTS[env_name]["std"])
 
         # Sort algos in your desired global order
+        print(env_data.keys())
         algo_keys = sorted(
             env_data.keys(),
             key=lambda k: algo_sort_key(k, ALGO_INDEX, ALGO_DISPLAY),
@@ -165,7 +172,7 @@ def plot_results_like_first(
                 x,
                 y,
                 label="Expert",
-                linewidth=2.5,
+                linewidth=1,
                 color=COLOR.get("Expert", None),
                 linestyle="--",
             )
@@ -224,7 +231,7 @@ def plot_results_like_first(
             ax.legend(frameon=False, fontsize=9)
 
     # hide unused axes
-    for extra_ax in axes[len(env_names):]:
+    for extra_ax in axes[len(env_names) :]:
         extra_ax.set_visible(False)
 
     # shared legend at top, ordered like ALGOS (Expert + your list)
@@ -238,8 +245,7 @@ def plot_results_like_first(
         # build mapping label -> handle (last one wins, ok)
         map_lh = {lab: h for h, lab in zip(legend_handles, legend_labels)}
         ordered_handles = [map_lh[l] for l in desired if l in map_lh]
-        ordered_labels  = [l for l in desired if l in map_lh]
-
+        ordered_labels = [l for l in desired if l in map_lh]
         fig.legend(
             ordered_handles,
             ordered_labels,
@@ -273,26 +279,28 @@ def plot_single_env(
     add_expert_line=True,
     ylim_bottom=0.0,
 ):
-    """
-    Plots a single environment into its own file.
+    """Plots a single environment into its own file.
     env_data is data[env_name] with the same structure as in plot_results_like_first.
     """
     fig, ax = plt.subplots(1, 1, figsize=(6.5, 4.5))
 
     # Determine common x
     n_points = None
-    max_steps = 0
+    max_steps = MAX_STEPS_PER_ENV.get(env_name)
     for algo_data in env_data.values():
         if algo_data["data"] and n_points is None:
             n_points = algo_data["data"][0].shape[0]
         if algo_data.get("agent_steps"):
-            max_steps = max(max_steps, max(algo_data["agent_steps"]))
+            for steps in algo_data["agent_steps"]:
+                if steps is None or len(steps) == 0:
+                    continue
+                max_steps = max(max_steps or 0, float(np.max(steps)))
 
     if n_points is None:
         plt.close(fig)
         return
 
-    if max_steps > 0:
+    if max_steps is not None and max_steps > 0:
         x = np.linspace(0, max_steps, num=n_points)
         x_label = "Steps"
     else:
@@ -313,7 +321,7 @@ def plot_single_env(
             x,
             y,
             label="Expert",
-            linewidth=2.5,
+            linewidth=1,
             color=COLOR.get("Expert", None),
             linestyle="--",
         )
@@ -371,24 +379,22 @@ def plot_single_env(
 
     desired = list(ALGOS)
     ordered_handles = [map_lh[l] for l in desired if l in map_lh]
-    ordered_labels  = [l for l in desired if l in map_lh]
+    ordered_labels = [l for l in desired if l in map_lh]
 
     fig.legend(
         ordered_handles,
         ordered_labels,
         loc="upper center",
-        ncol=min(len(ordered_labels), 4),
+        ncol=len(ordered_labels),
         frameon=False,
-        fontsize=11,
+        fontsize=7,
         borderaxespad=0.01,
     )
     fig.tight_layout(rect=[0.01, 0, 1, 0.97])
 
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
-
 
 
 def plot_median_across_envs(
@@ -401,8 +407,7 @@ def plot_median_across_envs(
     *,
     normalize_expert=True,
 ):
-    """
-    Builds a single curve per algo = median across environments of the per-env mean curves.
+    """Builds a single curve per algo = median across environments of the per-env mean curves.
     Assumes all curves already interpolated to same n_points in your data collection step.
     """
     env_names = list(data.keys())
@@ -454,7 +459,7 @@ def plot_median_across_envs(
             x,
             np.ones_like(x),
             label="Expert",
-            linewidth=2.5,
+            linewidth=1,
             color=COLOR.get("Expert", None),
             linestyle="--",
         )
@@ -495,10 +500,10 @@ def plot_median_across_envs(
     plt.close(fig)
 
 
-
 def main(
     sync_remote=False,
     update_group_runs=False,
+    create_plots=False,
 ):
     plotter_dir = Path(__file__).resolve().parent
     grouped_exp_path = plotter_dir / "grouped_exp_urls.yaml"
@@ -533,7 +538,6 @@ def main(
         if grouped_runs_path.is_file():
             group_runs = load_yaml(grouped_runs_path)
 
-
     data = {}
     for env_name, algos in group_runs.items():
         data[env_name] = {}
@@ -541,10 +545,13 @@ def main(
             data[env_name][algo] = {
                 "data": [],
                 "agent_steps": [],
-                "epochs": []
             }
             for exp in algo_values:
                 local_dir = Path(exp["logdir"])
+                if (local_dir / "ep_rewards_hist.npy").is_file():
+                    os.remove(local_dir / "ep_rewards_hist.npy")
+                if (local_dir / "ep_steps_hist.npy").is_file():
+                    os.remove(local_dir / "ep_steps_hist.npy")
                 if sync_remote:
                     # sync exp from the remote server
                     local_dir.mkdir(parents=True, exist_ok=True)
@@ -553,98 +560,136 @@ def main(
                         remote_exp_dir=f"/home/users/c/candidor/models/mineral/{exp['logdir']}/.",
                         local_exp_dir=str(local_dir),
                     )
-                
-                ep_rew = np.load(local_dir / "ep_rewards_hist.npy")
 
+                if create_plots:
+                    try:
+                        ep_rew = np.load(local_dir / "my_ep_rewards_hist.npy")
+                        steps = np.load(local_dir / "my_ep_steps_hist.npy")
+                    except:
+                        # load tb file
+                        tb_dir = local_dir / "tb"
 
+                        if not tb_dir.exists():
+                            raise FileNotFoundError(f"TB directory not found: {tb_dir}")
 
-                try:
-                    data_json = load_json(local_dir / "scores.json")
-                    agent_steps = data_json["agent_steps"]
-                    epoch = data_json["epoch"]
-                except:
-                    if algo.startswith("FOCUS"):
-                        agent_steps = 10000384
-                        epoch = 4882
+                        # Load everything (scalars only is cheap)
+                        ea = EventAccumulator(
+                            str(tb_dir),
+                            size_guidance={"scalars": 0},
+                        )
+                        ea.Reload()
 
-                def moving_average(x, window):
-                    x = np.asarray(x, dtype=np.float64)
-                    if window <= 1:
-                        return x
-                    window = min(window, x.size)
-                    pad = window // 2
+                        tag = "train_scores/episode_rewards"
+                        if tag not in ea.Tags().get("scalars", []):
+                            raise KeyError(f"Scalar '{tag}' not found in {tb_dir}")
 
-                    x_pad = np.pad(x, (pad, pad), mode="reflect")
-                    kernel = np.ones(window, dtype=np.float64) / window
-                    y = np.convolve(x_pad, kernel, mode="valid")
-                    return y
+                        events = ea.Scalars(tag)
+                        steps = np.array([e.step for e in events], dtype=np.int64)
+                        ep_rew = np.array([e.value for e in events], dtype=np.float64)
 
-                n_points = 5000
+                        # plt.plot(steps, ep_rew)
+                        # plt.title(f"Loaded from npy: {local_dir}")
+                        # plt.show()
+                        # plt.close()
 
-                # Interpolate to common resolution
-                old_x = np.linspace(0.0, 1.0, num=ep_rew.shape[0])
-                new_x = np.linspace(0.0, 1.0, num=n_points)
-                ep_rew_inter = np.interp(new_x, old_x, ep_rew)
+                        print(ep_rew[:10])
+                        print(steps[:10])
+                        print(len(steps), len(ep_rew))
 
-                # Smooth AFTER interpolation
-                smooth_window = 50  # typical values: 15–50
-                ep_rew_inter = moving_average(ep_rew_inter, smooth_window)
+                        np.save(local_dir / "my_ep_rewards_hist.npy", ep_rew)
+                        np.save(local_dir / "my_ep_steps_hist.npy", steps)
 
+                    print(ep_rew[:10])
+                    print(steps[:10])
+                    print(len(steps), len(ep_rew))
 
-                data[env_name][algo]["data"].append(ep_rew_inter)
-                data[env_name][algo]["agent_steps"].append(agent_steps)
-                data[env_name][algo]["epochs"].append(epoch)
-                print(env_name, algo, ep_rew.shape, agent_steps, epoch)
+                    max_steps = MAX_STEPS_PER_ENV.get(env_name)
+                    if max_steps is not None:
+                        keep_mask = steps <= max_steps
+                        steps = steps[keep_mask]
+                        ep_rew = ep_rew[keep_mask]
 
-    plot_path = plotter_dir / "plots" / "ep_rewards_like_first.png"
-    plot_results_like_first(
-        data,
-        plot_path,
-        COLOR=COLOR,
-        ALGOS=ALGOS,
-        ALGO_DISPLAY=ALGO_DISPLAY,
-        ALGO_INDEX=ALGO_INDEX,
-        EXPERTS=EXPERTS,
-        normalize_expert=True,
-        add_expert_line=True,
-        shared_legend=True,
-    )
+                    if steps.size == 0:
+                        continue
 
-    # One plot per environment
-    per_env_dir = plotter_dir / "plots" / "per_env"
-    for env_name, env_data in data.items():
-        out_path = per_env_dir / f"{env_name}_ep_rewards.png"
-        plot_single_env(
-            env_name,
-            env_data,
-            out_path,
+                    unique_steps, unique_idx = np.unique(steps, return_index=True)
+                    ep_rew = ep_rew[unique_idx]
+
+                    print(steps[-1])
+
+                    def moving_average(x, window):
+                        x = np.asarray(x, dtype=np.float64)
+                        if window <= 1:
+                            return x
+                        window = min(window, x.size)
+                        pad = window // 2
+
+                        x_pad = np.pad(x, (pad, pad), mode="reflect")
+                        kernel = np.ones(window, dtype=np.float64) / window
+                        y = np.convolve(x_pad, kernel, mode="valid")
+                        return y
+
+                    n_points = 5000
+
+                    # Interpolate to a shared step grid
+                    if max_steps is None:
+                        max_steps = float(unique_steps[-1])
+                    step_grid = np.linspace(0, max_steps, num=n_points)
+                    ep_rew_inter = np.interp(step_grid, unique_steps, ep_rew)
+
+                    # Smooth AFTER interpolation
+                    smooth_window = 50  # typical values: 15–50
+                    ep_rew_inter = moving_average(ep_rew_inter, smooth_window)
+
+                    data[env_name][algo]["data"].append(ep_rew_inter)
+                    data[env_name][algo]["agent_steps"].append(step_grid)
+                    print(env_name, algo, ep_rew.shape, step_grid[-1])
+
+    if create_plots:
+        plot_path = plotter_dir / "plots" / "all_return.png"
+        plot_results_like_first(
+            data,
+            plot_path,
             COLOR=COLOR,
             ALGOS=ALGOS,
             ALGO_DISPLAY=ALGO_DISPLAY,
             ALGO_INDEX=ALGO_INDEX,
             EXPERTS=EXPERTS,
-            ENV_NAMES=ENV_NAMES,
             normalize_expert=True,
             add_expert_line=True,
+            shared_legend=True,
         )
 
+        # One plot per environment
+        per_env_dir = plotter_dir / "plots" / "per_env"
+        for env_name, env_data in data.items():
+            out_path = per_env_dir / f"{env_name}.png"
+            plot_single_env(
+                env_name,
+                env_data,
+                out_path,
+                COLOR=COLOR,
+                ALGOS=ALGOS,
+                ALGO_DISPLAY=ALGO_DISPLAY,
+                ALGO_INDEX=ALGO_INDEX,
+                EXPERTS=EXPERTS,
+                ENV_NAMES=ENV_NAMES,
+                normalize_expert=True,
+                add_expert_line=True,
+            )
 
-    median_path = plotter_dir / "plots" / "median_rewards_like_first.png"
-    plot_median_across_envs(
-        data,
-        median_path,
-        COLOR=COLOR,
-        ALGOS=ALGOS,
-        ALGO_DISPLAY=ALGO_DISPLAY,
-        EXPERTS=EXPERTS,
-        normalize_expert=True,
-    )
-
+        median_path = plotter_dir / "plots" / "median_rewards.png"
+        plot_median_across_envs(
+            data,
+            median_path,
+            COLOR=COLOR,
+            ALGOS=ALGOS,
+            ALGO_DISPLAY=ALGO_DISPLAY,
+            EXPERTS=EXPERTS,
+            normalize_expert=True,
+        )
 
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    main(
-        sync_remote=False,
-        update_group_runs=False,
-    )
+    main(sync_remote=False, update_group_runs=False, create_plots=True)

@@ -29,6 +29,46 @@ hopper:
   - logdir: workdir/DFlexHopper10M-OTIL_20251229_190446/sweep_25
     seed: 1200
     run_id: september-eleven-charlie-low-happy-su27.OTIL.DFlex_hopper_64.seed1200
+  ILD:
+  - logdir: workdir/DFlexHopper10M-ILD_20260113_132856/sweep_18
+    seed: 110
+    run_id: two-wolfram-bulldog-hamper-butter-2x7R.ILD.DFlex_hopper_64.seed110
+  - logdir: workdir/DFlexHopper10M-ILD_20260113_132856/sweep_9
+    seed: 100
+    run_id: two-wolfram-bulldog-hamper-butter-Vaq9.ILD.DFlex_hopper_64.seed100
+  - logdir: workdir/DFlexHopper10M-ILD_20260113_132857/sweep_27
+    seed: 120
+    run_id: two-wolfram-bulldog-hamper-butter-asv6.ILD.DFlex_hopper_64.seed120
+  SAMfO/DACfO:
+  - logdir: workdir/DFlexHopper10M-DAC_20260115_022210/sweep_25
+    seed: 110
+    run_id: sierra-potato-mississippi-foxtrot-fanta-8vbW.DAC.DFlex_hopper_64.seed110
+  - logdir: workdir/DFlexHopper10M-DAC_20260115_022210/sweep_9
+    seed: 100
+    run_id: sierra-potato-mississippi-foxtrot-fanta-ffwe.DAC.DFlex_hopper_64.seed100
+  - logdir: workdir/DFlexHopper10M-DAC_20260115_022212/sweep_41
+    seed: 120
+    run_id: sierra-potato-mississippi-foxtrot-fanta-vxoc.DAC.DFlex_hopper_64.seed120
+  OPOLO:
+  - logdir: workdir/DFlexHopper10M-DAC_20260114_041855/sweep_88
+    seed: 120
+    run_id: freddie-mars-mobile-four-high-1C27.DAC.DFlex_hopper_64.seed120
+  - logdir: workdir/DFlexHopper10M-DAC_20260114_041854/sweep_24
+    seed: 100
+    run_id: freddie-mars-mobile-four-high-8GNS.DAC.DFlex_hopper_64.seed100
+  - logdir: workdir/DFlexHopper10M-DAC_20260114_041855/sweep_56
+    seed: 110
+    run_id: freddie-mars-mobile-four-high-QTod.DAC.DFlex_hopper_64.seed110
+  GAILfO:
+  - logdir: workdir/DFlexHopper10M-GAIL_20260109_010405/sweep_12
+    seed: 100
+    run_id: triple-fish-table-ack-massachusetts-1RLR.GAIL.DFlex_hopper_64.seed100
+  - logdir: workdir/DFlexHopper10M-GAIL_20260109_010406/sweep_36
+    seed: 110
+    run_id: triple-fish-table-ack-massachusetts-ArTh.GAIL.DFlex_hopper_64.seed110
+  - logdir: workdir/DFlexHopper10M-GAIL_20260109_010406/sweep_60
+    seed: 120
+    run_id: triple-fish-table-ack-massachusetts-h5GZ.GAIL.DFlex_hopper_64.seed120
 ant:
   FOCUS-l2:
   - logdir: workdir/DFlexAnt10M-OTIL_20251229_160817/sweep_12
@@ -78,6 +118,46 @@ ant:
   - logdir: workdir/DFlexAnt10M-OTIL_20251229_160824/sweep_26
     seed: 1200
     run_id: william-delaware-autumn-venus-iowa-uxsK.OTIL.DFlex_ant_64.seed1200
+  SAMfO/DACfO:
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_225151/sweep_33
+    seed: 120
+    run_id: foxtrot-seven-sixteen-oregon-beryllium-jwdV.DAC.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_225151/sweep_1
+    seed: 100
+    run_id: foxtrot-seven-sixteen-oregon-beryllium-kMCC.DAC.DFlex_ant_64.seed100
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_225151/sweep_17
+    seed: 110
+    run_id: foxtrot-seven-sixteen-oregon-beryllium-p4zX.DAC.DFlex_ant_64.seed110
+  ILD:
+  - logdir: workdir/DFlexAnt10M-ILD_20260113_132849/sweep_17
+    seed: 110
+    run_id: fourteen-sweet-sodium-idaho-virginia-hBuh.ILD.DFlex_ant_64.seed110
+  - logdir: workdir/DFlexAnt10M-ILD_20260113_132850/sweep_26
+    seed: 120
+    run_id: fourteen-sweet-sodium-idaho-virginia-KqZa.ILD.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-ILD_20260113_132849/sweep_8
+    seed: 100
+    run_id: fourteen-sweet-sodium-idaho-virginia-211A.ILD.DFlex_ant_64.seed100
+  OPOLO:
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_004640/sweep_13
+    seed: 100
+    run_id: yellow-six-freddie-hot-hawaii-H3Yr.DAC.DFlex_ant_64.seed100
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_004641/sweep_77
+    seed: 120
+    run_id: yellow-six-freddie-hot-hawaii-Hchh.DAC.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-DAC_20260114_004641/sweep_45
+    seed: 110
+    run_id: yellow-six-freddie-hot-hawaii-3DTI.DAC.DFlex_ant_64.seed110
+  GAILfO:
+  - logdir: workdir/DFlexAnt10M-GAIL_20260109_010332/sweep_49
+    seed: 120
+    run_id: alpha-alabama-beryllium-georgia-florida-FH0U.GAIL.DFlex_ant_64.seed120
+  - logdir: workdir/DFlexAnt10M-GAIL_20260109_010331/sweep_1
+    seed: 100
+    run_id: alpha-alabama-beryllium-georgia-florida-Lrbj.GAIL.DFlex_ant_64.seed100
+  - logdir: workdir/DFlexAnt10M-GAIL_20260109_010332/sweep_25
+    seed: 110
+    run_id: alpha-alabama-beryllium-georgia-florida-UFdN.GAIL.DFlex_ant_64.seed110
 humanoid:
   FOCUS-l2:
   - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_195250/sweep_8
@@ -127,6 +207,46 @@ humanoid:
   - logdir: workdir/DFlexHumanoid10M-OTIL_20251229_211257/sweep_13
     seed: 1100
     run_id: mirror-minnesota-seven-alanine-magazine-uBSr.OTIL.DFlex_humanoid_64.seed1100
+  ILD:
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260113_154510/sweep_8
+    seed: 100
+    run_id: arizona-september-video-quiet-pennsylvania-4tEv.ILD.DFlex_humanoid_64.seed100
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260113_154510/sweep_26
+    seed: 120
+    run_id: arizona-september-video-quiet-pennsylvania-Bz1a.ILD.DFlex_humanoid_64.seed120
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260113_154510/sweep_17
+    seed: 110
+    run_id: arizona-september-video-quiet-pennsylvania-LZLN.ILD.DFlex_humanoid_64.seed110
+  SAMfO/DACfO:
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_225153/sweep_6
+    seed: 100
+    run_id: lamp-seven-alabama-march-florida-LI0H.DAC.DFlex_humanoid_64.seed100
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_225154/sweep_22
+    seed: 110
+    run_id: lamp-seven-alabama-march-florida-PDAV.DAC.DFlex_humanoid_64.seed110
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_225154/sweep_38
+    seed: 120
+    run_id: lamp-seven-alabama-march-florida-a86F.DAC.DFlex_humanoid_64.seed120
+  OPOLO:
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_152245/sweep_40
+    seed: 120
+    run_id: freddie-wyoming-december-cardinal-artist-L1d4.DAC.DFlex_humanoid_64.seed120
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_152245/sweep_24
+    seed: 110
+    run_id: freddie-wyoming-december-cardinal-artist-opCP.DAC.DFlex_humanoid_64.seed110
+  - logdir: workdir/DFlexHumanoid10M-DAC_20260114_152245/sweep_8
+    seed: 100
+    run_id: freddie-wyoming-december-cardinal-artist-R1xC.DAC.DFlex_humanoid_64.seed100
+  GAILfO:
+  - logdir: workdir/DFlexHumanoid10M-GAIL_20260109_043526/sweep_7
+    seed: 100
+    run_id: mountain-saturn-nuts-texas-robin-lbuW.GAIL.DFlex_humanoid_64.seed100
+  - logdir: workdir/DFlexHumanoid10M-GAIL_20260109_043526/sweep_31
+    seed: 110
+    run_id: mountain-saturn-nuts-texas-robin-po8L.GAIL.DFlex_humanoid_64.seed110
+  - logdir: workdir/DFlexHumanoid10M-GAIL_20260109_043527/sweep_55
+    seed: 120
+    run_id: mountain-saturn-nuts-texas-robin-Y2tD.GAIL.DFlex_humanoid_64.seed120
 snu_humanoid:
   FOCUS-l2:
   - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_000707/sweep_12
@@ -167,3 +287,43 @@ snu_humanoid:
   - logdir: workdir/DFlexSNUHumanoid10M-OTIL_20251230_024318/sweep_2
     seed: 1000
     run_id: texas-cold-bluebird-video-winner-PLpI.OTIL.DFlex_snu_humanoid_64.seed1000
+  ILD:
+  - logdir: workdir/DFlexSNUHumanoid10M-ILD_20260113_163019/sweep_25
+    seed: 120
+    run_id: blue-twenty-eight-dakota-virginia-a0aw.ILD.DFlex_snu_humanoid_64.seed120
+  - logdir: workdir/DFlexSNUHumanoid10M-ILD_20260113_163018/sweep_16
+    seed: 110
+    run_id: blue-twenty-eight-dakota-virginia-WjcM.ILD.DFlex_snu_humanoid_64.seed110
+  - logdir: workdir/DFlexSNUHumanoid10M-ILD_20260113_163018/sweep_7
+    seed: 100
+    run_id: blue-twenty-eight-dakota-virginia-QMhI.ILD.DFlex_snu_humanoid_64.seed100
+  SAMfO/DACfO:
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260115_052327/sweep_16
+    seed: 100
+    run_id: football-robert-seventeen-texas-five-LLRt.DAC.DFlex_snu_humanoid_64.seed100
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260115_052328/sweep_32
+    seed: 110
+    run_id: football-robert-seventeen-texas-five-UTzd.DAC.DFlex_snu_humanoid_64.seed110
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260115_052328/sweep_48
+    seed: 120
+    run_id: football-robert-seventeen-texas-five-W6S6.DAC.DFlex_snu_humanoid_64.seed120
+  OPOLO:
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260114_072210/sweep_25
+    seed: 100
+    run_id: eight-sodium-tennessee-zulu-cup-9Mx3.DAC.DFlex_snu_humanoid_64.seed100
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260114_072212/sweep_89
+    seed: 120
+    run_id: eight-sodium-tennessee-zulu-cup-AgKh.DAC.DFlex_snu_humanoid_64.seed120
+  - logdir: workdir/DFlexSNUHumanoid10M-DAC_20260114_072211/sweep_57
+    seed: 110
+    run_id: eight-sodium-tennessee-zulu-cup-s9zm.DAC.DFlex_snu_humanoid_64.seed110
+  GAILfO:
+  - logdir: workdir/DFlexSNUHumanoid10M-GAIL_20260109_113649/sweep_32
+    seed: 110
+    run_id: snake-papa-equal-friend-iowa-9pxd.GAIL.DFlex_snu_humanoid_64.seed110
+  - logdir: workdir/DFlexSNUHumanoid10M-GAIL_20260109_113649/sweep_8
+    seed: 100
+    run_id: snake-papa-equal-friend-iowa-MaKj.GAIL.DFlex_snu_humanoid_64.seed100
+  - logdir: workdir/DFlexSNUHumanoid10M-GAIL_20260109_113650/sweep_56
+    seed: 120
+    run_id: snake-papa-equal-friend-iowa-wkfF.GAIL.DFlex_snu_humanoid_64.seed120
