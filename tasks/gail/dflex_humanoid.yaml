@@ -48,7 +48,7 @@ sweep:
   agent.gail.discriminator.iters: [1, 5]
   agent.gail.expert_batch_size: [512, 1024, 2048]
   agent.gail.inverse_model.enabled: true
-  agent.gail.inverse_model.reg_coef: 1
+  agent.gail.inverse_model.reg_coef: 10
   agent.gail.inverse_model.batch_size: 512
   agent.gail.inverse_model.iters: 100
 
