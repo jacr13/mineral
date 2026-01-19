@@ -27,6 +27,11 @@ PARAMS_OT_COST_TYPE=(
   "agent.otil.loss_ot_cost_type=cosine"
 )
 
+PARAMS_MLP_FEATURES_DIM=(
+  "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=null"
+)
+
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '
 }
@@ -73,6 +78,7 @@ for env in "${ENVS[@]}"; do
   for ((i=0; i<N; i++)); do
     critic_rm="${PARAMS_CRITIC_RM[$i]}"
     ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
+    mlp_feat="${PARAMS_MLP_FEATURES_DIM[$i]}"
     batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}"
 
     echo "------------------------------------------------------------"
@@ -95,9 +101,10 @@ for env in "${ENVS[@]}"; do
       --no-cleanup \
       --sweep \
       --sweep_max 150 \
-      --set "wandb.project=sweep-${env}-slurm-new" \
+      --set "wandb.project=OTIL_SHAC-${env}-slurm-new" \
       --set "${critic_rm}" \
       --set "${ot_cost}" \
+      --set "${mlp_feat}" \
       --env_files "${env}.yaml" \
       --deploy_now
 

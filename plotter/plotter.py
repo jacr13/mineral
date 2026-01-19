@@ -548,10 +548,6 @@ def main(
             }
             for exp in algo_values:
                 local_dir = Path(exp["logdir"])
-                if (local_dir / "ep_rewards_hist.npy").is_file():
-                    os.remove(local_dir / "ep_rewards_hist.npy")
-                if (local_dir / "ep_steps_hist.npy").is_file():
-                    os.remove(local_dir / "ep_steps_hist.npy")
                 if sync_remote:
                     # sync exp from the remote server
                     local_dir.mkdir(parents=True, exist_ok=True)
@@ -565,6 +561,7 @@ def main(
                     try:
                         ep_rew = np.load(local_dir / "my_ep_rewards_hist.npy")
                         steps = np.load(local_dir / "my_ep_steps_hist.npy")
+                        times = np.load(local_dir / "my_ep_times_hist.npy")
                     except:
                         # load tb file
                         tb_dir = local_dir / "tb"
@@ -586,6 +583,7 @@ def main(
                         events = ea.Scalars(tag)
                         steps = np.array([e.step for e in events], dtype=np.int64)
                         ep_rew = np.array([e.value for e in events], dtype=np.float64)
+                        times = np.array([e.wall_time for e in events], dtype=np.float64)
 
                         # plt.plot(steps, ep_rew)
                         # plt.title(f"Loaded from npy: {local_dir}")
@@ -598,10 +596,12 @@ def main(
 
                         np.save(local_dir / "my_ep_rewards_hist.npy", ep_rew)
                         np.save(local_dir / "my_ep_steps_hist.npy", steps)
+                        np.save(local_dir / "my_ep_times_hist.npy", times)
 
                     print(ep_rew[:10])
                     print(steps[:10])
-                    print(len(steps), len(ep_rew))
+                    print(times[:10])
+                    print(len(steps), len(ep_rew), len(times))
 
                     max_steps = MAX_STEPS_PER_ENV.get(env_name)
                     if max_steps is not None:
