@@ -86,6 +86,18 @@ def get_linestyle(algo_disp):
     return "-"
 
 
+def get_time_axis_max(env_data):
+    max_time = 0.0
+    for algo_name, algo_data in env_data.items():
+        for times in algo_data.get("agent_times", []):
+            max_time = max(max_time, max(times))
+
+    print("Max time across all algos:", max_time)
+    return max_time
+
+def convert_seconds_to_hours(seconds):
+    return seconds / 3600.0
+
 def plot_results_like_first(
     data,
     output_path,
@@ -100,10 +112,12 @@ def plot_results_like_first(
     shared_legend=True,  # one legend for the whole figure
     n_cols=4,
     ylim_bottom=0.0,
+    x_axis="steps",
 ):
     """data[env][algo] = {
         "data": [np.array(n_points), ...]  # per-seed
         "agent_steps": [...],
+        "agent_times": [...],
     }
     """
     if not data:
@@ -142,12 +156,20 @@ def plot_results_like_first(
             ax.set_visible(False)
             continue
 
-        if max_steps is not None and max_steps > 0:
-            x = np.linspace(0, max_steps, num=n_points)
-            x_label = "Steps"
-        else:
-            x = np.linspace(0.0, 1.0, num=n_points)
-            x_label = "Training progress"
+        x = None
+        x_label = None
+        if x_axis == "time":
+            max_time = get_time_axis_max(env_data)
+            max_time = convert_seconds_to_hours(max_time)
+            x = np.linspace(0, max_time, num=n_points)
+            x_label = "Relative Time (h)"
+        if x is None:
+            if max_steps is not None and max_steps > 0:
+                x = np.linspace(0, max_steps, num=n_points)
+                x_label = "Steps"
+            else:
+                x = np.linspace(0.0, 1.0, num=n_points)
+                x_label = "Training progress"
 
         # Expert mean for normalization / line
         expert_mean = None
@@ -181,8 +203,19 @@ def plot_results_like_first(
             algo_data = env_data[algo_key]
             if not algo_data["data"]:
                 continue
+            
+            agent_times = algo_data.get("agent_times", [])
+            agent_times = [convert_seconds_to_hours(t) for t in agent_times]
+            min_times_x = min([t[-1] for t in agent_times])
+            min_times_x_grid = np.linspace(0, min_times_x, num=n_points)
+            values = []
+            for i in range(len(algo_data["data"])):
+                times = agent_times[i]
+                returns = algo_data["data"][i]
+                ep_ret_inter = np.interp(min_times_x_grid, times, returns)
+                values.append(ep_ret_inter)
 
-            values = np.vstack(algo_data["data"])
+            values = np.vstack(values)
             mean = values.mean(axis=0)
             std = values.std(axis=0)
 
@@ -201,7 +234,7 @@ def plot_results_like_first(
             lw = 1 if algo_key.lower().startswith("focus") else 1
 
             ax.plot(
-                x,
+                min_times_x_grid,
                 mean,
                 label=algo_disp,
                 linewidth=lw,
@@ -209,7 +242,7 @@ def plot_results_like_first(
                 linestyle=linestyle,
             )
             ax.fill_between(
-                x,
+                min_times_x_grid,
                 mean - std,
                 mean + std,
                 alpha=0.2,
@@ -278,6 +311,7 @@ def plot_single_env(
     normalize_expert=True,
     add_expert_line=True,
     ylim_bottom=0.0,
+    x_axis="steps",
 ):
     """Plots a single environment into its own file.
     env_data is data[env_name] with the same structure as in plot_results_like_first.
@@ -300,12 +334,20 @@ def plot_single_env(
         plt.close(fig)
         return
 
-    if max_steps is not None and max_steps > 0:
-        x = np.linspace(0, max_steps, num=n_points)
-        x_label = "Steps"
-    else:
-        x = np.linspace(0.0, 1.0, num=n_points)
-        x_label = "Training progress"
+    x = None
+    x_label = None
+    if x_axis == "time":
+        x = get_time_axis_max(env_data)
+        print("TIME AXIS:", x)
+        if x is not None:
+            x_label = "Relative Time (min)"
+    if x is None:
+        if max_steps is not None and max_steps > 0:
+            x = np.linspace(0, max_steps, num=n_points)
+            x_label = "Steps"
+        else:
+            x = np.linspace(0.0, 1.0, num=n_points)
+            x_label = "Training progress"
 
     # Expert stats
     expert_mean = None
@@ -504,6 +546,7 @@ def main(
     sync_remote=False,
     update_group_runs=False,
     create_plots=False,
+    x_axis="time",
 ):
     plotter_dir = Path(__file__).resolve().parent
     grouped_exp_path = plotter_dir / "grouped_exp_urls.yaml"
@@ -545,6 +588,7 @@ def main(
             data[env_name][algo] = {
                 "data": [],
                 "agent_steps": [],
+                "agent_times": [],
             }
             for exp in algo_values:
                 local_dir = Path(exp["logdir"])
@@ -558,11 +602,24 @@ def main(
                     )
 
                 if create_plots:
+                    need_tb_reload = False
                     try:
                         ep_rew = np.load(local_dir / "my_ep_rewards_hist.npy")
                         steps = np.load(local_dir / "my_ep_steps_hist.npy")
                         times = np.load(local_dir / "my_ep_times_hist.npy")
-                    except:
+                        if x_axis == "time":
+                            if (
+                                ep_rew.size == 0
+                                or steps.size == 0
+                                or times.size == 0
+                                or ep_rew.size != steps.size
+                                or times.size != steps.size
+                            ):
+                                need_tb_reload = True
+                    except Exception:
+                        need_tb_reload = True
+
+                    if need_tb_reload:
                         # load tb file
                         tb_dir = local_dir / "tb"
 
@@ -603,7 +660,7 @@ def main(
                     print(times[:10])
                     print(len(steps), len(ep_rew), len(times))
 
-                    max_steps = MAX_STEPS_PER_ENV.get(env_name)
+                    max_steps = None if x_axis == "time" else MAX_STEPS_PER_ENV.get(env_name)
                     if max_steps is not None:
                         keep_mask = steps <= max_steps
                         steps = steps[keep_mask]
@@ -612,8 +669,6 @@ def main(
                     if steps.size == 0:
                         continue
 
-                    unique_steps, unique_idx = np.unique(steps, return_index=True)
-                    ep_rew = ep_rew[unique_idx]
 
                     print(steps[-1])
 
@@ -627,23 +682,40 @@ def main(
                         x_pad = np.pad(x, (pad, pad), mode="reflect")
                         kernel = np.ones(window, dtype=np.float64) / window
                         y = np.convolve(x_pad, kernel, mode="valid")
-                        return y
+                        return y[:-1]
 
                     n_points = 5000
-
-                    # Interpolate to a shared step grid
-                    if max_steps is None:
-                        max_steps = float(unique_steps[-1])
-                    step_grid = np.linspace(0, max_steps, num=n_points)
-                    ep_rew_inter = np.interp(step_grid, unique_steps, ep_rew)
+                    if x_axis == "time":
+                        print(f"Using wall time for {env_name} {algo}")
+                        rel_times = times - times[0]
+                        print(rel_times[:10])
+                        max_time = float(rel_times[-1])
+                        time_grid = np.linspace(0, max_time, num=n_points)
+                        ep_rew_inter = np.interp(time_grid, rel_times, ep_rew)
+                        step_grid = None
+                    elif x_axis == "steps":
+                        # Interpolate to a shared step grid
+                        if max_steps is None:
+                            max_steps = float(steps[-1])
+                        step_grid = np.linspace(0, max_steps, num=n_points)
+                        ep_rew_inter = np.interp(step_grid, steps, ep_rew)
+                    else:
+                        raise ValueError(f"Unknown x_axis: {x_axis}")
 
                     # Smooth AFTER interpolation
                     smooth_window = 50  # typical values: 15–50
                     ep_rew_inter = moving_average(ep_rew_inter, smooth_window)
 
                     data[env_name][algo]["data"].append(ep_rew_inter)
-                    data[env_name][algo]["agent_steps"].append(step_grid)
-                    print(env_name, algo, ep_rew.shape, step_grid[-1])
+                    if step_grid is not None:
+                        data[env_name][algo]["agent_steps"].append(step_grid)
+                    if time_grid is not None:
+                        data[env_name][algo]["agent_times"].append(time_grid)
+                    if x_axis == "time" and step_grid is None:
+                        last_x = max_time
+                    else:
+                        last_x = step_grid[-1]
+                    print(env_name, algo, ep_rew.shape, last_x)
 
     if create_plots:
         plot_path = plotter_dir / "plots" / "all_return.png"
@@ -658,6 +730,7 @@ def main(
             normalize_expert=True,
             add_expert_line=True,
             shared_legend=True,
+            x_axis=x_axis,
         )
 
         # One plot per environment
@@ -676,6 +749,7 @@ def main(
                 ENV_NAMES=ENV_NAMES,
                 normalize_expert=True,
                 add_expert_line=True,
+                x_axis=x_axis,
             )
 
         median_path = plotter_dir / "plots" / "median_rewards.png"
@@ -692,4 +766,4 @@ def main(
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    main(sync_remote=False, update_group_runs=False, create_plots=True)
+    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="time")
