@@ -74,7 +74,7 @@ for env in "${ENVS[@]}"; do
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
-        --set "agent=ILD/DFlexAnt${base_algo}" \
+        --set "agent.name=ILD/DFlexAnt${base_algo}" \
         --set "wandb.project=ILD_${base_algo}-sweep-${env}-slurm" \
         --set "agent.shac.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \

@@ -109,14 +109,14 @@ for env in "${ENVS[@]}"; do
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
+        --set "agent.name=OTIL/DFlexAnt${base_algo}" \
         --set "agent.shac.max_agent_steps=100000000" \
         --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-        --set "agent=OTIL/DFlexAnt${base_algo}" \
         --set "${critic_rm}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
         --env_files "${env}.yaml" \
-        --deploy_now
+        --no-deploy_now
 
       # Learn batch size from the first ever submission (since you start from 0 jobs).
       if [[ -z "$BATCH_JOBS" ]]; then
@@ -145,13 +145,13 @@ for env in "${ENVS[@]}"; do
       --no-cleanup \
       --sweep \
       --sweep_max 150 \
+      --set "agent.name=OTIL/DFlexAnt${base_algo}" \
       --set "agent.shac.max_agent_steps=100000000" \
       --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-      --set "agent=OTIL/DFlexAnt${base_algo}" \
       --set "agent.otil.imitation_loss_type=l2" \
       --set "agent.otil.loss_mlp_features_dim=64" \
       --env_files "${env}.yaml" \
-      --deploy_now
+      --no-deploy_now
 
     if [[ -z "$BATCH_JOBS" ]]; then
       sleep "$SETTLE_SECONDS"
