@@ -7,7 +7,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 USER="candidor"
 POLL_SECONDS=60
 MAX_JOBS=100
-BATCH_JOBS=6          # empty = unknown until first submit
+BATCH_JOBS=""          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
 ENVS=(
@@ -148,8 +148,8 @@ for env in "${ENVS[@]}"; do
       --set "agent.shac.max_agent_steps=100000000" \
       --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
       --set "agent.shac=OTIL/DFlexAnt${base_algo}" \
-      --set "agent.otil.imitation_loss_type: l2" \
-      --set "agent.otil.loss_mlp_features_dim: 64" \
+      --set "agent.otil.imitation_loss_type=l2" \
+      --set "agent.otil.loss_mlp_features_dim=64" \
       --env_files "${env}.yaml" \
       --deploy_now
 
