@@ -111,7 +111,7 @@ for env in "${ENVS[@]}"; do
         --sweep_max 150 \
         --set "agent.shac.max_agent_steps=100000000" \
         --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-        --set "agent.shac=OTIL/DFlexAnt${base_algo}" \
+        --set "agent=OTIL/DFlexAnt${base_algo}" \
         --set "${critic_rm}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
@@ -147,7 +147,7 @@ for env in "${ENVS[@]}"; do
       --sweep_max 150 \
       --set "agent.shac.max_agent_steps=100000000" \
       --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-      --set "agent.shac=OTIL/DFlexAnt${base_algo}" \
+      --set "agent=OTIL/DFlexAnt${base_algo}" \
       --set "agent.otil.imitation_loss_type=l2" \
       --set "agent.otil.loss_mlp_features_dim=64" \
       --env_files "${env}.yaml" \

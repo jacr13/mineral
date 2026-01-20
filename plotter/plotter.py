@@ -807,4 +807,4 @@ def main(
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="steps")
+    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="time")
