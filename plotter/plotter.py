@@ -759,7 +759,7 @@ def main(
                     print(env_name, algo, ep_rew.shape, last_x)
 
     if create_plots:
-        plot_path = plotter_dir / "plots" / "all_return.png"
+        plot_path = plotter_dir / "plots" / f"all_return_{x_axis}.png"
         plot_results_like_first(
             data,
             plot_path,
@@ -777,7 +777,7 @@ def main(
         # One plot per environment
         per_env_dir = plotter_dir / "plots" / "per_env"
         for env_name, env_data in data.items():
-            out_path = per_env_dir / f"{env_name}.png"
+            out_path = per_env_dir / f"{env_name}_{x_axis}.png"
             plot_single_env(
                 env_name,
                 env_data,
@@ -807,4 +807,5 @@ def main(
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="time")
+    for x_axis in ["time", "steps"]:
+        main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis=x_axis)
