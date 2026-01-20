@@ -116,7 +116,7 @@ for env in "${ENVS[@]}"; do
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
         --env_files "${env}.yaml" \
-        --no-deploy_now
+        --deploy_now
 
       # Learn batch size from the first ever submission (since you start from 0 jobs).
       if [[ -z "$BATCH_JOBS" ]]; then
@@ -151,7 +151,7 @@ for env in "${ENVS[@]}"; do
       --set "agent.otil.imitation_loss_type=l2" \
       --set "agent.otil.loss_mlp_features_dim=64" \
       --env_files "${env}.yaml" \
-      --no-deploy_now
+      --deploy_now
 
     if [[ -z "$BATCH_JOBS" ]]; then
       sleep "$SETTLE_SECONDS"
