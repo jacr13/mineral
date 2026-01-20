@@ -203,21 +203,35 @@ def plot_results_like_first(
             algo_data = env_data[algo_key]
             if not algo_data["data"]:
                 continue
-            
-            agent_times = algo_data.get("agent_times", [])
-            agent_times = [convert_seconds_to_hours(t) for t in agent_times]
-            min_times_x = min([t[-1] for t in agent_times])
-            min_times_x_grid = np.linspace(0, min_times_x, num=n_points)
-            values = []
-            for i in range(len(algo_data["data"])):
-                times = agent_times[i]
-                returns = algo_data["data"][i]
-                ep_ret_inter = np.interp(min_times_x_grid, times, returns)
-                values.append(ep_ret_inter)
 
-            values = np.vstack(values)
-            mean = values.mean(axis=0)
-            std = values.std(axis=0)
+            if x_axis == "time":
+                agent_times = algo_data.get("agent_times", [])
+                if not agent_times:
+                    continue
+                agent_times = [convert_seconds_to_hours(t) for t in agent_times]
+                min_times_x = min(t[-1] for t in agent_times if len(t) > 0)
+                if min_times_x <= 0:
+                    continue
+                min_times_x_grid = np.linspace(0, min_times_x, num=n_points)
+                values = []
+                for i in range(len(algo_data["data"])):
+                    times = agent_times[i]
+                    returns = algo_data["data"][i]
+                    if len(times) == 0:
+                        continue
+                    ep_ret_inter = np.interp(min_times_x_grid, times, returns)
+                    values.append(ep_ret_inter)
+                if not values:
+                    continue
+                values = np.vstack(values)
+                mean = values.mean(axis=0)
+                std = values.std(axis=0)
+                x_plot = min_times_x_grid
+            else:
+                values = np.vstack(algo_data["data"])
+                mean = values.mean(axis=0)
+                std = values.std(axis=0)
+                x_plot = x
 
             # Normalize by expert mean to match your first script behavior
             if normalize_expert and expert_mean is not None and expert_mean != 0:
@@ -234,7 +248,7 @@ def plot_results_like_first(
             lw = 1 if algo_key.lower().startswith("focus") else 1
 
             ax.plot(
-                min_times_x_grid,
+                x_plot,
                 mean,
                 label=algo_disp,
                 linewidth=lw,
@@ -242,7 +256,7 @@ def plot_results_like_first(
                 linestyle=linestyle,
             )
             ax.fill_between(
-                min_times_x_grid,
+                x_plot,
                 mean - std,
                 mean + std,
                 alpha=0.2,
@@ -337,10 +351,11 @@ def plot_single_env(
     x = None
     x_label = None
     if x_axis == "time":
-        x = get_time_axis_max(env_data)
-        print("TIME AXIS:", x)
-        if x is not None:
-            x_label = "Relative Time (min)"
+        max_time = get_time_axis_max(env_data)
+        if max_time is not None and max_time > 0:
+            max_time = convert_seconds_to_hours(max_time)
+            x = np.linspace(0, max_time, num=n_points)
+            x_label = "Relative Time (h)"
     if x is None:
         if max_steps is not None and max_steps > 0:
             x = np.linspace(0, max_steps, num=n_points)
@@ -379,9 +394,34 @@ def plot_single_env(
         if not algo_data["data"]:
             continue
 
-        values = np.vstack(algo_data["data"])
-        mean = values.mean(axis=0)
-        std = values.std(axis=0)
+        if x_axis == "time":
+            agent_times = algo_data.get("agent_times", [])
+            if not agent_times:
+                continue
+            agent_times = [convert_seconds_to_hours(t) for t in agent_times]
+            min_times_x = min(t[-1] for t in agent_times if len(t) > 0)
+            if min_times_x <= 0:
+                continue
+            min_times_x_grid = np.linspace(0, min_times_x, num=n_points)
+            values = []
+            for i in range(len(algo_data["data"])):
+                times = agent_times[i]
+                returns = algo_data["data"][i]
+                if len(times) == 0:
+                    continue
+                ep_ret_inter = np.interp(min_times_x_grid, times, returns)
+                values.append(ep_ret_inter)
+            if not values:
+                continue
+            values = np.vstack(values)
+            mean = values.mean(axis=0)
+            std = values.std(axis=0)
+            x_plot = min_times_x_grid
+        else:
+            values = np.vstack(algo_data["data"])
+            mean = values.mean(axis=0)
+            std = values.std(axis=0)
+            x_plot = x
 
         if normalize_expert and expert_mean is not None and expert_mean != 0:
             mean = mean / expert_mean
@@ -391,7 +431,7 @@ def plot_single_env(
         algo_disp = get_algo_display(algo_key, ALGO_DISPLAY)
 
         ax.plot(
-            x,
+            x_plot,
             mean,
             label=algo_disp,
             linewidth=1,  # adjust if you want FOCUS thicker
@@ -399,7 +439,7 @@ def plot_single_env(
             linestyle=get_linestyle(algo_disp),
         )
         ax.fill_between(
-            x,
+            x_plot,
             mean - std,
             mean + std,
             alpha=0.2,
@@ -695,6 +735,7 @@ def main(
                         step_grid = None
                     elif x_axis == "steps":
                         # Interpolate to a shared step grid
+                        time_grid = None
                         if max_steps is None:
                             max_steps = float(steps[-1])
                         step_grid = np.linspace(0, max_steps, num=n_points)
@@ -766,4 +807,4 @@ def main(
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="time")
+    main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis="steps")
