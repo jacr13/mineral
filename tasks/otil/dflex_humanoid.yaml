@@ -6,7 +6,7 @@ agent:
   name: OTIL/DFlexAntSHAC
   shac:
     max_epochs: 5000
-    max_agent_steps: 10000000
+    max_agent_steps: 15000000
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995
@@ -36,3 +36,7 @@ sweep:
   agent.otil.loss_use_huber_speedup: false
   agent.otil.loss_mlp_features_dim: null
   agent.otil.loss_use_detached_prev_obs: [true, false]
+
+
+spawner:
+  runtime: "7h30m"
