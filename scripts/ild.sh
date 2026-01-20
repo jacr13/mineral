@@ -17,6 +17,11 @@ ENVS=(
   "dflex_snu_humanoid"
 )
 
+PARAMS_AGENT_BASE=(
+  "SHAC"
+  "SAPO"
+)
+
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '
 }
@@ -49,8 +54,12 @@ for env in "${ENVS[@]}"; do
     echo "MAX_JOBS=${MAX_JOBS}"
     echo "============================================================"
 
-    git pull
-
+  git pull
+  for base_algo in "${PARAMS_AGENT_BASE[@]}"; do
+    echo "------------------------------------------------------------"
+    echo "Base algorithm: ${base_algo}"
+    echo "------------------------------------------------------------"
+  
     # If we already know how many jobs one batch creates, wait until there is room.
     if [[ -n "$BATCH_JOBS" ]]; then
         wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
@@ -65,7 +74,8 @@ for env in "${ENVS[@]}"; do
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
-        --set "wandb.project=ild-sweep-${env}-slurm" \
+        --set "agent.shac=ILD/DFlexAnt${base_algo}" \
+        --set "wandb.project=ILD_${base_algo}-sweep-${env}-slurm" \
         --set "agent.shac.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \
         --deploy_now
@@ -83,4 +93,5 @@ for env in "${ENVS[@]}"; do
         echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
         fi
     fi
+  done
 done
