@@ -26,7 +26,7 @@ run: train_eval
 seed: 100
 
 sweep:
-  seed: [100, 110, 120, 1000, 1100, 1200]
+  seed: [130, 140, 1300, 1400]
   agent.ild.demos.n_trajs: [1, 4, 8, 16]
   agent.shac.horizon_len: [10, 32]
 
