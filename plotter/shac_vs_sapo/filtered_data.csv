@@ -1,0 +1,465 @@
+env,env_name,algo,variant,group,run_id,imitation_loss_type,loss_ot_cost_type,horizon_len,demos,ep_rew
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-EFCp.ILD.DFlex_hopper_64.seed1000,,,32,1,4829.29708984375
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-fEr0.ILD.DFlex_hopper_64.seed1100,,,32,1,4824.511225585938
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-JOhd.ILD.DFlex_hopper_64.seed1200,,,32,1,4823.054760742188
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-luY4.ILD.DFlex_hopper_64.seed110,,,32,1,4837.4388427734375
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-MmLt.ILD.DFlex_hopper_64.seed120,,,32,1,4822.3614111328125
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-pv0X.ILD.DFlex_hopper_64.seed100,,,32,1,4701.579517822265
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-1vlM.ILD.DFlex_hopper_64.seed140,,,32,1,4829.42173828125
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-32Jc.ILD.DFlex_hopper_64.seed1300,,,32,1,4824.38412109375
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-MHzE.ILD.DFlex_hopper_64.seed130,,,32,1,4747.597194824219
+hopper,Hopper,ILD,SAPO,fix-ceiling-april-tennessee-october.ILD.DFlex_hopper_64,fix-ceiling-april-tennessee-october-Zi7M.ILD.DFlex_hopper_64.seed1400,,,32,1,4838.383051757813
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-Gb8I.ILD.DFlex_hopper_64.seed1000,,,32,4,4825.45271484375
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-hLMi.ILD.DFlex_hopper_64.seed1100,,,32,4,4816.014833984375
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-kBJQ.ILD.DFlex_hopper_64.seed1200,,,32,4,4817.827075195312
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-kXGe.ILD.DFlex_hopper_64.seed110,,,32,4,4820.8848876953125
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-lkiI.ILD.DFlex_hopper_64.seed100,,,32,4,4817.13744140625
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-vtlk.ILD.DFlex_hopper_64.seed120,,,32,4,4824.67333984375
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-60S6.ILD.DFlex_hopper_64.seed140,,,32,4,4816.285708007813
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-9IV6.ILD.DFlex_hopper_64.seed130,,,32,4,4803.907705078125
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-cwbK.ILD.DFlex_hopper_64.seed1400,,,32,4,4826.9830078125
+hopper,Hopper,ILD,SAPO,illinois-uniform-montana-maine-mountain.ILD.DFlex_hopper_64,illinois-uniform-montana-maine-mountain-xZy6.ILD.DFlex_hopper_64.seed1300,,,32,4,4815.679243164062
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-84yP.ILD.DFlex_hopper_64.seed1200,,,32,8,4815.970043945313
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-JQ2B.ILD.DFlex_hopper_64.seed1100,,,32,8,4807.719370117187
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-pCVV.ILD.DFlex_hopper_64.seed110,,,32,8,4818.536767578125
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-pWrq.ILD.DFlex_hopper_64.seed1000,,,32,8,4814.678940429688
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-vffs.ILD.DFlex_hopper_64.seed100,,,32,8,4809.831079101563
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-xLEv.ILD.DFlex_hopper_64.seed120,,,32,8,4814.446596679688
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-Glgu.ILD.DFlex_hopper_64.seed1400,,,32,8,4819.768032226562
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-Neyl.ILD.DFlex_hopper_64.seed140,,,32,8,4812.606967773438
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-srng.ILD.DFlex_hopper_64.seed130,,,32,8,4805.524350585937
+hopper,Hopper,ILD,SAPO,network-sixteen-pizza-pluto-ceiling.ILD.DFlex_hopper_64,network-sixteen-pizza-pluto-ceiling-WByy.ILD.DFlex_hopper_64.seed1300,,,32,8,4814.973745117188
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-3yHu.ILD.DFlex_hopper_64.seed100,,,32,16,4812.06720703125
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-5A6c.ILD.DFlex_hopper_64.seed110,,,32,16,4813.6138916015625
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-asYl.ILD.DFlex_hopper_64.seed1000,,,32,16,4811.9283984375
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-bMZh.ILD.DFlex_hopper_64.seed120,,,32,16,4816.203325195313
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-Mwhp.ILD.DFlex_hopper_64.seed1100,,,32,16,4816.938432617188
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-N2YQ.ILD.DFlex_hopper_64.seed1200,,,32,16,4811.138198242187
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-iTlK.ILD.DFlex_hopper_64.seed140,,,32,16,4814.027827148438
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-tdeD.ILD.DFlex_hopper_64.seed130,,,32,16,4806.652509765625
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-vOKq.ILD.DFlex_hopper_64.seed1300,,,32,16,4816.6309423828125
+hopper,Hopper,ILD,SAPO,ten-asparagus-yankee-nebraska-bravo.ILD.DFlex_hopper_64,ten-asparagus-yankee-nebraska-bravo-YF6h.ILD.DFlex_hopper_64.seed1400,,,32,16,4815.850629882812
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-4xie.ILD.DFlex_hopper_64.seed1000,,,32,1,4070.645221862793
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-aWvV.ILD.DFlex_hopper_64.seed1100,,,32,1,949.4350563049317
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-cNzG.ILD.DFlex_hopper_64.seed1200,,,32,1,4760.797873535156
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-JMv3.ILD.DFlex_hopper_64.seed100,,,32,1,4062.3896337890624
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-pqwT.ILD.DFlex_hopper_64.seed120,,,32,1,4727.73318359375
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-rBdO.ILD.DFlex_hopper_64.seed110,,,32,1,4731.566537475586
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-o3wz.ILD.DFlex_hopper_64.seed1400,,,32,1,4822.257451171875
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-LNad.ILD.DFlex_hopper_64.seed140,,,32,1,4811.240498046875
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-M2Ll.ILD.DFlex_hopper_64.seed130,,,32,1,4817.826484375
+hopper,Hopper,ILD,SHAC,chicken-ink-queen-quebec-illinois.ILD.DFlex_hopper_64,chicken-ink-queen-quebec-illinois-qSz2.ILD.DFlex_hopper_64.seed1300,,,32,1,794.2907945251465
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-L8uL.ILD.DFlex_hopper_64.seed1000,,,32,4,4391.735201416016
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-l9hj.ILD.DFlex_hopper_64.seed110,,,32,4,4812.471708984375
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-re3i.ILD.DFlex_hopper_64.seed1200,,,32,4,1121.2329528808593
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-VeTV.ILD.DFlex_hopper_64.seed1100,,,32,4,4788.080561523438
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-YSlo.ILD.DFlex_hopper_64.seed100,,,32,4,4806.8938818359375
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-yY9u.ILD.DFlex_hopper_64.seed120,,,32,4,4813.585063476563
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-rmxI.ILD.DFlex_hopper_64.seed1400,,,32,4,4826.019682617188
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-9Xpi.ILD.DFlex_hopper_64.seed130,,,32,4,4821.3099609375
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-PSjX.ILD.DFlex_hopper_64.seed140,,,32,4,4806.4669189453125
+hopper,Hopper,ILD,SHAC,florida-summer-quiet-beer-angel.ILD.DFlex_hopper_64,florida-summer-quiet-beer-angel-8JVb.ILD.DFlex_hopper_64.seed1300,,,32,4,4793.9149560546875
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-0HUA.ILD.DFlex_hopper_64.seed1200,,,32,8,4786.94359375
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-9hjC.ILD.DFlex_hopper_64.seed1100,,,32,8,4782.580974121094
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-dk0J.ILD.DFlex_hopper_64.seed100,,,32,8,4523.196882324219
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-EFU1.ILD.DFlex_hopper_64.seed120,,,32,8,4254.872636413575
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-gHCb.ILD.DFlex_hopper_64.seed110,,,32,8,4779.942836914062
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-GjzV.ILD.DFlex_hopper_64.seed1000,,,32,8,4797.098090820313
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-Vufo.ILD.DFlex_hopper_64.seed1300,,,32,8,4819.375776367187
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-su0Y.ILD.DFlex_hopper_64.seed130,,,32,8,325.37428756713865
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-VMEB.ILD.DFlex_hopper_64.seed1400,,,32,8,4816.417534179687
+hopper,Hopper,ILD,SHAC,massachusetts-fillet-skylark-jupiter-finch.ILD.DFlex_hopper_64,massachusetts-fillet-skylark-jupiter-finch-h6U4.ILD.DFlex_hopper_64.seed140,,,32,8,4798.745874023438
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-8ANR.ILD.DFlex_hopper_64.seed100,,,32,16,4810.222392578125
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-dpTY.ILD.DFlex_hopper_64.seed1000,,,32,16,4799.528286132812
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-eQka.ILD.DFlex_hopper_64.seed1100,,,32,16,4796.375434570313
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-fwkC.ILD.DFlex_hopper_64.seed120,,,32,16,4815.37478515625
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-KGiD.ILD.DFlex_hopper_64.seed1200,,,32,16,872.6909527587891
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-S11O.ILD.DFlex_hopper_64.seed110,,,32,16,4812.09283203125
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-KnLG.ILD.DFlex_hopper_64.seed1300,,,32,16,4820.21203125
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-Gtb0.ILD.DFlex_hopper_64.seed130,,,32,16,654.1125618743896
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-HSG0.ILD.DFlex_hopper_64.seed1400,,,32,16,4815.016997070313
+hopper,Hopper,ILD,SHAC,utah-march-avocado-pizza-berlin.ILD.DFlex_hopper_64,utah-march-avocado-pizza-berlin-Y1uq.ILD.DFlex_hopper_64.seed140,,,32,16,4807.442094726563
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-i6Cv.ILD.DFlex_ant_64.seed1000,,,32,8,9331.011455078125
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-oqLA.ILD.DFlex_ant_64.seed1100,,,32,8,9359.465693359374
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-qEc2.ILD.DFlex_ant_64.seed100,,,32,8,9389.341513671876
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-vKIP.ILD.DFlex_ant_64.seed110,,,32,8,9362.7196875
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-wbyU.ILD.DFlex_ant_64.seed120,,,32,8,9367.19822265625
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-PxVX.ILD.DFlex_ant_64.seed1200,,,32,8,9384.00833984375
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-MgsR.ILD.DFlex_ant_64.seed140,,,32,8,9391.082880859374
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-Qpqw.ILD.DFlex_ant_64.seed130,,,32,8,9375.288212890626
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-6Wnl.ILD.DFlex_ant_64.seed1300,,,32,8,9357.669208984375
+ant,Ant,ILD,SAPO,hydrogen-grey-high-victor-sad.ILD.DFlex_ant_64,hydrogen-grey-high-victor-sad-pOzO.ILD.DFlex_ant_64.seed1400,,,32,8,9400.113271484375
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-0hKz.ILD.DFlex_ant_64.seed1200,,,32,1,9228.03841796875
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-1gjP.ILD.DFlex_ant_64.seed1000,,,32,1,9237.7487890625
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-J67G.ILD.DFlex_ant_64.seed100,,,32,1,9174.947021484375
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-ni2B.ILD.DFlex_ant_64.seed1100,,,32,1,8982.631929626465
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-oe4O.ILD.DFlex_ant_64.seed120,,,32,1,9255.722431640625
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-zL8X.ILD.DFlex_ant_64.seed110,,,32,1,9252.217080078124
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-3xjt.ILD.DFlex_ant_64.seed1300,,,32,1,9221.266689453125
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-QaEX.ILD.DFlex_ant_64.seed140,,,32,1,9237.77349609375
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-sbDi.ILD.DFlex_ant_64.seed130,,,32,1,9250.4946875
+ant,Ant,ILD,SAPO,mirror-fruit-cardinal-vegan-cola.ILD.DFlex_ant_64,mirror-fruit-cardinal-vegan-cola-38MZ.ILD.DFlex_ant_64.seed1400,,,32,1,9234.225625
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-6hhk.ILD.DFlex_ant_64.seed1000,,,32,16,9410.525908203124
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-nILF.ILD.DFlex_ant_64.seed120,,,32,16,9365.337841796874
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-t5BL.ILD.DFlex_ant_64.seed1100,,,32,16,9411.094384765625
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-TWS4.ILD.DFlex_ant_64.seed100,,,32,16,9397.487392578125
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-wkfU.ILD.DFlex_ant_64.seed110,,,32,16,9421.077353515626
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-Mtng.ILD.DFlex_ant_64.seed1200,,,32,16,9400.06513671875
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-kb8l.ILD.DFlex_ant_64.seed140,,,32,16,9385.847978515625
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-klzJ.ILD.DFlex_ant_64.seed130,,,32,16,9401.603271484375
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-EUOi.ILD.DFlex_ant_64.seed1300,,,32,16,9392.0045703125
+ant,Ant,ILD,SAPO,single-winner-white-charlie-dakota.ILD.DFlex_ant_64,single-winner-white-charlie-dakota-FhO1.ILD.DFlex_ant_64.seed1400,,,32,16,9397.5142578125
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-0jvo.ILD.DFlex_ant_64.seed110,,,32,4,9335.622353515624
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-aBRE.ILD.DFlex_ant_64.seed100,,,32,4,9353.89294921875
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-DVqH.ILD.DFlex_ant_64.seed1100,,,32,4,9351.345986328124
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-Fvk3.ILD.DFlex_ant_64.seed1000,,,32,4,9313.46578125
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-Je1f.ILD.DFlex_ant_64.seed120,,,32,4,9307.18810546875
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-rBHm.ILD.DFlex_ant_64.seed1200,,,32,4,9352.71744140625
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-gtBe.ILD.DFlex_ant_64.seed1300,,,32,4,9353.299013671874
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-sl2m.ILD.DFlex_ant_64.seed130,,,32,4,9354.8037890625
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-wNvF.ILD.DFlex_ant_64.seed140,,,32,4,9343.55447265625
+ant,Ant,ILD,SAPO,utah-florida-fruit-ack-two.ILD.DFlex_ant_64,utah-florida-fruit-ack-two-mn80.ILD.DFlex_ant_64.seed1400,,,32,4,9335.696923828125
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-1cPb.ILD.DFlex_ant_64.seed1200,,,32,8,9296.115078125
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-F1Xy.ILD.DFlex_ant_64.seed120,,,32,8,9357.0850390625
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-IKOr.ILD.DFlex_ant_64.seed100,,,32,8,9138.430263671875
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-K67F.ILD.DFlex_ant_64.seed1100,,,32,8,9231.638984375
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-owy0.ILD.DFlex_ant_64.seed1000,,,32,8,1044.8827383422852
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-XdRN.ILD.DFlex_ant_64.seed110,,,32,8,8760.379469299316
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-3TFV.ILD.DFlex_ant_64.seed1400,,,32,8,9289.127607421875
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-5eGI.ILD.DFlex_ant_64.seed1300,,,32,8,9154.353701171874
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-EW9T.ILD.DFlex_ant_64.seed140,,,32,8,2115.2543936157226
+ant,Ant,ILD,SHAC,georgia-rugby-delaware-hotel-avocado.ILD.DFlex_ant_64,georgia-rugby-delaware-hotel-avocado-tgmP.ILD.DFlex_ant_64.seed130,,,32,8,1177.1883288574218
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-3wf6.ILD.DFlex_ant_64.seed1200,,,32,1,1272.5917793273925
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-8vCD.ILD.DFlex_ant_64.seed1100,,,32,1,1273.5046801757812
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-aSxr.ILD.DFlex_ant_64.seed110,,,32,1,9029.14669921875
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-KyHn.ILD.DFlex_ant_64.seed120,,,32,1,1230.3795944213866
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-pDwq.ILD.DFlex_ant_64.seed100,,,32,1,1225.5651219177246
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-TgYU.ILD.DFlex_ant_64.seed1000,,,32,1,1497.7137889099122
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-8XxZ.ILD.DFlex_ant_64.seed140,,,32,1,9250.740009765625
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-E8Tj.ILD.DFlex_ant_64.seed1300,,,32,1,1499.9065441894531
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-fMbW.ILD.DFlex_ant_64.seed130,,,32,1,1276.673516845703
+ant,Ant,ILD,SHAC,sad-yellow-kentucky-burger-four.ILD.DFlex_ant_64,sad-yellow-kentucky-burger-four-kNei.ILD.DFlex_ant_64.seed1400,,,32,1,9249.562333984375
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-8yQb.ILD.DFlex_ant_64.seed1000,,,32,16,9227.950234375
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-f5rd.ILD.DFlex_ant_64.seed120,,,32,16,9377.722529296874
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-hX4t.ILD.DFlex_ant_64.seed110,,,32,16,9192.25064453125
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-Hzg6.ILD.DFlex_ant_64.seed100,,,32,16,9247.50232421875
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-rZqF.ILD.DFlex_ant_64.seed1100,,,32,16,9193.843466796876
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-woZE.ILD.DFlex_ant_64.seed1200,,,32,16,9221.790517578125
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-AFaJ.ILD.DFlex_ant_64.seed1300,,,32,16,9306.630478515624
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-cMYN.ILD.DFlex_ant_64.seed140,,,32,16,9065.838175048828
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-LvGH.ILD.DFlex_ant_64.seed1400,,,32,16,9406.46376953125
+ant,Ant,ILD,SHAC,speaker-maine-fanta-purple-bacon.ILD.DFlex_ant_64,speaker-maine-fanta-purple-bacon-VWy9.ILD.DFlex_ant_64.seed130,,,32,16,9236.910810546875
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-7yek.ILD.DFlex_ant_64.seed110,,,32,4,9276.23791015625
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-8C72.ILD.DFlex_ant_64.seed1200,,,32,4,9184.87951171875
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-cmQt.ILD.DFlex_ant_64.seed1100,,,32,4,9198.87291015625
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-DxQS.ILD.DFlex_ant_64.seed1000,,,32,4,9252.852998046876
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-JWri.ILD.DFlex_ant_64.seed100,,,32,4,2468.1189279174805
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-yI3A.ILD.DFlex_ant_64.seed120,,,32,4,9299.63896484375
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-m0u2.ILD.DFlex_ant_64.seed1300,,,32,4,8818.06397857666
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-qWzU.ILD.DFlex_ant_64.seed130,,,32,4,9275.4871484375
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-wEDr.ILD.DFlex_ant_64.seed140,,,32,4,9174.098349609376
+ant,Ant,ILD,SHAC,summer-crazy-lion-solar-romeo.ILD.DFlex_ant_64,summer-crazy-lion-solar-romeo-ZWYD.ILD.DFlex_ant_64.seed1400,,,32,4,9310.43076171875
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-2ABW.ILD.DFlex_humanoid_64.seed1000,,,32,8,8166.690444335937
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-iDTu.ILD.DFlex_humanoid_64.seed100,,,32,8,166.29081146240233
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-ONuP.ILD.DFlex_humanoid_64.seed1100,,,32,8,168.36317016601564
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-z07W.ILD.DFlex_humanoid_64.seed1200,,,32,8,8118.723828125
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-zRxb.ILD.DFlex_humanoid_64.seed120,,,32,8,177.7194694519043
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-3SRf.ILD.DFlex_humanoid_64.seed110,,,32,8,166.3082385826111
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-BDWG.ILD.DFlex_humanoid_64.seed1300,,,32,8,8151.994311523437
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-uoqg.ILD.DFlex_humanoid_64.seed1400,,,32,8,159.769266166687
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-UW0Z.ILD.DFlex_humanoid_64.seed130,,,32,8,7974.512293930054
+humanoid,Humanoid,ILD,SAPO,blue-muppet-timing-harry-orange.ILD.DFlex_humanoid_64,blue-muppet-timing-harry-orange-ZKbn.ILD.DFlex_humanoid_64.seed140,,,32,8,162.0590102005005
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-1JJ3.ILD.DFlex_humanoid_64.seed100,,,32,16,162.1681462097168
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-AEVM.ILD.DFlex_humanoid_64.seed1200,,,32,16,172.02740051269532
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-FbUf.ILD.DFlex_humanoid_64.seed110,,,32,16,170.7826789855957
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-JjWU.ILD.DFlex_humanoid_64.seed1000,,,32,16,8192.903530273437
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-T9t5.ILD.DFlex_humanoid_64.seed1100,,,32,16,162.73959747314453
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-vPuT.ILD.DFlex_humanoid_64.seed120,,,32,16,8117.656611328125
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-EGPJ.ILD.DFlex_humanoid_64.seed1300,,,32,16,8144.88664932251
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-ikwa.ILD.DFlex_humanoid_64.seed130,,,32,16,8135.630595245361
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-l2x9.ILD.DFlex_humanoid_64.seed140,,,32,16,165.9453622817993
+humanoid,Humanoid,ILD,SAPO,failed-network-mexico-violet-papa.ILD.DFlex_humanoid_64,failed-network-mexico-violet-papa-Qhzb.ILD.DFlex_humanoid_64.seed1400,,,32,16,165.73857780456544
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-cU0k.ILD.DFlex_humanoid_64.seed1000,,,32,4,8004.218717041015
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-oYSE.ILD.DFlex_humanoid_64.seed120,,,32,4,7842.000078125
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-Vv1I.ILD.DFlex_humanoid_64.seed1100,,,32,4,8066.81974609375
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-WW3I.ILD.DFlex_humanoid_64.seed1200,,,32,4,7893.998241882324
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-Xq45.ILD.DFlex_humanoid_64.seed110,,,32,4,179.17161350250245
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-b7vU.ILD.DFlex_humanoid_64.seed100,,,32,4,174.5367635345459
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-sOAF.ILD.DFlex_humanoid_64.seed140,,,32,4,166.42785717010497
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-sXWT.ILD.DFlex_humanoid_64.seed130,,,32,4,7779.758014755249
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-U0xy.ILD.DFlex_humanoid_64.seed1300,,,32,4,7587.610308914184
+humanoid,Humanoid,ILD,SAPO,football-undress-cola-whiskey-muppet.ILD.DFlex_humanoid_64,football-undress-cola-whiskey-muppet-uDbg.ILD.DFlex_humanoid_64.seed1400,,,32,4,157.71423130035402
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-3Srr.ILD.DFlex_humanoid_64.seed1000,,,32,1,156.65756618499756
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-BYRZ.ILD.DFlex_humanoid_64.seed1200,,,32,1,155.005572013855
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-H9U0.ILD.DFlex_humanoid_64.seed120,,,32,1,161.5729127883911
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-mpcz.ILD.DFlex_humanoid_64.seed110,,,32,1,159.8392809677124
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-Vz4Y.ILD.DFlex_humanoid_64.seed1100,,,32,1,157.44278339385986
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-3Efr.ILD.DFlex_humanoid_64.seed100,,,32,1,160.10126056671143
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-7nQg.ILD.DFlex_humanoid_64.seed140,,,32,1,157.952388381958
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-EI1a.ILD.DFlex_humanoid_64.seed130,,,32,1,160.47495769500733
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-HegM.ILD.DFlex_humanoid_64.seed1300,,,32,1,163.0848323059082
+humanoid,Humanoid,ILD,SAPO,gee-sodium-comet-comet-floor.ILD.DFlex_humanoid_64,gee-sodium-comet-comet-floor-nhYm.ILD.DFlex_humanoid_64.seed1400,,,32,1,162.28581155776976
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-HaEH.ILD.DFlex_humanoid_64.seed100,,,32,8,7898.13013305664
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-ippH.ILD.DFlex_humanoid_64.seed1100,,,32,8,7653.574279937744
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-kjSy.ILD.DFlex_humanoid_64.seed1000,,,32,8,7553.827945251465
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-lihl.ILD.DFlex_humanoid_64.seed120,,,32,8,7863.08533203125
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-vPvo.ILD.DFlex_humanoid_64.seed110,,,32,8,7962.489077911377
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-5Dfw.ILD.DFlex_humanoid_64.seed1200,,,32,8,7998.219064331055
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-PpRe.ILD.DFlex_humanoid_64.seed130,,,32,8,7688.4805352783205
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-SH9E.ILD.DFlex_humanoid_64.seed1300,,,32,8,7606.648330535889
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-XYjO.ILD.DFlex_humanoid_64.seed1400,,,32,8,7963.294133605957
+humanoid,Humanoid,ILD,SHAC,august-apart-king-rugby-six.ILD.DFlex_humanoid_64,august-apart-king-rugby-six-YB1F.ILD.DFlex_humanoid_64.seed140,,,32,8,165.7869020462036
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-FHr5.ILD.DFlex_humanoid_64.seed100,,,32,16,8046.622509765625
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-HtRw.ILD.DFlex_humanoid_64.seed120,,,32,16,8070.823303756714
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-p1Za.ILD.DFlex_humanoid_64.seed1100,,,32,16,8015.966837844849
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-SjIz.ILD.DFlex_humanoid_64.seed110,,,32,16,7972.733713684082
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-x9SE.ILD.DFlex_humanoid_64.seed1000,,,32,16,7774.916276397705
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-ZwmD.ILD.DFlex_humanoid_64.seed1200,,,32,16,8006.37166381836
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-cNnH.ILD.DFlex_humanoid_64.seed1400,,,32,16,8051.031279296875
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-dA9m.ILD.DFlex_humanoid_64.seed140,,,32,16,7924.336838531494
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-QHnP.ILD.DFlex_humanoid_64.seed130,,,32,16,183.40553009033204
+humanoid,Humanoid,ILD,SHAC,hot-lion-crazy-spaghetti-lion.ILD.DFlex_humanoid_64,hot-lion-crazy-spaghetti-lion-Zz0C.ILD.DFlex_humanoid_64.seed1300,,,32,16,7953.945170440674
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-b9UK.ILD.DFlex_humanoid_64.seed110,,,32,1,7245.311677398681
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-BZA1.ILD.DFlex_humanoid_64.seed120,,,32,1,6955.92841255188
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-JHI2.ILD.DFlex_humanoid_64.seed100,,,32,1,7314.529687652588
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-NNwa.ILD.DFlex_humanoid_64.seed1100,,,32,1,170.56719261169434
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-Op3C.ILD.DFlex_humanoid_64.seed1000,,,32,1,168.16545185089112
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-Tyto.ILD.DFlex_humanoid_64.seed1200,,,32,1,6574.745882263183
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-mOIr.ILD.DFlex_humanoid_64.seed140,,,32,1,75.17125337600709
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-rdoq.ILD.DFlex_humanoid_64.seed130,,,32,1,174.0308867263794
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-s0V3.ILD.DFlex_humanoid_64.seed1300,,,32,1,6829.191790313721
+humanoid,Humanoid,ILD,SHAC,network-spaghetti-green-sink-bakerloo.ILD.DFlex_humanoid_64,network-spaghetti-green-sink-bakerloo-sSUx.ILD.DFlex_humanoid_64.seed1400,,,32,1,7015.785507507324
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-BPSx.ILD.DFlex_humanoid_64.seed100,,,32,4,7475.883135910034
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-d5WK.ILD.DFlex_humanoid_64.seed1100,,,32,4,195.20696945190429
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-FIOQ.ILD.DFlex_humanoid_64.seed1000,,,32,4,7201.695127334595
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-lPS6.ILD.DFlex_humanoid_64.seed120,,,32,4,7412.515271911621
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-qRnF.ILD.DFlex_humanoid_64.seed110,,,32,4,7608.404755020141
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-Uwoh.ILD.DFlex_humanoid_64.seed1200,,,32,4,7837.598453979492
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-2Kkz.ILD.DFlex_humanoid_64.seed140,,,32,4,170.71353019714354
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-GE9Z.ILD.DFlex_humanoid_64.seed130,,,32,4,7756.910536880493
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-OQ0l.ILD.DFlex_humanoid_64.seed1400,,,32,4,7724.4088803100585
+humanoid,Humanoid,ILD,SHAC,utah-diet-six-video-uniform.ILD.DFlex_humanoid_64,utah-diet-six-video-uniform-qp99.ILD.DFlex_humanoid_64.seed1300,,,32,4,176.00791179656983
+snu_humanoid,SNU Humanoid,ILD,SAPO,equal-winter-ohio-connecticut-pip.ILD.DFlex_snu_humanoid_64,equal-winter-ohio-connecticut-pip-aomT.ILD.DFlex_snu_humanoid_64.seed1300,,,32,8,5627.310337753296
+snu_humanoid,SNU Humanoid,ILD,SAPO,equal-winter-ohio-connecticut-pip.ILD.DFlex_snu_humanoid_64,equal-winter-ohio-connecticut-pip-cQSV.ILD.DFlex_snu_humanoid_64.seed130,,,32,8,2434.4384376561643
+snu_humanoid,SNU Humanoid,ILD,SAPO,equal-winter-ohio-connecticut-pip.ILD.DFlex_snu_humanoid_64,equal-winter-ohio-connecticut-pip-v7OL.ILD.DFlex_snu_humanoid_64.seed140,,,32,8,113.71156032085419
+snu_humanoid,SNU Humanoid,ILD,SAPO,equal-winter-ohio-connecticut-pip.ILD.DFlex_snu_humanoid_64,equal-winter-ohio-connecticut-pip-WBp5.ILD.DFlex_snu_humanoid_64.seed1400,,,32,8,6259.497950515747
+snu_humanoid,SNU Humanoid,ILD,SAPO,potato-seven-mexico-five-floor.ILD.DFlex_snu_humanoid_64,potato-seven-mexico-five-floor-1qQa.ILD.DFlex_snu_humanoid_64.seed140,,,32,4,378.98109601020815
+snu_humanoid,SNU Humanoid,ILD,SAPO,potato-seven-mexico-five-floor.ILD.DFlex_snu_humanoid_64,potato-seven-mexico-five-floor-80bP.ILD.DFlex_snu_humanoid_64.seed1400,,,32,4,263.09030654907224
+snu_humanoid,SNU Humanoid,ILD,SAPO,potato-seven-mexico-five-floor.ILD.DFlex_snu_humanoid_64,potato-seven-mexico-five-floor-Jx4l.ILD.DFlex_snu_humanoid_64.seed1300,,,32,4,235.70401619911195
+snu_humanoid,SNU Humanoid,ILD,SAPO,potato-seven-mexico-five-floor.ILD.DFlex_snu_humanoid_64,potato-seven-mexico-five-floor-qrdI.ILD.DFlex_snu_humanoid_64.seed130,,,32,4,191.86262353658677
+snu_humanoid,SNU Humanoid,ILD,SAPO,speaker-undress-sodium-wisconsin-failed.ILD.DFlex_snu_humanoid_64,speaker-undress-sodium-wisconsin-failed-6syL.ILD.DFlex_snu_humanoid_64.seed1300,,,32,1,139.56560951709747
+snu_humanoid,SNU Humanoid,ILD,SAPO,speaker-undress-sodium-wisconsin-failed.ILD.DFlex_snu_humanoid_64,speaker-undress-sodium-wisconsin-failed-BQTw.ILD.DFlex_snu_humanoid_64.seed130,,,32,1,143.25147300720215
+snu_humanoid,SNU Humanoid,ILD,SAPO,speaker-undress-sodium-wisconsin-failed.ILD.DFlex_snu_humanoid_64,speaker-undress-sodium-wisconsin-failed-cbKP.ILD.DFlex_snu_humanoid_64.seed140,,,32,1,113.42515919685364
+snu_humanoid,SNU Humanoid,ILD,SAPO,speaker-undress-sodium-wisconsin-failed.ILD.DFlex_snu_humanoid_64,speaker-undress-sodium-wisconsin-failed-myp2.ILD.DFlex_snu_humanoid_64.seed1400,,,32,1,2794.432490537167
+snu_humanoid,SNU Humanoid,ILD,SAPO,stream-foxtrot-twenty-venus-emma.ILD.DFlex_snu_humanoid_64,stream-foxtrot-twenty-venus-emma-7q3V.ILD.DFlex_snu_humanoid_64.seed1300,,,32,16,6051.606297988892
+snu_humanoid,SNU Humanoid,ILD,SAPO,stream-foxtrot-twenty-venus-emma.ILD.DFlex_snu_humanoid_64,stream-foxtrot-twenty-venus-emma-glBi.ILD.DFlex_snu_humanoid_64.seed130,,,32,16,133.1054087895155
+snu_humanoid,SNU Humanoid,ILD,SAPO,stream-foxtrot-twenty-venus-emma.ILD.DFlex_snu_humanoid_64,stream-foxtrot-twenty-venus-emma-hZM6.ILD.DFlex_snu_humanoid_64.seed140,,,32,16,694.5491514682769
+snu_humanoid,SNU Humanoid,ILD,SAPO,stream-foxtrot-twenty-venus-emma.ILD.DFlex_snu_humanoid_64,stream-foxtrot-twenty-venus-emma-KemN.ILD.DFlex_snu_humanoid_64.seed1400,,,32,16,6202.324257659912
+snu_humanoid,SNU Humanoid,ILD,SHAC,early-pasta-violet-spaghetti-moon.ILD.DFlex_snu_humanoid_64,early-pasta-violet-spaghetti-moon-4Pxp.ILD.DFlex_snu_humanoid_64.seed1400,,,32,1,216.8196183371544
+snu_humanoid,SNU Humanoid,ILD,SHAC,early-pasta-violet-spaghetti-moon.ILD.DFlex_snu_humanoid_64,early-pasta-violet-spaghetti-moon-lNWv.ILD.DFlex_snu_humanoid_64.seed130,,,32,1,113.64324048042297
+snu_humanoid,SNU Humanoid,ILD,SHAC,early-pasta-violet-spaghetti-moon.ILD.DFlex_snu_humanoid_64,early-pasta-violet-spaghetti-moon-os10.ILD.DFlex_snu_humanoid_64.seed1300,,,32,1,186.10891949355602
+snu_humanoid,SNU Humanoid,ILD,SHAC,early-pasta-violet-spaghetti-moon.ILD.DFlex_snu_humanoid_64,early-pasta-violet-spaghetti-moon-rhHb.ILD.DFlex_snu_humanoid_64.seed140,,,32,1,107.34345783233643
+snu_humanoid,SNU Humanoid,ILD,SHAC,echo-high-october-mexico-salami.ILD.DFlex_snu_humanoid_64,echo-high-october-mexico-salami-cmnE.ILD.DFlex_snu_humanoid_64.seed130,,,32,16,105.45429224491119
+snu_humanoid,SNU Humanoid,ILD,SHAC,echo-high-october-mexico-salami.ILD.DFlex_snu_humanoid_64,echo-high-october-mexico-salami-QPFP.ILD.DFlex_snu_humanoid_64.seed1400,,,32,16,399.62399084091186
+snu_humanoid,SNU Humanoid,ILD,SHAC,echo-high-october-mexico-salami.ILD.DFlex_snu_humanoid_64,echo-high-october-mexico-salami-r7CB.ILD.DFlex_snu_humanoid_64.seed1300,,,32,16,4216.662621269226
+snu_humanoid,SNU Humanoid,ILD,SHAC,echo-high-october-mexico-salami.ILD.DFlex_snu_humanoid_64,echo-high-october-mexico-salami-RuCR.ILD.DFlex_snu_humanoid_64.seed140,,,32,16,117.56383361577987
+snu_humanoid,SNU Humanoid,ILD,SHAC,golf-georgia-three-double-south.ILD.DFlex_snu_humanoid_64,golf-georgia-three-double-south-bStK.ILD.DFlex_snu_humanoid_64.seed1300,,,32,4,151.08356487870216
+snu_humanoid,SNU Humanoid,ILD,SHAC,golf-georgia-three-double-south.ILD.DFlex_snu_humanoid_64,golf-georgia-three-double-south-C1XB.ILD.DFlex_snu_humanoid_64.seed130,,,32,4,109.1535139387846
+snu_humanoid,SNU Humanoid,ILD,SHAC,golf-georgia-three-double-south.ILD.DFlex_snu_humanoid_64,golf-georgia-three-double-south-VJNs.ILD.DFlex_snu_humanoid_64.seed1400,,,32,4,199.86622054576873
+snu_humanoid,SNU Humanoid,ILD,SHAC,golf-georgia-three-double-south.ILD.DFlex_snu_humanoid_64,golf-georgia-three-double-south-Zl0i.ILD.DFlex_snu_humanoid_64.seed140,,,32,4,105.80237360954284
+snu_humanoid,SNU Humanoid,ILD,SHAC,vermont-green-south-blossom-green.ILD.DFlex_snu_humanoid_64,vermont-green-south-blossom-green-9FUJ.ILD.DFlex_snu_humanoid_64.seed130,,,32,8,100.38953896522521
+snu_humanoid,SNU Humanoid,ILD,SHAC,vermont-green-south-blossom-green.ILD.DFlex_snu_humanoid_64,vermont-green-south-blossom-green-d85M.ILD.DFlex_snu_humanoid_64.seed140,,,32,8,4507.67988407135
+snu_humanoid,SNU Humanoid,ILD,SHAC,vermont-green-south-blossom-green.ILD.DFlex_snu_humanoid_64,vermont-green-south-blossom-green-dC9F.ILD.DFlex_snu_humanoid_64.seed1300,,,32,8,698.0305199623108
+snu_humanoid,SNU Humanoid,ILD,SHAC,vermont-green-south-blossom-green.ILD.DFlex_snu_humanoid_64,vermont-green-south-blossom-green-kLYk.ILD.DFlex_snu_humanoid_64.seed1400,,,32,8,306.73425721883774
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-tBE4.OTIL.DFlex_hopper_64.seed100,l2,l2,32,1,4850.97568359375
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-rFSL.OTIL.DFlex_hopper_64.seed110,l2,l2,32,1,4694.459213867188
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-20By.OTIL.DFlex_hopper_64.seed120,l2,l2,32,1,4742.706000976563
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-wY5m.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,1,4802.53212890625
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-bHmx.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,1,4793.8269873046875
+hopper,Hopper,OTIL,SAPO,sixteen-happy-berlin-stream-beryllium.OTIL.DFlex_hopper_64,sixteen-happy-berlin-stream-beryllium-k8fA.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,1,4759.804599609375
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-E9Dw.OTIL.DFlex_hopper_64.seed100,l2,l2,32,8,4816.9137109375
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-FIdH.OTIL.DFlex_hopper_64.seed110,l2,l2,32,8,4647.840073242188
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-Gd64.OTIL.DFlex_hopper_64.seed120,l2,l2,32,8,4743.149833984375
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-3XF4.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,8,4770.116748046875
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-CBqP.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,8,4776.8160009765625
+hopper,Hopper,OTIL,SAPO,harry-nevada-yellow-freddie-magnesium.OTIL.DFlex_hopper_64,harry-nevada-yellow-freddie-magnesium-6aiu.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,8,4783.409067382812
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-UiMg.OTIL.DFlex_hopper_64.seed100,l2,l2,32,4,4813.911362304688
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-Lzu4.OTIL.DFlex_hopper_64.seed120,l2,l2,32,4,4769.68400390625
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-yiJs.OTIL.DFlex_hopper_64.seed110,l2,l2,32,4,4805.814311523438
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-XHN2.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,4,4773.488188476563
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-0BxY.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,4,4799.649921875
+hopper,Hopper,OTIL,SAPO,tennessee-mexico-yankee-timing-utah.OTIL.DFlex_hopper_64,tennessee-mexico-yankee-timing-utah-n8XI.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,4,4765.664868164063
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-Wjda.OTIL.DFlex_hopper_64.seed100,l2,l2,32,16,4839.611528320313
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-uiwa.OTIL.DFlex_hopper_64.seed110,l2,l2,32,16,4788.400654296875
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-ENAT.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,16,4781.924267578125
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-syfe.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,16,4833.165454101562
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-CRu0.OTIL.DFlex_hopper_64.seed120,l2,l2,32,16,4762.153833007813
+hopper,Hopper,OTIL,SAPO,louisiana-papa-shade-lima-rugby.OTIL.DFlex_hopper_64,louisiana-papa-shade-lima-rugby-MlUs.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,16,4814.990107421875
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-6LkR.OTIL.DFlex_hopper_64.seed110,l2,l2,32,4,1071.4054052734375
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-q2SK.OTIL.DFlex_hopper_64.seed100,l2,l2,32,4,146.25248390197754
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-fC8Y.OTIL.DFlex_hopper_64.seed120,l2,l2,32,4,90.47413084030151
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-7ybK.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,4,108.61828479766845
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-HqFU.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,4,3115.0120601654053
+hopper,Hopper,OTIL,SHAC,april-echo-speaker-may-west.OTIL.DFlex_hopper_64,april-echo-speaker-may-west-PKKT.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,4,106.27782043457032
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-MJYr.OTIL.DFlex_hopper_64.seed110,l2,l2,32,8,1120.6545442962647
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-esPK.OTIL.DFlex_hopper_64.seed100,l2,l2,32,8,3519.743781738281
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-YmUT.OTIL.DFlex_hopper_64.seed120,l2,l2,32,8,2681.729521484375
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-f5u7.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,8,3992.8800230407714
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-oMUH.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,8,2579.679723358154
+hopper,Hopper,OTIL,SHAC,early-finch-michigan-juliet-autumn.OTIL.DFlex_hopper_64,early-finch-michigan-juliet-autumn-QHIN.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,8,2559.43408864975
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-fq8R.OTIL.DFlex_hopper_64.seed100,l2,l2,32,1,927.4848116493225
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-IVJG.OTIL.DFlex_hopper_64.seed110,l2,l2,32,1,1036.9328106689454
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-2gGe.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,1,3590.6611251831055
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-84es.OTIL.DFlex_hopper_64.seed120,l2,l2,32,1,1222.6796495819092
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-EV6f.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,1,3694.1857360839845
+hopper,Hopper,OTIL,SHAC,magnesium-papa-video-jersey-mississippi.OTIL.DFlex_hopper_64,magnesium-papa-video-jersey-mississippi-mLQh.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,1,105.40089631557464
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-3FUB.OTIL.DFlex_hopper_64.seed110,l2,l2,32,16,91.1530806183815
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-OBcO.OTIL.DFlex_hopper_64.seed100,l2,l2,32,16,757.7354586029053
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-SeQ2.OTIL.DFlex_hopper_64.seed120,l2,l2,32,16,-28.27617546081543
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-odea.OTIL.DFlex_hopper_64.seed1200,l2,l2,32,16,2521.002946357727
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-ojzk.OTIL.DFlex_hopper_64.seed1100,l2,l2,32,16,2370.2603848266604
+hopper,Hopper,OTIL,SHAC,zebra-purple-item-beer-early.OTIL.DFlex_hopper_64,zebra-purple-item-beer-early-KTXh.OTIL.DFlex_hopper_64.seed1000,l2,l2,32,16,2093.9070323944093
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-1eNM.OTIL.DFlex_ant_64.seed1100,l2,l2,32,8,7182.801845703125
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-7Iny.OTIL.DFlex_ant_64.seed1200,l2,l2,32,8,4431.718145751953
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-hB8p.OTIL.DFlex_ant_64.seed110,l2,l2,32,8,5095.462978515625
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-smSx.OTIL.DFlex_ant_64.seed100,l2,l2,32,8,8766.251279296876
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-pvdp.OTIL.DFlex_ant_64.seed120,l2,l2,32,8,7359.70169921875
+ant,Ant,OTIL,SAPO,fish-sweet-cat-london-diet.OTIL.DFlex_ant_64,fish-sweet-cat-london-diet-99Uf.OTIL.DFlex_ant_64.seed1000,l2,l2,32,8,3538.6897583007812
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-YqFd.OTIL.DFlex_ant_64.seed1200,l2,l2,32,1,2356.2347265625
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-iHYm.OTIL.DFlex_ant_64.seed120,l2,l2,32,1,5261.136401367187
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-JxfI.OTIL.DFlex_ant_64.seed100,l2,l2,32,1,8756.934482421875
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-k062.OTIL.DFlex_ant_64.seed110,l2,l2,32,1,6005.470682373047
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-RhB4.OTIL.DFlex_ant_64.seed1000,l2,l2,32,1,5668.75251953125
+ant,Ant,OTIL,SAPO,football-undress-whiskey-orange-colorado.OTIL.DFlex_ant_64,football-undress-whiskey-orange-colorado-xZFc.OTIL.DFlex_ant_64.seed1100,l2,l2,32,1,3889.3110205078124
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-virK.OTIL.DFlex_ant_64.seed1100,l2,l2,32,4,4408.8436328125
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-WQ45.OTIL.DFlex_ant_64.seed1200,l2,l2,32,4,7633.959794921875
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-m20t.OTIL.DFlex_ant_64.seed100,l2,l2,32,4,8771.6923828125
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-Rmte.OTIL.DFlex_ant_64.seed110,l2,l2,32,4,5171.78513671875
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-EkF5.OTIL.DFlex_ant_64.seed120,l2,l2,32,4,4393.862550048828
+ant,Ant,OTIL,SAPO,maine-asparagus-dakota-nineteen-angel.OTIL.DFlex_ant_64,maine-asparagus-dakota-nineteen-angel-ZWrC.OTIL.DFlex_ant_64.seed1000,l2,l2,32,4,5212.612485351562
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-btWx.OTIL.DFlex_ant_64.seed1200,l2,l2,32,16,3013.6128051757814
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-YfiW.OTIL.DFlex_ant_64.seed1100,l2,l2,32,16,5433.75412109375
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-2S9R.OTIL.DFlex_ant_64.seed110,l2,l2,32,16,5212.754848632812
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-hPVE.OTIL.DFlex_ant_64.seed100,l2,l2,32,16,8809.34625
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-UL4A.OTIL.DFlex_ant_64.seed1000,l2,l2,32,16,6759.268779296875
+ant,Ant,OTIL,SAPO,mirror-happy-spaghetti-johnny-indigo.OTIL.DFlex_ant_64,mirror-happy-spaghetti-johnny-indigo-X7N9.OTIL.DFlex_ant_64.seed120,l2,l2,32,16,7797.487153320312
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-REPz.OTIL.DFlex_ant_64.seed110,l2,l2,32,16,1031.958544921875
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-RskM.OTIL.DFlex_ant_64.seed100,l2,l2,32,16,1248.8582678222656
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-Bxpi.OTIL.DFlex_ant_64.seed1200,l2,l2,32,16,1091.1908117675782
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-g19q.OTIL.DFlex_ant_64.seed120,l2,l2,32,16,1201.664048461914
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-Q3ps.OTIL.DFlex_ant_64.seed1100,l2,l2,32,16,1585.2832861328125
+ant,Ant,OTIL,SHAC,colorado-fanta-johnny-sixteen-east.OTIL.DFlex_ant_64,colorado-fanta-johnny-sixteen-east-ySY2.OTIL.DFlex_ant_64.seed1000,l2,l2,32,16,1456.2253149414062
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-plpO.OTIL.DFlex_ant_64.seed110,l2,l2,32,4,891.661922531128
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-SxbT.OTIL.DFlex_ant_64.seed100,l2,l2,32,4,1335.5223794555664
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-14mp.OTIL.DFlex_ant_64.seed1200,l2,l2,32,4,1168.7112322998046
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-ka56.OTIL.DFlex_ant_64.seed120,l2,l2,32,4,2099.607391357422
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-qPJq.OTIL.DFlex_ant_64.seed1000,l2,l2,32,4,1218.4282878112792
+ant,Ant,OTIL,SHAC,leopard-coffee-august-stairway-missouri.OTIL.DFlex_ant_64,leopard-coffee-august-stairway-missouri-h12P.OTIL.DFlex_ant_64.seed1100,l2,l2,32,4,1111.2890942382812
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-FvaL.OTIL.DFlex_ant_64.seed110,l2,l2,32,1,1083.0000082397462
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-OAIZ.OTIL.DFlex_ant_64.seed100,l2,l2,32,1,1217.1397161865234
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-2Xdm.OTIL.DFlex_ant_64.seed120,l2,l2,32,1,984.3819274902344
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-9hVe.OTIL.DFlex_ant_64.seed1000,l2,l2,32,1,922.1394105529785
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-N6VD.OTIL.DFlex_ant_64.seed1200,l2,l2,32,1,1105.2942882156372
+ant,Ant,OTIL,SHAC,louisiana-september-burger-nevada-lactose.OTIL.DFlex_ant_64,louisiana-september-burger-nevada-lactose-CQVb.OTIL.DFlex_ant_64.seed1100,l2,l2,32,1,1255.2558935546874
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-4IRD.OTIL.DFlex_ant_64.seed110,l2,l2,32,8,2373.3896995544433
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-Fpnf.OTIL.DFlex_ant_64.seed100,l2,l2,32,8,1516.7368112182617
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-boH8.OTIL.DFlex_ant_64.seed1200,l2,l2,32,8,1484.3064028930664
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-BsXo.OTIL.DFlex_ant_64.seed1100,l2,l2,32,8,1254.332096862793
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-o8MC.OTIL.DFlex_ant_64.seed120,l2,l2,32,8,1260.5917211914064
+ant,Ant,OTIL,SHAC,montana-sixteen-fillet-beryllium-october.OTIL.DFlex_ant_64,montana-sixteen-fillet-beryllium-october-ZXsk.OTIL.DFlex_ant_64.seed1000,l2,l2,32,8,1392.4538441467284
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-TaOY.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,8,8288.656630859376
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-W3mK.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,8,5021.103994140625
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-1azX.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,8,3982.9821382141113
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-moPd.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,8,6753.658764038086
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-OwrV.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,8,4620.180120773315
+humanoid,Humanoid,OTIL,SAPO,batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64,batman-september-mike-minnesota-tango-r9mh.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,8,7280.859468994141
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-hDCM.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,1,6182.901015090943
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-rBF0.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,1,3585.504861984253
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-Uffr.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,1,4423.608998947144
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-77PD.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,1,8226.851577148438
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-NXQd.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,1,7766.5398796081545
+humanoid,Humanoid,OTIL,SAPO,early-grey-uncle-johnny-carolina.OTIL.DFlex_humanoid_64,early-grey-uncle-johnny-carolina-rsL5.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,1,4465.29134765625
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-3DNj.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,4,5546.584655761719
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-9e8y.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,4,4836.41685546875
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-K7ZT.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,4,6993.59626953125
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-zoso.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,4,4121.765707702637
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-ORM4.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,4,7452.8240234375
+humanoid,Humanoid,OTIL,SAPO,oxygen-artist-video-speaker-beer.OTIL.DFlex_humanoid_64,oxygen-artist-video-speaker-beer-tIQb.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,4,7383.978008422851
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-7HJK.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,16,5997.521141357422
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-C1sS.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,16,5078.321296195983
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-nXrG.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,16,7878.88275390625
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-t01V.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,16,8001.344493408204
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-xQ17.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,16,4992.0521240234375
+humanoid,Humanoid,OTIL,SAPO,robin-emma-diet-sink-apart.OTIL.DFlex_humanoid_64,robin-emma-diet-sink-apart-qyPi.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,16,7790.725191650391
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-CsdT.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,1,668.078464384079
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-55Ph.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,1,448.11930519104004
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-h6ss.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,1,1143.416595954895
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-JQ2U.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,1,413.9079346704483
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-pqi5.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,1,530.2799234962463
+humanoid,Humanoid,OTIL,SHAC,paris-summer-white-vermont-earth.OTIL.DFlex_humanoid_64,paris-summer-white-vermont-earth-j3nd.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,1,420.91008264780044
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-zwj7.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,16,624.1815801048278
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-2ii5.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,16,450.89148926734924
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-4O6w.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,16,498.6915206718445
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-BU3g.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,16,377.7249386882782
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-NzHy.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,16,348.5488623046875
+humanoid,Humanoid,OTIL,SHAC,uncle-venus-october-gee-ink.OTIL.DFlex_humanoid_64,uncle-venus-october-gee-ink-UFQW.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,16,554.3654191589355
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-Jg4y.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,4,782.8550681543351
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-MSG2.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,4,169.11710033893584
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-S94o.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,4,398.9178833770752
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-tLbJ.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,4,822.8437604331971
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-yjsS.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,4,605.6499140167236
+humanoid,Humanoid,OTIL,SHAC,bakerloo-blossom-johnny-connecticut-georgia.OTIL.DFlex_humanoid_64,bakerloo-blossom-johnny-connecticut-georgia-IETc.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,4,632.8712489318848
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-15Zf.OTIL.DFlex_humanoid_64.seed110,l2,l2,32,8,725.8448348617553
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-Ngt0.OTIL.DFlex_humanoid_64.seed1000,l2,l2,32,8,319.506630589962
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-p3n0.OTIL.DFlex_humanoid_64.seed1100,l2,l2,32,8,556.5640701675416
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-pYlR.OTIL.DFlex_humanoid_64.seed120,l2,l2,32,8,542.6635968208313
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-vnn9.OTIL.DFlex_humanoid_64.seed1200,l2,l2,32,8,288.05057740211487
+humanoid,Humanoid,OTIL,SHAC,mississippi-hydrogen-salami-avocado-floor.OTIL.DFlex_humanoid_64,mississippi-hydrogen-salami-avocado-floor-rn9t.OTIL.DFlex_humanoid_64.seed100,l2,l2,32,8,1694.4286807250976
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-ZD7h.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,4,5788.436217727661
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-bqoI.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,4,5662.595413360596
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-D4oz.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,4,5595.443232879638
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-m8iT.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,4,2618.3689538955687
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-wruk.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,4,5857.590529403687
+snu_humanoid,SNU Humanoid,OTIL,SAPO,apart-paris-glucose-glucose-michigan.OTIL.DFlex_snu_humanoid_64,apart-paris-glucose-glucose-michigan-w93i.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,4,5557.268345718384
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-Q7eO.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,16,5679.9589597702025
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-dnEo.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,16,2784.8805952453613
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-aJQD.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,16,5739.851206970215
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-ATFw.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,16,5760.526564941406
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-c6px.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,16,2604.4906574249267
+snu_humanoid,SNU Humanoid,OTIL,SAPO,aspen-sink-steak-jig-shade.OTIL.DFlex_snu_humanoid_64,aspen-sink-steak-jig-shade-eF0k.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,16,5364.423850059509
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-9AlZ.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,1,2489.0370529174807
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-dNWv.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,1,3314.2828759765625
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-eVnt.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,1,2181.2938208007813
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-KLoS.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,1,3429.180126724243
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-p5Dg.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,1,2168.776305847168
+snu_humanoid,SNU Humanoid,OTIL,SAPO,leopard-mars-beer-pennsylvania-tango.OTIL.DFlex_snu_humanoid_64,leopard-mars-beer-pennsylvania-tango-is32.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,1,5886.508407745361
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-9dPG.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,8,5750.4776866149905
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-CIrH.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,8,2061.918993654251
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-kftg.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,8,5902.52676361084
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-JYw2.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,8,4027.424309463501
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-y6z2.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,8,3082.947237548828
+snu_humanoid,SNU Humanoid,OTIL,SAPO,speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64,speaker-fifteen-alabama-potato-fruit-rEcg.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,8,5443.845803279877
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-9cMy.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,8,700.9924387502671
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-HAY4.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,8,1316.2917958068847
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-iEiE.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,8,284.2333635187149
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-lkv9.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,8,650.7739054059982
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-G0XX.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,8,1948.4964211845397
+snu_humanoid,SNU Humanoid,OTIL,SHAC,bulldog-bakerloo-king-lemon-zebra.OTIL.DFlex_snu_humanoid_64,bulldog-bakerloo-king-lemon-zebra-J5bT.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,8,102.56721240401268
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-3mz2.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,4,725.794965558052
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-42dA.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,4,54.10759785175323
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-AnL0.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,4,929.480580573082
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-HDNm.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,4,786.3314261722564
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-oQDi.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,4,1721.0848138713836
+snu_humanoid,SNU Humanoid,OTIL,SHAC,carpet-nitrogen-coffee-item-equal.OTIL.DFlex_snu_humanoid_64,carpet-nitrogen-coffee-item-equal-wEAM.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,4,1866.66335460186
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-fZTP.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,16,1732.0932738208771
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-LTmR.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,16,212.0117540550232
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-oX4T.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,16,29.42785061597824
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-ua3K.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,16,1825.868510298729
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-xD3n.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,16,1025.6263503992557
+snu_humanoid,SNU Humanoid,OTIL,SHAC,florida-alanine-butter-six-wisconsin.OTIL.DFlex_snu_humanoid_64,florida-alanine-butter-six-wisconsin-G9uI.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,16,721.3090494680405
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-3OSk.OTIL.DFlex_snu_humanoid_64.seed1000,l2,l2,32,1,69.87820136785507
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-DBUz.OTIL.DFlex_snu_humanoid_64.seed1200,l2,l2,32,1,597.4064895820618
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-imzF.OTIL.DFlex_snu_humanoid_64.seed100,l2,l2,32,1,436.69047340393064
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-iUCH.OTIL.DFlex_snu_humanoid_64.seed120,l2,l2,32,1,672.8369508481026
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-JCCP.OTIL.DFlex_snu_humanoid_64.seed110,l2,l2,32,1,1792.1070363068582
+snu_humanoid,SNU Humanoid,OTIL,SHAC,hotel-foxtrot-eleven-shade-iowa.OTIL.DFlex_snu_humanoid_64,hotel-foxtrot-eleven-shade-iowa-GAtH.OTIL.DFlex_snu_humanoid_64.seed1100,l2,l2,32,1,357.29531258285044

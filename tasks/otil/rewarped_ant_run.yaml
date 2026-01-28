@@ -12,6 +12,7 @@ agent:
     demos:
       path: "experts/demos/Rewarped_Ant_demos128_return4893_len1000.pt"
       n_trajs: 8
+    loss_best_of_k_k: 8
   network:
     actor_kwargs:
       mlp_kwargs:

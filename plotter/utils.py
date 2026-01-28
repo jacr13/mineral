@@ -31,4 +31,16 @@ def save_yaml(path, data):
 
 
 def sync_exp_from_remote(remote, remote_exp_dir, local_exp_dir):
-    os.system(f"rsync -rvaP --progress {remote}:{remote_exp_dir} {local_exp_dir}")
+    rsync_cmd = [
+        "rsync",
+        "-rvaP",
+        "--progress",
+        "--prune-empty-dirs",
+        "--include=*/",
+        "--include=tb/**/tfevents*",
+        "--include=*.npy",
+        "--exclude=*",
+        f"{remote}:{remote_exp_dir}",
+        local_exp_dir,
+    ]
+    os.system(" ".join(rsync_cmd))

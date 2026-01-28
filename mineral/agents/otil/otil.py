@@ -32,6 +32,7 @@ class OTIL(SHAC):
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
         self.loss_use_detached_prev_obs = self.otil_config.get("loss_use_detached_prev_obs", True)
+        self.loss_best_of_k_k = self.otil_config.get("loss_best_of_k_k", 8)
 
         if self.imitation_loss_type in ["ot", "l2", "cosine"]:
             if self.imitation_loss_type == "ot":
@@ -56,7 +57,7 @@ class OTIL(SHAC):
 
             bok_params = dict(
                 T=self.horizon_len if self.input_type == "state" else self.horizon_len + 1,
-                K=8,
+                K=self.loss_best_of_k_k,
                 input_type=self.input_type,
                 detach_prev_obs=self.loss_use_detached_prev_obs,
                 mlp_features_dim=self.loss_mlp_features_dim,

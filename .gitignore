@@ -10,6 +10,8 @@ eval/
 demos/
 spawn/
 otil2.py
+plotter/plots/
+plotter/shac_vs_sapo/figures/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

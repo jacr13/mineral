@@ -11,6 +11,7 @@ agent:
     demos:
       path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
       n_trajs: 8
+    loss_best_of_k_k: 8
     critic_reward_mapping: exp
     imitation_loss_type: ot
     input_type: state_state
@@ -30,8 +31,9 @@ run: train_eval
 seed: 100
 
 sweep:
-  seed: [100, 110, 120, 1000, 1100, 1200]
-  agent.otil.demos.n_trajs: [1, 4, 8, 16]
+  seed: [100, 110, 120]
+  agent.otil.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.otil.demos.n_trajs: 8
   agent.otil.critic_reward_mapping: exp #[log_exp, exp]
   agent.otil.imitation_loss_type: ot
   agent.otil.loss_ot_cost_type: l2 #[l2, cosine]

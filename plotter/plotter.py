@@ -1,5 +1,4 @@
 import math
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -7,7 +6,7 @@ import numpy as np
 import seaborn as sns
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from utils import load_yaml, save_yaml, sync_exp_from_remote
-from wandb_api import get_group_runs
+from wandb_api import get_group_runs, get_rew_steps_times
 
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
@@ -17,14 +16,22 @@ EXPERTS = {
     'hopper': {'mean': 4812.96875, 'std': 7.324751853942871},
     'ant': {'mean': 9329.505859375, 'std': 37.58782196044922},
     'humanoid': {'mean': 8225.2177734375, 'std': 81.0524673461914},
-    'snu_humanoid': {'mean': 6748.921875, 'std': 49.13310623168945},
+    'snu_humanoid': {'mean': 6498.921875, 'std': 49.13310623168945},
 }
 
 MAX_STEPS_PER_ENV = {
     "hopper": 10_000_000,
     "ant": 10_000_000,
-    "humanoid": 10_000_000,
-    "snu_humanoid": 10_000_000,
+    "humanoid": 15_000_000,
+    "snu_humanoid": 15_000_000,
+}
+
+# Max wall time per env (seconds). Set to None to disable capping.
+MAX_TIME_PER_ENV = {
+    "hopper": 60 * 60 * 2,
+    "ant": 60 * 60 * 3,
+    "humanoid": 60 * 60 * 6,
+    "snu_humanoid": 60 * 60 * 6,
 }
 
 ENV_NAMES = {"hopper": "Hopper", "ant": "Ant", "humanoid": "Humanoid", "snu_humanoid": "SNU Humanoid"}
@@ -86,17 +93,74 @@ def get_linestyle(algo_disp):
     return "-"
 
 
-def get_time_axis_max(env_data):
+def get_time_axis_max(env_data, *, max_time_cap=None):
     max_time = 0.0
     for algo_name, algo_data in env_data.items():
         for times in algo_data.get("agent_times", []):
             max_time = max(max_time, max(times))
 
+    if max_time_cap is not None and max_time_cap > 0:
+        max_time = min(max_time, max_time_cap)
+
     print("Max time across all algos:", max_time)
     return max_time
 
+
 def convert_seconds_to_hours(seconds):
     return seconds / 3600.0
+
+
+def normalize_center_stat(center_stat):
+    center_stat = str(center_stat).lower()
+    if center_stat == "media":
+        center_stat = "median"
+    if center_stat not in {"mean", "median"}:
+        raise ValueError(f"Unknown center_stat: {center_stat}")
+    return center_stat
+
+
+def normalize_band(band):
+    band = str(band).lower()
+    if band in {"95_ci", "95%ci", "ci95"}:
+        band = "95ci"
+    if band not in {"std", "95ci"}:
+        raise ValueError(f"Unknown band: {band}")
+    return band
+
+
+def compute_center_and_band(values, *, center_stat="mean", band="std"):
+    values = np.asarray(values, dtype=np.float64)
+    center_stat = normalize_center_stat(center_stat)
+    band = normalize_band(band)
+
+    if center_stat == "mean":
+        center = values.mean(axis=0)
+    else:
+        center = np.median(values, axis=0)
+
+    if band == "std":
+        spread = values.std(axis=0)
+        lower = center - spread
+        upper = center + spread
+        return center, lower, upper
+
+    n_runs = values.shape[0]
+    if center_stat == "mean":
+        if n_runs < 2:
+            lower = center.copy()
+            upper = center.copy()
+        else:
+            std = values.std(axis=0, ddof=1)
+            sem = std / np.sqrt(n_runs)
+            half_width = 1.96 * sem
+            lower = center - half_width
+            upper = center + half_width
+    else:
+        lower = np.percentile(values, 2.5, axis=0)
+        upper = np.percentile(values, 97.5, axis=0)
+
+    return center, lower, upper
+
 
 def plot_results_like_first(
     data,
@@ -112,7 +176,10 @@ def plot_results_like_first(
     shared_legend=True,  # one legend for the whole figure
     n_cols=4,
     ylim_bottom=0.0,
+    ylim_top=1.1,
     x_axis="steps",
+    center_stat="mean",
+    band="std",
 ):
     """data[env][algo] = {
         "data": [np.array(n_points), ...]  # per-seed
@@ -140,6 +207,13 @@ def plot_results_like_first(
         ax = axes[ax_idx]
         env_data = data[env_name]
 
+        if env_name == "hopper":
+            center_stat_="mean"
+            band_="std"
+        else:
+            center_stat_=center_stat
+            band_=band
+
         # Determine common x
         n_points = None
         max_steps = MAX_STEPS_PER_ENV.get(env_name)
@@ -159,7 +233,7 @@ def plot_results_like_first(
         x = None
         x_label = None
         if x_axis == "time":
-            max_time = get_time_axis_max(env_data)
+            max_time = get_time_axis_max(env_data, max_time_cap=MAX_TIME_PER_ENV.get(env_name))
             max_time = convert_seconds_to_hours(max_time)
             x = np.linspace(0, max_time, num=n_points)
             x_label = "Relative Time (h)"
@@ -224,19 +298,26 @@ def plot_results_like_first(
                 if not values:
                     continue
                 values = np.vstack(values)
-                mean = values.mean(axis=0)
-                std = values.std(axis=0)
+                mean, band_low, band_high = compute_center_and_band(
+                    values,
+                    center_stat=center_stat_,
+                    band=band_,
+                )
                 x_plot = min_times_x_grid
             else:
                 values = np.vstack(algo_data["data"])
-                mean = values.mean(axis=0)
-                std = values.std(axis=0)
+                mean, band_low, band_high = compute_center_and_band(
+                    values,
+                    center_stat=center_stat_,
+                    band=band_,
+                )
                 x_plot = x
 
             # Normalize by expert mean to match your first script behavior
             if normalize_expert and expert_mean is not None and expert_mean != 0:
                 mean = mean / expert_mean
-                std = std / expert_mean
+                band_low = band_low / expert_mean
+                band_high = band_high / expert_mean
 
             color_key = normalize_algo_key(algo_key)
             algo_disp = get_algo_display(algo_key, ALGO_DISPLAY)
@@ -257,15 +338,18 @@ def plot_results_like_first(
             )
             ax.fill_between(
                 x_plot,
-                mean - std,
-                mean + std,
+                band_low,
+                band_high,
                 alpha=0.2,
                 color=color,
             )
 
         ax.set_title(ENV_NAMES[env_name])
         ax.set_xlabel(x_label)
-        ax.set_ylim(bottom=ylim_bottom)
+        if ylim_top is None:
+            ax.set_ylim(bottom=ylim_bottom)
+        else:
+            ax.set_ylim(bottom=ylim_bottom, top=ylim_top)
         ax.margins(x=0)
         ax.spines["right"].set_visible(False)
         ax.spines["top"].set_visible(False)
@@ -297,7 +381,7 @@ def plot_results_like_first(
             ordered_handles,
             ordered_labels,
             loc="upper center",
-            ncol=min(len(ordered_labels), 6),
+            ncol=len(ordered_labels),
             frameon=False,
             fontsize=12,
             borderaxespad=0.02,
@@ -325,7 +409,10 @@ def plot_single_env(
     normalize_expert=True,
     add_expert_line=True,
     ylim_bottom=0.0,
+    ylim_top=1.1,
     x_axis="steps",
+    center_stat="mean",
+    band="std",
 ):
     """Plots a single environment into its own file.
     env_data is data[env_name] with the same structure as in plot_results_like_first.
@@ -351,7 +438,7 @@ def plot_single_env(
     x = None
     x_label = None
     if x_axis == "time":
-        max_time = get_time_axis_max(env_data)
+        max_time = get_time_axis_max(env_data, max_time_cap=MAX_TIME_PER_ENV.get(env_name))
         if max_time is not None and max_time > 0:
             max_time = convert_seconds_to_hours(max_time)
             x = np.linspace(0, max_time, num=n_points)
@@ -414,18 +501,25 @@ def plot_single_env(
             if not values:
                 continue
             values = np.vstack(values)
-            mean = values.mean(axis=0)
-            std = values.std(axis=0)
+            mean, band_low, band_high = compute_center_and_band(
+                values,
+                center_stat=center_stat,
+                band=band,
+            )
             x_plot = min_times_x_grid
         else:
             values = np.vstack(algo_data["data"])
-            mean = values.mean(axis=0)
-            std = values.std(axis=0)
+            mean, band_low, band_high = compute_center_and_band(
+                values,
+                center_stat=center_stat,
+                band=band,
+            )
             x_plot = x
 
         if normalize_expert and expert_mean is not None and expert_mean != 0:
             mean = mean / expert_mean
-            std = std / expert_mean
+            band_low = band_low / expert_mean
+            band_high = band_high / expert_mean
 
         color_key = normalize_algo_key(algo_key)
         algo_disp = get_algo_display(algo_key, ALGO_DISPLAY)
@@ -440,8 +534,8 @@ def plot_single_env(
         )
         ax.fill_between(
             x_plot,
-            mean - std,
-            mean + std,
+            band_low,
+            band_high,
             alpha=0.2,
             color=COLOR.get(color_key, None),
         )
@@ -450,7 +544,10 @@ def plot_single_env(
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel("Normalized Return" if normalize_expert else "Return")
-    ax.set_ylim(bottom=ylim_bottom)
+    if ylim_top is None:
+        ax.set_ylim(bottom=ylim_bottom)
+    else:
+        ax.set_ylim(bottom=ylim_bottom, top=ylim_top)
     ax.margins(x=0)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
@@ -469,7 +566,7 @@ def plot_single_env(
         loc="upper center",
         ncol=len(ordered_labels),
         frameon=False,
-        fontsize=7,
+        fontsize=5.5,
         borderaxespad=0.01,
     )
     fig.tight_layout(rect=[0.01, 0, 1, 0.97])
@@ -488,6 +585,8 @@ def plot_median_across_envs(
     EXPERTS=None,
     *,
     normalize_expert=True,
+    center_stat="mean",
+    ylim_top=1.1,
 ):
     """Builds a single curve per algo = median across environments of the per-env mean curves.
     Assumes all curves already interpolated to same n_points in your data collection step.
@@ -512,6 +611,7 @@ def plot_median_across_envs(
     x = np.linspace(0, 100, n_points)
 
     # collect per-env mean curves
+    center_stat = normalize_center_stat(center_stat)
     per_algo_env_means = {a: [] for a in ALGOS if a != "Expert"}  # we draw Expert separately (flat 1)
     for env in env_names:
         expert_mean = None
@@ -526,7 +626,10 @@ def plot_median_across_envs(
             if disp not in per_algo_env_means:
                 continue
             values = np.vstack(algo_data["data"])
-            mean = values.mean(axis=0)
+            if center_stat == "mean":
+                mean = values.mean(axis=0)
+            else:
+                mean = np.median(values, axis=0)
 
             if normalize_expert and expert_mean is not None and expert_mean != 0:
                 mean = mean / expert_mean
@@ -566,7 +669,10 @@ def plot_median_across_envs(
             linestyle="-",
         )
 
-    ax.set_ylim(bottom=0.0)
+    if ylim_top is None:
+        ax.set_ylim(bottom=0.0)
+    else:
+        ax.set_ylim(bottom=0.0, top=ylim_top)
     ax.margins(x=0)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
@@ -587,6 +693,8 @@ def main(
     update_group_runs=False,
     create_plots=False,
     x_axis="time",
+    center_stat="mean",
+    band="std",
 ):
     plotter_dir = Path(__file__).resolve().parent
     grouped_exp_path = plotter_dir / "grouped_exp_urls.yaml"
@@ -614,6 +722,8 @@ def main(
                             "logdir": logdir,
                             "seed": run["config"].get("seed"),
                             "run_id": run["run_id"],
+                            "entity": run["entity"],
+                            "project": run["project"],
                         }
                     )
         save_yaml(grouped_runs_path, group_runs)
@@ -660,36 +770,46 @@ def main(
                         need_tb_reload = True
 
                     if need_tb_reload:
-                        # load tb file
-                        tb_dir = local_dir / "tb"
+                        try:
+                            # load tb file
+                            tb_dir = local_dir / "tb"
 
-                        if not tb_dir.exists():
-                            raise FileNotFoundError(f"TB directory not found: {tb_dir}")
+                            if not tb_dir.exists():
+                                raise FileNotFoundError(f"TB directory not found: {tb_dir}")
 
-                        # Load everything (scalars only is cheap)
-                        ea = EventAccumulator(
-                            str(tb_dir),
-                            size_guidance={"scalars": 0},
-                        )
-                        ea.Reload()
+                            # Load everything (scalars only is cheap)
+                            ea = EventAccumulator(
+                                str(tb_dir),
+                                size_guidance={"scalars": 0},
+                            )
+                            ea.Reload()
 
-                        tag = "train_scores/episode_rewards"
-                        if tag not in ea.Tags().get("scalars", []):
-                            raise KeyError(f"Scalar '{tag}' not found in {tb_dir}")
+                            tag = "train_scores/episode_rewards"
+                            if tag not in ea.Tags().get("scalars", []):
+                                raise KeyError(f"Scalar '{tag}' not found in {tb_dir}")
 
-                        events = ea.Scalars(tag)
-                        steps = np.array([e.step for e in events], dtype=np.int64)
-                        ep_rew = np.array([e.value for e in events], dtype=np.float64)
-                        times = np.array([e.wall_time for e in events], dtype=np.float64)
+                            events = ea.Scalars(tag)
+                            steps = np.array([e.step for e in events], dtype=np.int64)
+                            ep_rew = np.array([e.value for e in events], dtype=np.float64)
+                            times = np.array([e.wall_time for e in events], dtype=np.float64)
 
-                        # plt.plot(steps, ep_rew)
-                        # plt.title(f"Loaded from npy: {local_dir}")
-                        # plt.show()
-                        # plt.close()
+                            # plt.plot(steps, ep_rew)
+                            # plt.title(f"Loaded from npy: {local_dir}")
+                            # plt.show()
+                            # plt.close()
 
-                        print(ep_rew[:10])
-                        print(steps[:10])
-                        print(len(steps), len(ep_rew))
+                            print(ep_rew[:10])
+                            print(steps[:10])
+                            print(len(steps), len(ep_rew))
+
+                        except:
+                            print("Failed to load TB data from npy, reloading from wandb")
+                            ep_rew, steps, times = get_rew_steps_times(
+                                entity=exp["entity"],
+                                project=exp["project"],
+                                run_id=exp["run_id"],
+                            )
+
 
                         np.save(local_dir / "my_ep_rewards_hist.npy", ep_rew)
                         np.save(local_dir / "my_ep_steps_hist.npy", steps)
@@ -701,6 +821,7 @@ def main(
                     print(len(steps), len(ep_rew), len(times))
 
                     max_steps = None if x_axis == "time" else MAX_STEPS_PER_ENV.get(env_name)
+                    max_time_env = MAX_TIME_PER_ENV.get(env_name) if x_axis == "time" else None
                     if max_steps is not None:
                         keep_mask = steps <= max_steps
                         steps = steps[keep_mask]
@@ -708,7 +829,6 @@ def main(
 
                     if steps.size == 0:
                         continue
-
 
                     print(steps[-1])
 
@@ -724,10 +844,17 @@ def main(
                         y = np.convolve(x_pad, kernel, mode="valid")
                         return y[:-1]
 
-                    n_points = 5000
+                    n_points = 1000
                     if x_axis == "time":
                         print(f"Using wall time for {env_name} {algo}")
                         rel_times = times - times[0]
+                        if max_time_env is not None:
+                            keep_mask = rel_times <= max_time_env
+                            rel_times = rel_times[keep_mask]
+                            ep_rew = ep_rew[keep_mask]
+                            steps = steps[keep_mask]
+                            if rel_times.size == 0:
+                                continue
                         print(rel_times[:10])
                         max_time = float(rel_times[-1])
                         time_grid = np.linspace(0, max_time, num=n_points)
@@ -759,7 +886,7 @@ def main(
                     print(env_name, algo, ep_rew.shape, last_x)
 
     if create_plots:
-        plot_path = plotter_dir / "plots" / f"all_return_{x_axis}.png"
+        plot_path = plotter_dir / "plots" / f"all_return_{center_stat}{band}_{x_axis}.png"
         plot_results_like_first(
             data,
             plot_path,
@@ -772,12 +899,14 @@ def main(
             add_expert_line=True,
             shared_legend=True,
             x_axis=x_axis,
+            center_stat=center_stat,
+            band=band,
         )
 
         # One plot per environment
         per_env_dir = plotter_dir / "plots" / "per_env"
         for env_name, env_data in data.items():
-            out_path = per_env_dir / f"{env_name}_{x_axis}.png"
+            out_path = per_env_dir / f"{center_stat}{band}_{env_name}_{x_axis}.png"
             plot_single_env(
                 env_name,
                 env_data,
@@ -791,6 +920,8 @@ def main(
                 normalize_expert=True,
                 add_expert_line=True,
                 x_axis=x_axis,
+                center_stat=center_stat,
+                band=band,
             )
 
         median_path = plotter_dir / "plots" / "median_rewards.png"
@@ -802,10 +933,30 @@ def main(
             ALGO_DISPLAY=ALGO_DISPLAY,
             EXPERTS=EXPERTS,
             normalize_expert=True,
+            center_stat=center_stat,
         )
 
 
 if __name__ == "__main__":
     # sync exp from the remote server
-    for x_axis in ["time", "steps"]:
-        main(sync_remote=False, update_group_runs=False, create_plots=True, x_axis=x_axis)
+    for center_stat in ["mean", "median"]:
+        for band in ["std", "95ci"]:
+            for x_axis in ["time", "steps"]:
+                main(
+                    sync_remote=False,
+                    update_group_runs=False,
+                    create_plots=True,
+                    x_axis=x_axis,
+                    center_stat=center_stat,
+                    band=band,
+                )
+
+
+    # main(
+    #     sync_remote=True,
+    #     update_group_runs=True,
+    #     create_plots=True,
+    #     x_axis="time",
+    #     center_stat="mean",
+    #     band="std",
+    # )

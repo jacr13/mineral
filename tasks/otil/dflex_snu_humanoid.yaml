@@ -14,6 +14,7 @@ agent:
     demos:
       path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
       n_trajs: 8
+    loss_best_of_k_k: 8
   network:
     actor_kwargs:
       mlp_kwargs:

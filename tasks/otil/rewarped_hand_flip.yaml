@@ -22,6 +22,7 @@ agent:
     demos:
       path: ""
       n_trajs: 8
+    loss_best_of_k_k: 8
 logdir: "workdir/RewarpedDexDeformFlip6M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)"
 num_envs: 32
 wandb:

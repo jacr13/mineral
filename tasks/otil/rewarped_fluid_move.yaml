@@ -24,6 +24,7 @@ agent:
     demos:
       path: ""
       n_trajs: 8
+    loss_best_of_k_k: 8
       subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
 logdir: "workdir/RewarpedSoftgymTransport4M-OTIL/$(date +%Y%m%d-%H%M%S.%2N)"
 num_envs: 32

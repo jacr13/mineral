@@ -33,7 +33,6 @@ PARAMS_MLP_FEATURES_DIM=(
 )
 
 PARAMS_AGENT_BASE=(
-  "SHAC"
   "SAPO"
 )
 
@@ -133,37 +132,37 @@ for env in "${ENVS[@]}"; do
       fi
     done
 
-    if [[ -n "$BATCH_JOBS" ]]; then
-      wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
-    fi
-    python spawner.py \
-      --task_name otil \
-      --docker \
-      --docker_image /home/users/c/candidor/docker/mineral.sif \
-      --deployment slurm \
-      --runtime 6h \
-      --no-cleanup \
-      --sweep \
-      --sweep_max 150 \
-      --set "agent.name=OTIL/DFlexAnt${base_algo}" \
-      --set "agent.shac.max_agent_steps=100000000" \
-      --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-      --set "agent.otil.imitation_loss_type=l2" \
-      --set "agent.otil.loss_mlp_features_dim=64" \
-      --env_files "${env}.yaml" \
-      --deploy_now
+    # if [[ -n "$BATCH_JOBS" ]]; then
+    #   wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
+    # fi
+    # python spawner.py \
+    #   --task_name otil \
+    #   --docker \
+    #   --docker_image /home/users/c/candidor/docker/mineral.sif \
+    #   --deployment slurm \
+    #   --runtime 6h \
+    #   --no-cleanup \
+    #   --sweep \
+    #   --sweep_max 150 \
+    #   --set "agent.name=OTIL/DFlexAnt${base_algo}" \
+    #   --set "agent.shac.max_agent_steps=100000000" \
+    #   --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
+    #   --set "agent.otil.imitation_loss_type=l2" \
+    #   --set "agent.otil.loss_mlp_features_dim=64" \
+    #   --env_files "${env}.yaml" \
+    #   --deploy_now
 
-    if [[ -z "$BATCH_JOBS" ]]; then
-      sleep "$SETTLE_SECONDS"
-      BATCH_JOBS="$(job_count)"
-      echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
+    # if [[ -z "$BATCH_JOBS" ]]; then
+    #   sleep "$SETTLE_SECONDS"
+    #   BATCH_JOBS="$(job_count)"
+    #   echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
 
-      if [[ "$BATCH_JOBS" -eq 0 ]]; then
-        echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
-      fi
-      if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
-        echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
-      fi
-    fi
+    #   if [[ "$BATCH_JOBS" -eq 0 ]]; then
+    #     echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
+    #   fi
+    #   if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
+    #     echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
+    #   fi
+    # fi
   done
 done
