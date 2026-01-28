@@ -11,8 +11,8 @@ BATCH_JOBS=""          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
 ENVS=(
-  "dflex_ant"
   "dflex_hopper"
+  "dflex_ant"
   "dflex_humanoid"
   "dflex_snu_humanoid"
 )
@@ -110,7 +110,7 @@ for env in "${ENVS[@]}"; do
         --sweep_max 150 \
         --set "agent.name=OTIL/DFlexAnt${base_algo}" \
         --set "agent.shac.max_agent_steps=100000000" \
-        --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
+        --set "wandb.project=bestofk_OTIL_${base_algo}-${env}-slurm-new" \
         --set "${critic_rm}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
