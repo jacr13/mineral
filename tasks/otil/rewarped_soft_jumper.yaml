@@ -4,17 +4,30 @@ task:
     env_name: Jumper
     env_suite: gradsim
 agent:
-  name: OTIL/RewarpedJumper
+  name: OTIL/DFlexAntSAPO
   network:
     encoder_kwargs:
+      weight_init_pcd: orthogonalg1
+      weight_init_mlp: orthogonalg1
       mlp_keys: "com_q|com_qd|actions"
     actor_kwargs:
+      weight_init_last_layers: False
       mlp_kwargs:
         units: [512, 256]
+    critic: EnsembleCritic
     critic_kwargs:
+      weight_init: orthogonalg1
       mlp_kwargs:
         units: [256, 256]
+        norm_type: LayerNorm
+        act_type: SiLU
+      n_critics: 2
   shac:
+    max_epochs: 6000
+    max_agent_steps: 6.2e6
+    actor_detach_encoder: False
+    critic_detach_encoder: False
+    share_encoder: False
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995
@@ -32,4 +45,15 @@ run: train_eval
 seed: 1300
 
 sweep:
-  seed: [100, 110, 120, 130, 140, 1000, 1100, 1200, 1300, 1400]
+  seed: [100, 110, 120]
+  agent.otil.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.otil.demos.n_trajs: 8
+  agent.otil.critic_reward_mapping: exp #[log_exp, exp]
+  agent.otil.imitation_loss_type: ot
+  agent.otil.loss_ot_cost_type: l2 #[l2, cosine]
+  agent.otil.loss_use_huber_speedup: false
+  agent.otil.loss_mlp_features_dim: null
+  agent.otil.loss_use_detached_prev_obs: false
+
+spawner:
+  runtime: "12h"

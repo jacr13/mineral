@@ -1,18 +1,20 @@
 import argparse
 import os
 import random
+import re
 import subprocess
 from copy import deepcopy
 from datetime import datetime, timedelta
 from itertools import product
 from pathlib import Path
-import re
 
 import yaml
 
 ENV_BUNDLES = {
     "dflex": ["ant", "hopper", "humanoid", "snu_humanoid"],
     "rewarped": ["ant_run", "fluid_move", "hand_flip", "hand_reorient", "rolling_flat", "soft_jumper"],
+    "rewarped_1": ["ant_run", "soft_jumper", "hand_reorient"],
+    "rewarped_2": ["fluid_move", "hand_flip", "rolling_flat"],
 }
 ENV_BUNDLES["all"] = ENV_BUNDLES["dflex"] + ENV_BUNDLES["rewarped"]
 
@@ -182,6 +184,7 @@ def _build_overrides(config, deployment, indent="\t\t"):
 
 _DURATION_RE = re.compile(r"(\d+)([smhd])")
 
+
 def _format_d_hms(td: timedelta) -> str:
     total_seconds = int(td.total_seconds())
     if total_seconds < 0:
@@ -241,7 +244,6 @@ def _parse_runtime(runtime: str):
 
     td = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
     return td, _format_d_hms(td)
-
 
 
 def _select_partition(runtime_td, device):
