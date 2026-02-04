@@ -9,7 +9,7 @@ agent:
     encoder_kwargs:
       weight_init_pcd: orthogonalg1
       weight_init_mlp: orthogonalg1
-      mlp_keys: "com_q|com_qd|actions"
+      mlp_keys: com_q|com_qd|actions
     actor_kwargs:
       weight_init_last_layers: False
       mlp_kwargs:
