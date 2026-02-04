@@ -18,9 +18,9 @@ SETTLE_SECONDS=5       # give slurm time to show new jobs
 # )
 
 ENVS=(
-  "ant_run"
-  "soft_jumper"
-  "hand_reorient"
+  "rewarped_ant_run"
+  "rewarped_soft_jumper"
+  "rewarped_hand_reorient"
 )
 
 PARAMS_CRITIC_RM=(
