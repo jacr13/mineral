@@ -37,7 +37,7 @@ class OTIL(SHAC):
         self.loss_best_of_k_k = self.otil_config.get("loss_best_of_k_k", 8)
         self.save_plan_heatmaps = self.otil_config.get("save_plan_heatmaps", True)
         self.save_plan_heatmaps_every = int(self.otil_config.get("save_plan_heatmaps_every", 50_000))
-        self.save_plan_heatmaps_num_samples = int(self.otil_config.get("save_plan_heatmaps_num_samples", 100))
+        self.save_plan_heatmaps_num_samples = int(self.otil_config.get("save_plan_heatmaps_num_samples", 5))
         self._last_plan_heatmap_step = None
         self._plan_heatmap_plt = None
         self.plan_heatmap_dir = os.path.join(self.logdir, "ot_plan_heatmaps")
