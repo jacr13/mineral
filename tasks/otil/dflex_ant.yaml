@@ -37,9 +37,9 @@ sweep:
   agent.otil.demos.n_trajs: 8
   agent.otil.critic_disabled: false
   agent.otil.critic_reward_shapping: true
-  agent.otil.critic_reward_mapping: [log_exp, exp]
+  agent.otil.critic_reward_mapping: exp # [log_exp, exp]
   agent.otil.imitation_loss_type: ot
-  agent.otil.loss_ot_cost_type: [l2, cosine]
+  agent.otil.loss_ot_cost_type: l2 # [l2, cosine]
   agent.otil.loss_use_huber_speedup: false
   agent.otil.loss_mlp_features_dim: null
   agent.otil.loss_use_detached_prev_obs: false
