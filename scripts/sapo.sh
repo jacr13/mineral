@@ -1,0 +1,14 @@
+python spawner.py \
+    --task_name sapo \
+    --no-docker \
+    --docker_image /home/users/c/candidor/docker/mineral.sif \
+    --deployment local \
+    --runtime 6h \
+    --no-cleanup \
+    --sweep \
+    --sweep_max 150 \
+    --set "agent.shac.max_epochs=10000" \
+    --set "agent.shac.max_agent_steps=100000000" \
+    --set "wandb.project=anymal_local" \
+    --env_files "dflex_anymal.yaml" \
+    --deploy_now

@@ -2,6 +2,7 @@ from omegaconf import OmegaConf
 
 DEFAULT_DFLEXENVS_KWARGS = {
     'ant': {'env_name': 'AntEnv', 'episode_length': 1000, 'MM_caching_frequency': 16},
+    'anymal': {'env_name': 'AnymalEnv', 'episode_length': 1000, 'MM_caching_frequency': 16},
     'cartpoleswingup': {'env_name': 'CartPoleSwingUpEnv', 'episode_length': 240, 'MM_caching_frequency': 4},
     'cheetah': {'env_name': 'CheetahEnv', 'episode_length': 1000, 'MM_caching_frequency': 16},
     'hopper': {'env_name': 'HopperEnv', 'episode_length': 1000, 'MM_caching_frequency': 16},

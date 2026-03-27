@@ -1,4 +1,5 @@
 import collections
+import os
 from copy import deepcopy
 
 import torch
@@ -21,6 +22,7 @@ class OTIL(SHAC):
         self.imitation_loss_type = self.otil_config.get("imitation_loss_type", "ot")
         self.input_type = self.otil_config.get("input_type", "state")
 
+        self.critic_disabled = self.otil_config.get("critic_disabled", False)
         self.critic_reward_mapping = self.otil_config.get("critic_reward_mapping", "log_exp")
         self.critic_reward_scale = self.otil_config.get("critic_reward_scale", 1.0)
         self.critic_reward_normalize = self.otil_config.get("critic_reward_normalize", False)
@@ -33,6 +35,14 @@ class OTIL(SHAC):
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
         self.loss_use_detached_prev_obs = self.otil_config.get("loss_use_detached_prev_obs", True)
         self.loss_best_of_k_k = self.otil_config.get("loss_best_of_k_k", 8)
+        self.save_plan_heatmaps = self.otil_config.get("save_plan_heatmaps", True)
+        self.save_plan_heatmaps_every = int(self.otil_config.get("save_plan_heatmaps_every", 50_000))
+        self.save_plan_heatmaps_num_samples = int(self.otil_config.get("save_plan_heatmaps_num_samples", 1))
+        self._last_plan_heatmap_step = None
+        self._plan_heatmap_plt = None
+        self.plan_heatmap_dir = os.path.join(self.logdir, "ot_plan_heatmaps")
+        if self.save_plan_heatmaps and (not self.multi_gpu or self.rank == 0):
+            os.makedirs(self.plan_heatmap_dir, exist_ok=True)
 
         if self.imitation_loss_type in ["ot", "l2", "cosine"]:
             if self.imitation_loss_type == "ot":
@@ -117,6 +127,7 @@ class OTIL(SHAC):
                 "pseudo_reward_std",
                 "imitation_loss",
                 "returns_mean",
+                "expert_return",
             )
             for key in stat_keys:
                 if key in info:
@@ -270,11 +281,26 @@ class OTIL(SHAC):
             else:
                 obs_exp = self.demos["obs"]
 
+        # B_agent, T_agent = next(iter(obs_window.values())).shape[0:2]
+        # B_exp, T_exp = next(iter(obs_exp.values())).shape[0:2]
+
+        # obs_window = {k: v.view(-1, *v.shape[2:]) for k, v in obs_window.items()}
+        # obs_exp = {k: v.view(-1, *v.shape[2:]) for k, v in obs_exp.items()}
+
         obs_z = self.actor_encoder(obs_window)
         exp_z = self.actor_encoder(obs_exp).detach()
+
+        # if isinstance(obs_z, dict):
+        #     obs_z = obs_z["z"].view(B_agent, T_agent, *obs_z["z"].shape[1:])
+        # if isinstance(exp_z, dict):
+        #     exp_z = exp_z["z"].view(B_exp, T_exp, *exp_z["z"].shape[1:])
+
+        # exp_z = exp_z.detach()
+
         loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=True)
         if "per_step_costs" not in info:
             raise ValueError("BestOfK info missing per_step_costs for OTIL")
+        self._maybe_save_plan_heatmaps(info)
         per_step_costs = info.pop("per_step_costs")  # [B,T]
         per_step_rewards = self._build_pseudo_rewards(per_step_costs)
         info["pseudo_reward_mean"] = per_step_rewards.detach().mean()
@@ -290,6 +316,7 @@ class OTIL(SHAC):
             self.rew_buf.copy_(step_rewards.detach())
         # use live next_values for actor gradients; buffers stay detached for critic use
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
+
         returns = self._compute_returns_from_rewards(
             step_rewards=step_rewards,
             next_vs=next_vs_live,
@@ -302,6 +329,107 @@ class OTIL(SHAC):
 
         self.agent_steps += self.horizon_len * self.num_envs
         return actor_loss, info
+
+    def _maybe_save_plan_heatmaps(self, info):
+        print("maybe_save_plan_heatmaps", info.keys())
+        if not self.save_plan_heatmaps:
+            print("not saving plan heatmaps")
+            return
+        if self.multi_gpu and self.rank != 0:
+            print("not saving plan heatmaps on rank != 0")
+            return
+        if self._last_plan_heatmap_step is not None:
+            if self.agent_steps - self._last_plan_heatmap_step < self.save_plan_heatmaps_every:
+                print("not saving plan heatmaps")
+                return
+
+        transport_plans = info.get("transport_plans")
+        if transport_plans is None:
+            print("not saving plan heatmaps because transport_plans is None")
+            return
+
+        plt = self._get_plan_heatmap_plt()
+        if plt is None:
+            print("not saving plan heatmaps because plt is None")
+            return
+
+        plans = transport_plans.detach().to(device="cpu", dtype=torch.float32)
+        starts = info["starts"].detach().to(device="cpu", dtype=torch.long)
+        losses = info["Lk"].detach().to(device="cpu", dtype=torch.float32)
+        best_k = info["best_idx"]
+        print(best_k)
+        expert_ids = info.get("expert_ids")
+        if expert_ids is not None:
+            expert_ids = expert_ids.detach().to(device="cpu", dtype=torch.long)
+
+        num_samples = min(self.save_plan_heatmaps_num_samples, plans.shape[0])
+        losses_dir = os.path.join(self.logdir, "losses")
+        os.makedirs(losses_dir, exist_ok=True)
+        
+        for sample_idx in range(num_samples):
+            with open(os.path.join(losses_dir, f"{sample_idx}.csv"), "a+") as f:
+                f.write(f"{','.join(map(str, losses[sample_idx].tolist()))}\n")
+
+            for k_idx in range(plans.shape[1]):
+                plan = plans[sample_idx, k_idx].numpy()
+                fig, ax = plt.subplots(figsize=(5, 4.5))
+                im = ax.imshow(
+                    plan,
+                    origin="lower",
+                    aspect="auto",
+                    interpolation="nearest",
+                    cmap=self._plan_heatmap_mpl.colormaps["Blues"],
+                )
+                fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                ax.set_xlabel("Expert timestep")
+                ax.set_ylabel("Sim timestep")
+
+                title_parts = [
+                    f"step={int(self.agent_steps)}",
+                    f"k={k_idx}",
+                    f"loss={losses[sample_idx, k_idx].item():.4f}",
+                ]
+                # if expert_ids is not None:
+                #     title_parts.append(f"expert={int(expert_ids[sample_idx, k_idx])}")
+                ax.set_title(" | ".join(title_parts))
+
+                filename_parts = [
+                    f"step_{int(self.agent_steps):012d}",
+                    f"k_{k_idx:02d}",
+                    f"start_{int(starts[sample_idx, k_idx]):04d}",
+                ]
+                if expert_ids is not None:
+                    filename_parts.append(f"expert_{int(expert_ids[sample_idx, k_idx]):04d}")
+
+                if k_idx == best_k[sample_idx]:
+                    filename_parts.append("best_k")
+
+                out_path = os.path.join(self.plan_heatmap_dir, f"sample_{sample_idx:02d}", "__".join(filename_parts) + ".png")
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                fig.tight_layout()
+                fig.savefig(out_path, dpi=150)
+                plt.close(fig)
+
+        self._last_plan_heatmap_step = self.agent_steps
+
+    def _get_plan_heatmap_plt(self):
+        if self._plan_heatmap_plt is not None:
+            return self._plan_heatmap_plt
+
+        try:
+            import matplotlib as mpl
+
+            mpl.use("Agg", force=True)
+            import matplotlib.pyplot as plt
+        except ImportError as exc:
+            print(f"Skipping OT plan heatmaps because matplotlib is unavailable: {exc}")
+            self._plan_heatmap_mpl = None
+            self._plan_heatmap_plt = None
+            return None
+
+        self._plan_heatmap_mpl = mpl
+        self._plan_heatmap_plt = plt
+        return self._plan_heatmap_plt
 
     def _build_pseudo_rewards(self, per_step_costs: torch.Tensor, add_cost: bool = True) -> torch.Tensor:
         if self.critic_reward_mapping == "neg":
@@ -339,6 +467,9 @@ class OTIL(SHAC):
     ) -> torch.Tensor:
         """Compute returns from per-step costs and rewards, stopping bootstrapping at window boundaries."""
         rewards = step_rewards
+
+        if self.critic_disabled:
+            return rewards.sum(dim=0)
 
         # rewards: [T, B]
         returns = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)

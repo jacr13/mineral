@@ -133,7 +133,10 @@ class OTSinkhornCriterion(BestOfKCriterion):
 
         plan_costs = (P.detach() * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
         Lk = plan_costs.sum(dim=-1)  # [B, K]
-        info = {"per_step_costs": plan_costs}
+        info = {
+            "per_step_costs": plan_costs,
+            "transport_plans": P.detach().view(B, K, T, T),
+        }
         return Lk, info
 
 
@@ -349,6 +352,8 @@ class BestOfK(nn.Module):
             info["per_step_costs"] = weighted_per_step_costs
         if expert.dim() == 3 and expert.shape[0] != B:
             info["expert_ids"] = expert_ids.detach() if expert_ids is not None else None
+        if "transport_plans" in crit_info:
+            info["transport_plans"] = crit_info["transport_plans"].detach()
 
         return loss, info
 

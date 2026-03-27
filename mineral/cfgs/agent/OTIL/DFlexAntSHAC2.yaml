@@ -17,6 +17,7 @@ otil:
   loss_use_detached_prev_obs: true
   loss_best_of_k_k: 8
 
+  critic_disabled: False
   critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0
   critic_reward_normalize: ${..shac.normalize_ret}

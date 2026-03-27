@@ -4,30 +4,17 @@ task:
     env_name: Jumper
     env_suite: gradsim
 agent:
-  name: OTIL/DFlexAntSAPO
+  name: OTIL/RewarpedJumperSAPO
   network:
     encoder_kwargs:
-      weight_init_pcd: orthogonalg1
-      weight_init_mlp: orthogonalg1
       mlp_keys: com_q|com_qd|actions
     actor_kwargs:
-      weight_init_last_layers: False
       mlp_kwargs:
         units: [512, 256]
-    critic: EnsembleCritic
     critic_kwargs:
-      weight_init: orthogonalg1
       mlp_kwargs:
         units: [256, 256]
-        norm_type: LayerNorm
-        act_type: SiLU
-      n_critics: 2
   shac:
-    max_epochs: 6000
-    max_agent_steps: 6.2e6
-    actor_detach_encoder: False
-    critic_detach_encoder: False
-    share_encoder: False
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995

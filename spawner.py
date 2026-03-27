@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 ENV_BUNDLES = {
+    "new_dflex": ["cheetah", "anymal"],
     "dflex": ["ant", "hopper", "humanoid", "snu_humanoid"],
     "rewarped": ["ant_run", "fluid_move", "hand_flip", "hand_reorient", "rolling_flat", "soft_jumper"],
     "rewarped_1": ["ant_run", "soft_jumper", "hand_reorient"],
@@ -329,6 +330,23 @@ def _command_from_overrides(overrides):
     return "\n".join(lines)
 
 
+def _apply_base_algo_override(config, base_algo):
+    if not base_algo:
+        return
+    agent_cfg = config.get("agent")
+    if not isinstance(agent_cfg, dict):
+        return
+    agent_name = agent_cfg.get("name")
+    if not isinstance(agent_name, str):
+        return
+    normalized = base_algo.upper()
+    if not normalized:
+        return
+    for token in ("SHAC2", "SHAC", "SAPO"):
+        agent_name = re.sub(token, base_algo, agent_name, flags=re.IGNORECASE)
+    agent_cfg["name"] = agent_name
+
+
 def _write_local_script(script_path, name, command, args):
     if args.docker:
         if args.docker_image is None:
@@ -552,9 +570,13 @@ def run(args):
                 _set_nested_value(effective_config, key.split("."), value)
             if effective_args.runtime and "max_runtime" not in effective_config:
                 effective_config["max_runtime"] = effective_args.runtime
+            _apply_base_algo_override(effective_config, effective_args.base_algo)
 
             overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
+
+            if effective_args.poetry_update:
+                command = f"poetry update && {command}"
 
             print(f"[{id_config}/{len(configs)}-{sweep_index}/{len(variant_entries)}] Created task script: {script_path}")
             if effective_args.deployment == "slurm":
@@ -622,6 +644,7 @@ if __name__ == "__main__":
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")
+    boolean_flag(parser, "poetry_update", default=False, help="update poetry before deployment?")
     boolean_flag(parser, "timestamp", default=True, help="append timestamp (YYYYMMDD_HHMMSS) to generated script filenames")
     boolean_flag(parser, "sweep_logdir", default=True, help="override logdir per sweep with timestamped subdirectories")
     parser.add_argument(
@@ -654,6 +677,12 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Name of docker image or path to image (cluster)",
+    )
+    parser.add_argument(
+        "--base_algo",
+        type=str,
+        default=None,
+        help="Base algorithm override",
     )
 
     # args not used yet:

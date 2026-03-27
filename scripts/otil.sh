@@ -10,32 +10,53 @@ MAX_JOBS=100
 BATCH_JOBS=""          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
-# ENVS=(
-#   "dflex_hopper"
-#   "dflex_ant"
-#   "dflex_humanoid"
-#   "dflex_snu_humanoid"
-# )
-
 ENVS=(
-  # "rewarped_ant_run"
-  "rewarped_soft_jumper"
-  # "rewarped_hand_reorient"
+  "dflex_hopper"
+  "dflex_ant"
+  "dflex_humanoid"
+  "dflex_snu_humanoid"
 )
+
+# ENVS=(
+#   # "rewarped_ant_run"
+#   "rewarped_soft_jumper"
+#   # "rewarped_hand_reorient"
+# )
 
 PARAMS_CRITIC_RM=(
   "agent.otil.critic_reward_mapping=exp"
   "agent.otil.critic_reward_mapping=log_exp"
+  "agent.otil.critic_reward_mapping=exp"
+  "agent.otil.critic_reward_mapping=log_exp"
+  "agent.otil.critic_reward_mapping=neg"
+  "agent.otil.critic_reward_mapping=neg"
 )
 
 PARAMS_OT_COST_TYPE=(
   "agent.otil.loss_ot_cost_type=l2"
+  "agent.otil.loss_ot_cost_type=l2"
   "agent.otil.loss_ot_cost_type=cosine"
+  "agent.otil.loss_ot_cost_type=cosine"
+  "agent.otil.loss_ot_cost_type=l2"
+  "agent.otil.loss_ot_cost_type=l2"
 )
 
 PARAMS_MLP_FEATURES_DIM=(
   "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=64"
   "agent.otil.loss_mlp_features_dim=null"
+  "agent.otil.loss_mlp_features_dim=null"
+  "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=64"
+)
+
+PARAMS_CRITIC_DISABLED=(
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=true"
 )
 
 PARAMS_AGENT_BASE=(
@@ -92,6 +113,7 @@ for env in "${ENVS[@]}"; do
       critic_rm="${PARAMS_CRITIC_RM[$i]}"
       ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
       mlp_feat="${PARAMS_MLP_FEATURES_DIM[$i]}"
+      critic_disabled="${PARAMS_CRITIC_DISABLED[$i]}"
       batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}"
 
       echo "------------------------------------------------------------"
@@ -111,15 +133,16 @@ for env in "${ENVS[@]}"; do
         --docker_image /home/users/c/candidor/docker/mineral.sif \
         --deployment slurm \
         --runtime 6h \
+        --poetry_update \
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
-        --set "agent.name=OTIL/DFlexAnt${base_algo}" \
-        --set "agent.shac.max_agent_steps=100000000" \
-        --set "wandb.project=bestofk_OTIL_${base_algo}-${env}-slurm-new" \
+        --base_algo "${base_algo}" \
+        --set "wandb.project=sweep_rewardshape_critic_OTIL_${base_algo}-${env}-slurm" \
         --set "${critic_rm}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
+        --set "${critic_disabled}" \
         --env_files "${env}.yaml" \
         --deploy_now
 
@@ -138,37 +161,21 @@ for env in "${ENVS[@]}"; do
       fi
     done
 
-    if [[ -n "$BATCH_JOBS" ]]; then
-      wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
-    fi
-    python spawner.py \
-      --task_name otil \
-      --docker \
-      --docker_image /home/users/c/candidor/docker/mineral.sif \
-      --deployment slurm \
-      --runtime 6h \
-      --no-cleanup \
-      --sweep \
-      --sweep_max 150 \
-      --set "agent.name=OTIL/DFlexAnt${base_algo}" \
-      --set "agent.shac.max_agent_steps=100000000" \
-      --set "wandb.project=OTIL_${base_algo}-${env}-slurm-new" \
-      --set "agent.otil.imitation_loss_type=l2" \
-      --set "agent.otil.loss_mlp_features_dim=64" \
-      --env_files "${env}.yaml" \
-      --deploy_now
+    # if [[ -n "$BATCH_JOBS" ]]; then
+    #   wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
+    # fi
 
-    if [[ -z "$BATCH_JOBS" ]]; then
-      sleep "$SETTLE_SECONDS"
-      BATCH_JOBS="$(job_count)"
-      echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
+    # if [[ -z "$BATCH_JOBS" ]]; then
+    #   sleep "$SETTLE_SECONDS"
+    #   BATCH_JOBS="$(job_count)"
+    #   echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
 
-      if [[ "$BATCH_JOBS" -eq 0 ]]; then
-        echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
-      fi
-      if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
-        echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
-      fi
-    fi
+    #   if [[ "$BATCH_JOBS" -eq 0 ]]; then
+    #     echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
+    #   fi
+    #   if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
+    #     echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
+    #   fi
+    # fi
   done
 done

@@ -27,6 +27,7 @@ urchin = "^0.0.29"
 wandb = "^0.22.2"
 python-dotenv = "^1.2.1"
 atalaya = {extras = ["wandb"], version = "^0.2.8"}
+matplotlib = "^3.10.8"
 
 [[tool.poetry.source]]
 name     = "pytorch-cu124"  # CUDA-specific wheels
@@ -131,11 +132,11 @@ rm -rf .coverage
 # --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)
 docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 --no-cache -t candidj0/mineral:no_kernels ."
 docker_build_k_1 = "docker run --gpus=all -u 1000:1000 -v .:/workspace --name mineral_build candidj0/mineral:no_kernels python -c 'import dflex'"
-docker_build_k_2 = "docker commit mineral_build candidj0/mineral:latest"
+docker_build_k_2 = "docker commit mineral_build candidj0/mineral:new"
 docker_build_k_3 = "docker rm mineral_build"
 docker_build_dflex_kernels = ["docker_build_k_1", "docker_build_k_2", "docker_build_k_3"]
 
-docker_push = "docker push candidj0/mineral:latest"
+docker_push = "docker push candidj0/mineral:new"
 dbp = ["docker_build", "docker_build_dflex_kernels", "docker_push"]
 
 docker = """
@@ -148,7 +149,7 @@ docker run \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v .:/workspace \
-    candidj0/mineral:latest bash
+    candidj0/mineral:new bash
 """
 
 docker_win = """
