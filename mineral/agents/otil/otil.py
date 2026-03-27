@@ -37,7 +37,7 @@ class OTIL(SHAC):
         self.loss_best_of_k_k = self.otil_config.get("loss_best_of_k_k", 8)
         self.save_plan_heatmaps = self.otil_config.get("save_plan_heatmaps", True)
         self.save_plan_heatmaps_every = int(self.otil_config.get("save_plan_heatmaps_every", 50_000))
-        self.save_plan_heatmaps_num_samples = int(self.otil_config.get("save_plan_heatmaps_num_samples", 1))
+        self.save_plan_heatmaps_num_samples = int(self.otil_config.get("save_plan_heatmaps_num_samples", 100))
         self._last_plan_heatmap_step = None
         self._plan_heatmap_plt = None
         self.plan_heatmap_dir = os.path.join(self.logdir, "ot_plan_heatmaps")
@@ -195,7 +195,10 @@ class OTIL(SHAC):
                 self.mus[i, ...] = mu.clone()
                 self.sigmas[i, ...] = sigma.clone()
 
+            self.timer.start("train/compute_actor_loss/forward_sim")
             obs, rew, done, info = self.env.step(actions)
+            self.timer.end("train/compute_actor_loss/forward_sim")
+
             real_obs = info.get("obs_before_reset", obs)
             real_obs = obs if real_obs is None else real_obs
 
@@ -297,7 +300,10 @@ class OTIL(SHAC):
 
         # exp_z = exp_z.detach()
 
+        self.timer.start("train/compute_actor_loss/loss_fn")
         loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=True)
+        self.timer.end("train/compute_actor_loss/loss_fn")
+
         if "per_step_costs" not in info:
             raise ValueError("BestOfK info missing per_step_costs for OTIL")
         self._maybe_save_plan_heatmaps(info)
