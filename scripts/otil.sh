@@ -133,7 +133,6 @@ for env in "${ENVS[@]}"; do
         --docker_image /home/users/c/candidor/docker/mineral.sif \
         --deployment slurm \
         --runtime 6h \
-        --poetry_update \
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
