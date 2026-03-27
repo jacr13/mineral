@@ -22,6 +22,7 @@ class OTIL(SHAC):
         self.imitation_loss_type = self.otil_config.get("imitation_loss_type", "ot")
         self.input_type = self.otil_config.get("input_type", "state")
 
+        self.critic_reward_shapping = self.otil_config.get("critic_reward_shapping", True)
         self.critic_disabled = self.otil_config.get("critic_disabled", False)
         self.critic_reward_mapping = self.otil_config.get("critic_reward_mapping", "log_exp")
         self.critic_reward_scale = self.otil_config.get("critic_reward_scale", 1.0)
@@ -452,6 +453,7 @@ class OTIL(SHAC):
             raise NotImplementedError(self.critic_reward_mapping)
 
         # allows gradients to flow through cost when loss is high and exp goes to 0
+        add_cost = self.critic_reward_shapping
         if add_cost and self.critic_reward_mapping in [
             "neg",
             "log_exp",

@@ -35,6 +35,7 @@ sweep:
   # agent.otil.loss_best_of_k_k: [1, 2, 4, 8, 16]
   agent.otil.demos.n_trajs: 8
   agent.otil.critic_disabled: false
+  agent.otil.critic_reward_shapping: true
   agent.otil.critic_reward_mapping: [log_exp, exp]
   agent.otil.imitation_loss_type: ot
   agent.otil.loss_ot_cost_type: [l2, cosine]

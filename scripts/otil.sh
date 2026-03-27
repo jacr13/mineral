@@ -30,6 +30,10 @@ PARAMS_CRITIC_RM=(
   "agent.otil.critic_reward_mapping=log_exp"
   "agent.otil.critic_reward_mapping=neg"
   "agent.otil.critic_reward_mapping=neg"
+  "agent.otil.critic_reward_mapping=exp"
+  "agent.otil.critic_reward_mapping=log_exp"
+  "agent.otil.critic_reward_mapping=exp"
+  "agent.otil.critic_reward_mapping=log_exp"
 )
 
 PARAMS_OT_COST_TYPE=(
@@ -39,6 +43,10 @@ PARAMS_OT_COST_TYPE=(
   "agent.otil.loss_ot_cost_type=cosine"
   "agent.otil.loss_ot_cost_type=l2"
   "agent.otil.loss_ot_cost_type=l2"
+  "agent.otil.loss_ot_cost_type=l2"
+  "agent.otil.loss_ot_cost_type=l2"
+  "agent.otil.loss_ot_cost_type=cosine"
+  "agent.otil.loss_ot_cost_type=cosine"
 )
 
 PARAMS_MLP_FEATURES_DIM=(
@@ -48,6 +56,10 @@ PARAMS_MLP_FEATURES_DIM=(
   "agent.otil.loss_mlp_features_dim=null"
   "agent.otil.loss_mlp_features_dim=64"
   "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=64"
+  "agent.otil.loss_mlp_features_dim=null"
+  "agent.otil.loss_mlp_features_dim=null"
 )
 
 PARAMS_CRITIC_DISABLED=(
@@ -57,6 +69,23 @@ PARAMS_CRITIC_DISABLED=(
   "agent.otil.critic_disabled=false"
   "agent.otil.critic_disabled=false"
   "agent.otil.critic_disabled=true"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=false"
+)
+
+PARAMS_CRITIC_REWARD_SHAPPING=(
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=true"
+  "agent.otil.critic_reward_shapping=false"
+  "agent.otil.critic_reward_shapping=false"
+  "agent.otil.critic_reward_shapping=false"
+  "agent.otil.critic_reward_shapping=false"
 )
 
 PARAMS_AGENT_BASE=(
@@ -114,6 +143,7 @@ for env in "${ENVS[@]}"; do
       ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
       mlp_feat="${PARAMS_MLP_FEATURES_DIM[$i]}"
       critic_disabled="${PARAMS_CRITIC_DISABLED[$i]}"
+      critic_rm="${PARAMS_CRITIC_REWARD_SHAPPING[$i]}"
       batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}"
 
       echo "------------------------------------------------------------"
@@ -137,11 +167,13 @@ for env in "${ENVS[@]}"; do
         --sweep \
         --sweep_max 150 \
         --base_algo "${base_algo}" \
-        --set "wandb.project=sweep_rewardshape_critic_OTIL_${base_algo}-${env}-slurm" \
+        --set "wandb.project=rewardshape_critic_OTIL_${base_algo}-${env}-slurm" \
+        --set "agent.shac.max_agent_steps=100000000" \
         --set "${critic_rm}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
         --set "${critic_disabled}" \
+        --set "${critic_rm}" \
         --env_files "${env}.yaml" \
         --deploy_now
 

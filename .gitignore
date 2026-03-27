@@ -1,9 +1,6 @@
 # mineral
 data/
-workdir/
-workdir2/
-workdir_eval/
-workdir_check/
+workdir*
 outputs/
 experts/dflex/*.pt
 eval/
