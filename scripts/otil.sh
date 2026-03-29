@@ -139,16 +139,16 @@ for env in "${ENVS[@]}"; do
     echo "Base algorithm: ${base_algo}"
     echo "------------------------------------------------------------"
     for ((i=0; i<N; i++)); do
-      critic_rm="${PARAMS_CRITIC_RM[$i]}"
+      critic_rmapping="${PARAMS_CRITIC_RM[$i]}"
       ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
       mlp_feat="${PARAMS_MLP_FEATURES_DIM[$i]}"
       critic_disabled="${PARAMS_CRITIC_DISABLED[$i]}"
-      critic_rm="${PARAMS_CRITIC_REWARD_SHAPPING[$i]}"
-      batch_tag="pair$((i+1))__${critic_rm##*=}__${ot_cost##*=}"
+      critic_rshapping="${PARAMS_CRITIC_REWARD_SHAPPING[$i]}"
+      batch_tag="pair$((i+1))__${critic_rmapping##*=}__${ot_cost##*=}"
 
       echo "------------------------------------------------------------"
       echo "Config $((i+1))/${N}: ${batch_tag}"
-      echo "  ${critic_rm}"
+      echo "  ${critic_rmapping}"
       echo "  ${ot_cost}"
       echo "------------------------------------------------------------"
 
@@ -169,11 +169,11 @@ for env in "${ENVS[@]}"; do
         --base_algo "${base_algo}" \
         --set "wandb.project=rewardshape_critic_OTIL_${base_algo}-${env}-slurm" \
         --set "agent.shac.max_agent_steps=100000000" \
-        --set "${critic_rm}" \
+        --set "${critic_rmapping}" \
         --set "${ot_cost}" \
         --set "${mlp_feat}" \
         --set "${critic_disabled}" \
-        --set "${critic_rm}" \
+        --set "${critic_rshapping}" \
         --env_files "${env}.yaml" \
         --deploy_now
 
