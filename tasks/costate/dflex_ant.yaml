@@ -1,0 +1,48 @@
+task:
+  name: DFlex
+  env:
+    env_name: ant
+agent:
+  name: Costate/DFlexAntSHAC
+  shac:
+    max_epochs: 50000
+    max_agent_steps: 10000000
+  otil:
+    demos:
+      path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+    critic_reward_mapping: exp
+    imitation_loss_type: ot
+    input_type: state_state
+    loss_mlp_features_dim: null
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexAnt10M-Costate_SHAC/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 100
+
+sweep:
+  logdir: "workdir/DFlexAnt10M-Costate-sweep/$(date +%Y%m%d-%H%M%S.%2N)"
+  seed: [100, 110, 120, 1000, 1100, 1200]
+  # agent.otil.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.otil.demos.n_trajs: 8
+  agent.otil.critic_disabled: false
+  agent.otil.critic_reward_shapping: true
+  agent.otil.critic_reward_mapping: exp # [log_exp, exp]
+  agent.otil.imitation_loss_type: ot
+  agent.otil.loss_ot_cost_type: l2 # [l2, cosine]
+  agent.otil.loss_use_huber_speedup: false
+  agent.otil.loss_mlp_features_dim: null
+  agent.otil.loss_use_detached_prev_obs: false
+
+spawner:
+  runtime: "2h"

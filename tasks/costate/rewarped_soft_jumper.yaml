@@ -1,0 +1,46 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Jumper
+    env_suite: gradsim
+agent:
+  name: Costate/RewarpedJumperSAPO
+  network:
+    encoder_kwargs:
+      mlp_keys: com_q|com_qd|actions
+    actor_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+  shac:
+    critic_optim_kwargs:
+      lr: 5e-4
+    target_critic_alpha: 0.995
+  otil:
+    demos:
+      path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+logdir: "workdir/RewarpedJumper6M-Costate/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1300
+
+sweep:
+  seed: [100, 110, 120]
+  agent.otil.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.otil.demos.n_trajs: 8
+  agent.otil.critic_reward_mapping: exp #[log_exp, exp]
+  agent.otil.imitation_loss_type: ot
+  agent.otil.loss_ot_cost_type: l2 #[l2, cosine]
+  agent.otil.loss_use_huber_speedup: false
+  agent.otil.loss_mlp_features_dim: null
+  agent.otil.loss_use_detached_prev_obs: false
+
+spawner:
+  runtime: "12h"

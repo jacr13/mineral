@@ -1,0 +1,11 @@
+defaults:
+  - /agent/OTIL/RewarpedJumperSAPO@_here_
+  - _self_
+
+algo: Costate
+
+costate:
+  costate_grad_clip: null
+  costate_grad_normalize: false
+  loss_scale: 1.0
+  use_reparameterized_surrogate: true
