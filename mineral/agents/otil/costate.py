@@ -20,6 +20,7 @@ class Costate(OTIL):
 
     def __init__(self, full_cfg, **kwargs):
         super().__init__(full_cfg, **kwargs)
+        self.critic_disabled = True
         self.costate_config = full_cfg.agent.get("costate", {})
         self.costate_grad_clip = self.costate_config.get("costate_grad_clip", None)
         self.costate_grad_normalize = self.costate_config.get("costate_grad_normalize", False)
@@ -65,8 +66,6 @@ class Costate(OTIL):
             self.timer.start("train/update_actor")
             self.actor_encoder.train()
             self.actor.train()
-            self.critic.eval()
-            self.critic_target.eval()
             actor_results = self.update_actor()
             self.timer.end("train/update_actor")
 
