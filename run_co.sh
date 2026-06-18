@@ -39,7 +39,7 @@ docker run \
         agent.costate.loss_scale=10.0 \
         agent.costate.use_reparameterized_surrogate=true \
         logdir=workdir/DFlexHopper10M-Costate-debug/$(date +%Y%m%d-%H%M%S.%2N) \
-        wandb.mode=disabled \
+        wandb.mode=online \
         wandb.project=debug_costate \
         run=train_eval \
         seed=130 \
