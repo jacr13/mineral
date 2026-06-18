@@ -16,7 +16,7 @@ docker run \
     -v /etc/localtime:/etc/localtime:ro \
     -v "$(pwd)":/workspace \
     -w /workspace \
-    candidj0/mineral:latest \
+    candidj0/mineral:new \
     bash -lc "python -m mineral.scripts.run \
         task=DFlex \
         task.env.env_name=hopper \
