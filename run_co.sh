@@ -36,7 +36,7 @@ docker run \
         agent.otil.loss_use_detached_prev_obs=false \
         agent.costate.costate_grad_clip=null \
         agent.costate.costate_grad_normalize=false \
-        agent.costate.loss_scale=1.0 \
+        agent.costate.loss_scale=10.0 \
         agent.costate.use_reparameterized_surrogate=true \
         logdir=workdir/DFlexHopper10M-Costate-debug/$(date +%Y%m%d-%H%M%S.%2N) \
         wandb.mode=disabled \
