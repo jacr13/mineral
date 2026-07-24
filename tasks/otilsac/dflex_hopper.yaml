@@ -1,0 +1,41 @@
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+agent:
+  name: OTIL/DFlexAntSAC
+  sac:
+    max_agent_steps: 10000000
+    warm_up: 32
+    +target_entropy_scalar: 0.5
+    tau: 0.005
+  otil:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+    input_type: state_state
+    imitation_loss_type: ot
+    loss_best_of_k_k: 8
+    loss_ot_cost_type: l2
+    loss_use_huber_speedup: false
+    loss_use_detached_prev_obs: false
+    loss_mlp_features_dim: 64
+    critic_reward_mapping: exp
+    critic_reward_shapping: false
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexHopper10M-OTIL_SAC/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]

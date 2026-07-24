@@ -1,0 +1,39 @@
+defaults:
+  - /agent/PPO/DFlexAnt@_here_
+  - _self_
+
+algo: OTILPPO
+
+# Keep the policy widths aligned with the FOCUS DFlex configuration. Task
+# files may add their task-specific critic_mlp_kwargs.
+network:
+  actor_critic_kwargs:
+    separate_value_mlp: true
+    fixed_sigma: true
+    actor_dist_kwargs: {dist_type: normal}
+    mlp_kwargs:
+      units: [128, 64, 32]
+      norm_type: LayerNorm
+      act_type: ELU
+
+otil:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+
+  input_type: state
+  imitation_loss_type: ot
+  loss_ot_cost_type: l2
+  loss_ot_eps: 0.1
+  loss_ot_iters: 60
+  loss_ot_huber_delta: 1.0
+  loss_use_huber_speedup: true
+  loss_mlp_features_dim: null
+  loss_use_detached_prev_obs: true
+  loss_best_of_k_k: 8
+
+  critic_reward_shapping: true
+  critic_reward_mapping: log_exp
+  critic_reward_scale: 1.0
+  critic_reward_normalize: false

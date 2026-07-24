@@ -7,6 +7,8 @@ from .gail.gail import GAIL
 from .otil.ild import ILD
 from .otil.diffmimic import DiffMimic
 from .otil.otil import OTIL
+from .otil.otil_ppo import OTILPPO
+from .otil.otil_sac import OTILSAC
 from .ppo.ppo import PPO
 from .sac.sac import SAC
 

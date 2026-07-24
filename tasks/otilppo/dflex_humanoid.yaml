@@ -1,0 +1,39 @@
+task:
+  name: DFlex
+  env:
+    env_name: humanoid
+    no_grad: true
+agent:
+  name: OTIL/DFlexAntPPO
+  ppo:
+    max_agent_steps: 10000000
+  otil:
+    demos:
+      path: "experts/demos/DFlex_humanoid_demos128_return8116_len984.pt"
+      n_trajs: 8
+    input_type: state_state
+    imitation_loss_type: ot
+    loss_best_of_k_k: 8
+    loss_ot_cost_type: l2
+    loss_use_huber_speedup: false
+    loss_use_detached_prev_obs: false
+    loss_mlp_features_dim: 64
+    critic_reward_mapping: exp
+    critic_reward_shapping: false
+  network:
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+      +critic_mlp_kwargs:
+        units: [64, 64]
+        norm_type: LayerNorm
+        act_type: ELU
+logdir: "workdir/DFlexHumanoid10M-OTIL_PPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 110
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
