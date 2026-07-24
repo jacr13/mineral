@@ -60,6 +60,7 @@ SBATCH_FILE_CONTENT = """#!/usr/bin/env bash
 #SBATCH --ntasks={num_workers}
 #SBATCH --time={duration}
 #SBATCH --mem={memory}000
+#SBATCH --exclude=gpu051
 #SBATCH --output=./out/run_%j.out
 #SBATCH --error=./out/run_e%j.out
 {extra_params}
