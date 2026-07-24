@@ -80,12 +80,11 @@ for env in "${ENVS[@]}"; do
         --docker \
         --docker_image /home/users/c/candidor/docker/mineral.sif \
         --deployment slurm \
-        --runtime 6h \
         --no-cleanup \
         --set "seed=${seed}" \
         --set "logdir=workdir/OTIL_PPO_${env}_${RUN_STAMP}/${condition}/seed_${seed}" \
         --set "wandb.project=OTIL_PPO-${env}-slurm" \
-        --set "agent.ppo.max_agent_steps=10000000" \
+        --set "agent.ppo.max_agent_steps=100000000" \
         --set "agent.otil.input_type=state_state" \
         --set "agent.otil.imitation_loss_type=${imitation_loss}" \
         --set "agent.otil.loss_ot_cost_type=${ot_cost}" \

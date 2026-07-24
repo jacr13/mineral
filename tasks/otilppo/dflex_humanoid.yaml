@@ -37,3 +37,6 @@ seed: 110
 
 sweep:
   seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "7h30m"

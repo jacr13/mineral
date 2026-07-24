@@ -6,7 +6,6 @@ task:
 agent:
   name: OTIL/DFlexAntPPO
   ppo:
-    max_epochs: 50000
     max_agent_steps: 10000000
   otil:
     demos:
@@ -38,3 +37,6 @@ seed: 100
 
 sweep:
   seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "3h"
