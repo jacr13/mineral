@@ -7,6 +7,12 @@ hopper:
   OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_hopper-slurm/groups/freddie-mars-mobile-four-high.DAC.DFlex_hopper_64/workspace
   GAIfO: https://wandb.ai/jacr/gail-sweep-dflex_hopper-slurm/groups/triple-fish-table-ack-massachusetts.GAIL.DFlex_hopper_64/workspace
   MAAD: https://wandb.ai/jacr/gail-sweep-dflex_hopper-slurm/groups/yankee-oklahoma-paris-ink-enemy.GAIL.DFlex_hopper_64/workspace
+  ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/emma-fish-purple-zulu-uncle.OTILSAC.DFlex_hopper_64/workspace
+  ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/undress-leopard-mexico-winter-failed.OTILSAC.DFlex_hopper_64/workspace
+  ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/seven-delta-charlie-louisiana-music.OTILSAC.DFlex_hopper_64/workspace
+  ZOCUS-PPO-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_hopper-slurm/groups/jersey-aspen-eleven-fix-robin.OTILPPO.DFlex_hopper_64/workspace
+  ZOCUS-PPO-OT-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_hopper-slurm/groups/twenty-red-pennsylvania-black-orange.OTILPPO.DFlex_hopper_64/workspace
+  ZOCUS-PPO-OT-cos: https://wandb.ai/jacr/OTIL_PPO-dflex_hopper-slurm/groups/louisiana-cold-violet-william-spaghetti.OTILPPO.DFlex_hopper_64/workspace
 ant:
   FOCUS-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_ant-slurm-new/groups/fish-sweet-cat-london-diet.OTIL.DFlex_ant_64/workspace
   FOCUS-ot-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_ant-slurm-new/groups/violet-don-potato-indigo-princess.OTIL.DFlex_ant_64/workspace
@@ -16,6 +22,12 @@ ant:
   OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_ant-slurm/groups/yellow-six-freddie-hot-hawaii.DAC.DFlex_ant_64/workspace
   GAIfO: https://wandb.ai/jacr/gail-sweep-dflex_ant-slurm/groups/alpha-alabama-beryllium-georgia-florida.GAIL.DFlex_ant_64/workspace
   MAAD: https://wandb.ai/jacr/gail-sweep-dflex_ant-slurm/groups/illinois-mars-neptune-angel-friend.GAIL.DFlex_ant_64/workspace
+  ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/pluto-nevada-mango-happy-uniform.OTILSAC.DFlex_ant_64/workspace
+  ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/chicken-rugby-diet-north-muppet.OTILSAC.DFlex_ant_64/workspace
+  ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/queen-oxygen-blossom-idaho-nuts.OTILSAC.DFlex_ant_64/workspace
+  ZOCUS-PPO-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_ant-slurm/groups/florida-ink-michigan-mexico-white.OTILPPO.DFlex_ant_64/workspace
+  ZOCUS-PPO-OT-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_ant-slurm/groups/kentucky-india-north-emma-kilo.OTILPPO.DFlex_ant_64/workspace
+  ZOCUS-PPO-OT-cos: https://wandb.ai/jacr/OTIL_PPO-dflex_ant-slurm/groups/rugby-lithium-london-tango-mississippi.OTILPPO.DFlex_ant_64/workspace
 humanoid:
   FOCUS-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_humanoid-slurm-new/groups/batman-september-mike-minnesota-tango.OTIL.DFlex_humanoid_64/workspace
   FOCUS-ot-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_humanoid-slurm-new/groups/michigan-neptune-august-thirteen-east.OTIL.DFlex_humanoid_64/workspace
@@ -25,6 +37,12 @@ humanoid:
   OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_humanoid-slurm/groups/freddie-wyoming-december-cardinal-artist.DAC.DFlex_humanoid_64/workspace
   GAIfO: https://wandb.ai/jacr/gail-sweep-dflex_humanoid-slurm/groups/mountain-saturn-nuts-texas-robin.GAIL.DFlex_humanoid_64/workspace
   MAAD: https://wandb.ai/jacr/gail-sweep-dflex_humanoid-slurm/groups/carbon-twelve-idaho-green-football.GAIL.DFlex_humanoid_64/workspace
+  ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/victor-quebec-lake-social-speaker.OTILSAC.DFlex_humanoid_64/workspace
+  ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/oven-autumn-nevada-hydrogen-nuts.OTILSAC.DFlex_humanoid_64/workspace
+  ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/whiskey-sierra-connecticut-gee-carbon.OTILSAC.DFlex_humanoid_64/workspace
+  ZOCUS-PPO-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_humanoid-slurm/groups/purple-ceiling-six-kilo-football.OTILPPO.DFlex_humanoid_64/workspace
+  ZOCUS-PPO-OT-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_humanoid-slurm/groups/equal-east-ink-paris-oregon.OTILPPO.DFlex_humanoid_64/workspace
+  ZOCUS-PPO-OT-cos: https://wandb.ai/jacr/OTIL_PPO-dflex_humanoid-slurm/groups/sink-six-juliet-lamp-pennsylvania.OTILPPO.DFlex_humanoid_64/workspace
 snu_humanoid:
   FOCUS-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_snu_humanoid-slurm-new/groups/speaker-fifteen-alabama-potato-fruit.OTIL.DFlex_snu_humanoid_64/workspace
   FOCUS-ot-l2: https://wandb.ai/jacr/OTIL_SAPO-dflex_snu_humanoid-slurm-new/groups/steak-diet-lemon-video-mississippi.OTIL.DFlex_snu_humanoid_64/workspace
@@ -34,3 +52,9 @@ snu_humanoid:
   OPOLO: https://wandb.ai/jacr/dac-sweep-dflex_snu_humanoid-slurm/groups/eight-sodium-tennessee-zulu-cup.DAC.DFlex_snu_humanoid_64/workspace
   GAIfO: https://wandb.ai/jacr/gail-sweep-dflex_snu_humanoid-slurm/groups/snake-papa-equal-friend-iowa.GAIL.DFlex_snu_humanoid_64/workspace
   MAAD: https://wandb.ai/jacr/gail-sweep-dflex_snu_humanoid-slurm/groups/illinois-romeo-nineteen-sodium-november.GAIL.DFlex_snu_humanoid_64/workspace
+  ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/eleven-angel-maine-batman-cardinal.OTILSAC.DFlex_snu_humanoid_64/workspace
+  ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/princess-fillet-king-muppet-paris.OTILSAC.DFlex_snu_humanoid_64/workspace
+  ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/shade-tennessee-nineteen-queen-zulu.OTILSAC.DFlex_snu_humanoid_64/workspace
+  ZOCUS-PPO-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_snu_humanoid-slurm/groups/massachusetts-grey-uniform-uniform-solar.OTILPPO.DFlex_snu_humanoid_64/workspace
+  ZOCUS-PPO-OT-l2: https://wandb.ai/jacr/OTIL_PPO-dflex_snu_humanoid-slurm/groups/high-coffee-neptune-tennis-georgia.OTILPPO.DFlex_snu_humanoid_64/workspace
+  ZOCUS-PPO-OT-cos: https://wandb.ai/jacr/OTIL_PPO-dflex_snu_humanoid-slurm/groups/lima-football-winner-aspen-snake.OTILPPO.DFlex_snu_humanoid_64/workspace

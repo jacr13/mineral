@@ -1,3 +1,4 @@
+import csv
 import math
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from wandb_api import get_group_runs, get_rew_steps_times
 
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
+
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots_ZOCUS"
 
 
 EXPERTS = {
@@ -46,6 +49,12 @@ COLOR = {
     "FOCUS-l2": "#5BC5DB",
     "FOCUS-OT-cos": "#A0C75C",
     "FOCUS-OT-l2": "#479A5F",
+    "ZOCUS-SAC-l2": "#4C00FF",
+    "ZOCUS-SAC-OT-l2": "#0066FF",
+    "ZOCUS-SAC-OT-cos": "#0084FF",
+    "ZOCUS-PPO-l2": "#FF9100",
+    "ZOCUS-PPO-OT-l2": "#FF5100",
+    "ZOCUS-PPO-OT-cos": "#FF3C00",
 }
 
 ALGOS = [
@@ -58,6 +67,12 @@ ALGOS = [
     "FOCUS-l2",
     "FOCUS-OT-l2",
     "FOCUS-OT-cos",
+    "ZOCUS-SAC-l2",
+    "ZOCUS-SAC-OT-l2",
+    "ZOCUS-SAC-OT-cos",
+    "ZOCUS-PPO-l2",
+    "ZOCUS-PPO-OT-l2",
+    "ZOCUS-PPO-OT-cos",
 ]
 
 ALGO_DISPLAY = {}
@@ -162,6 +177,178 @@ def compute_center_and_band(values, *, center_stat="mean", band="std"):
     return center, lower, upper
 
 
+def build_results_table(
+    data,
+    *,
+    EXPERTS=None,
+    ALGO_DISPLAY=None,
+    ALGO_INDEX=None,
+    normalize_expert=True,
+    x_axis="steps",
+    center_stat="mean",
+    band="std",
+):
+    """Summarize the final comparable return for every environment and algorithm."""
+    center_stat = normalize_center_stat(center_stat)
+    band = normalize_band(band)
+    ALGO_DISPLAY = ALGO_DISPLAY or {}
+    ALGO_INDEX = ALGO_INDEX or {}
+    rows = []
+
+    for env_name, env_data in data.items():
+        expert_mean = None
+        if EXPERTS and env_name in EXPERTS:
+            expert_mean = float(EXPERTS[env_name]["mean"])
+
+        algo_keys = sorted(
+            env_data,
+            key=lambda key: algo_sort_key(key, ALGO_INDEX, ALGO_DISPLAY),
+        )
+        for algo_key in algo_keys:
+            algo_data = env_data[algo_key]
+            curves = algo_data.get("data", [])
+            if not curves:
+                continue
+
+            if x_axis == "time":
+                timed_curves = []
+                for times, returns in zip(algo_data.get("agent_times", []), curves):
+                    times = np.asarray(times, dtype=np.float64)
+                    returns = np.asarray(returns, dtype=np.float64)
+                    if times.size == 0 or returns.size == 0 or times.size != returns.size:
+                        continue
+                    timed_curves.append((times, returns))
+                if not timed_curves:
+                    continue
+
+                common_end_time = min(times[-1] for times, _ in timed_curves)
+                if common_end_time <= 0:
+                    continue
+                n_points = min(returns.size for _, returns in timed_curves)
+                common_grid = np.linspace(0, common_end_time, num=n_points)
+                values = np.vstack([np.interp(common_grid, times, returns) for times, returns in timed_curves])
+                final_x = convert_seconds_to_hours(common_end_time)
+                final_x_unit = "hours"
+            elif x_axis == "steps":
+                values = np.vstack(curves)
+                step_grids = algo_data.get("agent_steps", [])
+                valid_steps = [
+                    np.asarray(steps, dtype=np.float64) for steps in step_grids if steps is not None and len(steps) > 0
+                ]
+                final_x = min(steps[-1] for steps in valid_steps) if valid_steps else np.nan
+                final_x_unit = "steps"
+            else:
+                raise ValueError(f"Unknown x_axis: {x_axis}")
+
+            if normalize_expert and expert_mean is not None and expert_mean != 0:
+                values = values / expert_mean
+
+            center, lower, upper = compute_center_and_band(
+                values[:, -1:],
+                center_stat=center_stat,
+                band=band,
+            )
+            rows.append(
+                {
+                    "environment": env_name,
+                    "environment_name": ENV_NAMES.get(env_name, env_name),
+                    "algorithm": algo_key,
+                    "algorithm_display": get_algo_display(algo_key, ALGO_DISPLAY),
+                    "center": float(center[0]),
+                    "lower": float(lower[0]),
+                    "upper": float(upper[0]),
+                    "n_runs": int(values.shape[0]),
+                    "final_x": float(final_x),
+                    "final_x_unit": final_x_unit,
+                    "x_axis": x_axis,
+                    "center_stat": center_stat,
+                    "band": band,
+                    "normalized_by_expert": normalize_expert,
+                }
+            )
+
+    return rows
+
+
+def _latex_escape(value):
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(char, char) for char in str(value))
+
+
+def save_results_table(
+    data,
+    output_stem,
+    *,
+    EXPERTS=None,
+    ALGO_DISPLAY=None,
+    ALGO_INDEX=None,
+    normalize_expert=True,
+    x_axis="steps",
+    center_stat="mean",
+    band="std",
+):
+    """Save final-return summaries as numeric CSV and a wide LaTeX table."""
+    rows = build_results_table(
+        data,
+        EXPERTS=EXPERTS,
+        ALGO_DISPLAY=ALGO_DISPLAY,
+        ALGO_INDEX=ALGO_INDEX,
+        normalize_expert=normalize_expert,
+        x_axis=x_axis,
+        center_stat=center_stat,
+        band=band,
+    )
+    if not rows:
+        return None
+
+    output_stem = Path(output_stem)
+    output_stem.parent.mkdir(parents=True, exist_ok=True)
+    csv_path = output_stem.with_suffix(".csv")
+    tex_path = output_stem.with_suffix(".tex")
+
+    with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    env_names = list(dict.fromkeys(row["environment_name"] for row in rows))
+    algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
+    values_by_env_algo = {(row["environment_name"], row["algorithm_display"]): row for row in rows}
+
+    def format_cell(row):
+        if row is None:
+            return "--"
+        if band == "std":
+            spread = max(row["center"] - row["lower"], row["upper"] - row["center"])
+            return rf"{row['center']:.3f} $\pm$ {spread:.3f}"
+        return rf"{row['center']:.3f} [{row['lower']:.3f}, {row['upper']:.3f}]"
+
+    latex_lines = [
+        rf"\begin{{tabular}}{{l{'c' * len(algo_names)}}}",
+        r"\toprule",
+        "Environment & " + " & ".join(_latex_escape(name) for name in algo_names) + r" \\",
+        r"\midrule",
+    ]
+    for env_name in env_names:
+        cells = [format_cell(values_by_env_algo.get((env_name, algo_name))) for algo_name in algo_names]
+        latex_lines.append(_latex_escape(env_name) + " & " + " & ".join(cells) + r" \\")
+    latex_lines.extend([r"\bottomrule", r"\end{tabular}", ""])
+    tex_path.write_text("\n".join(latex_lines), encoding="utf-8")
+
+    return csv_path, tex_path
+
+
 def plot_results_like_first(
     data,
     output_path,
@@ -208,11 +395,11 @@ def plot_results_like_first(
         env_data = data[env_name]
 
         if env_name == "hopper":
-            center_stat_="mean"
-            band_="std"
+            center_stat_ = "mean"
+            band_ = "std"
         else:
-            center_stat_=center_stat
-            band_=band
+            center_stat_ = center_stat
+            band_ = band
 
         # Determine common x
         n_points = None
@@ -810,7 +997,6 @@ def main(
                                 run_id=exp["run_id"],
                             )
 
-
                         np.save(local_dir / "my_ep_rewards_hist.npy", ep_rew)
                         np.save(local_dir / "my_ep_steps_hist.npy", steps)
                         np.save(local_dir / "my_ep_times_hist.npy", times)
@@ -886,7 +1072,20 @@ def main(
                     print(env_name, algo, ep_rew.shape, last_x)
 
     if create_plots:
-        plot_path = plotter_dir / "plots" / f"all_return_{center_stat}{band}_{x_axis}.png"
+        table_stem = FOLDER_TO_SAVE_PLOTS / f"final_return_table_{center_stat}{band}_{x_axis}"
+        save_results_table(
+            data,
+            table_stem,
+            EXPERTS=EXPERTS,
+            ALGO_DISPLAY=ALGO_DISPLAY,
+            ALGO_INDEX=ALGO_INDEX,
+            normalize_expert=True,
+            x_axis=x_axis,
+            center_stat=center_stat,
+            band=band,
+        )
+
+        plot_path = FOLDER_TO_SAVE_PLOTS / f"all_return_{center_stat}{band}_{x_axis}.png"
         plot_results_like_first(
             data,
             plot_path,
@@ -904,7 +1103,7 @@ def main(
         )
 
         # One plot per environment
-        per_env_dir = plotter_dir / "plots" / "per_env"
+        per_env_dir = FOLDER_TO_SAVE_PLOTS / "per_env"
         for env_name, env_data in data.items():
             out_path = per_env_dir / f"{center_stat}{band}_{env_name}_{x_axis}.png"
             plot_single_env(
@@ -924,7 +1123,7 @@ def main(
                 band=band,
             )
 
-        median_path = plotter_dir / "plots" / "median_rewards.png"
+        median_path = FOLDER_TO_SAVE_PLOTS / "median_rewards.png"
         plot_median_across_envs(
             data,
             median_path,
@@ -943,14 +1142,13 @@ if __name__ == "__main__":
         for band in ["std", "95ci"]:
             for x_axis in ["time", "steps"]:
                 main(
-                    sync_remote=False,
+                    sync_remote=True,
                     update_group_runs=False,
                     create_plots=True,
                     x_axis=x_axis,
                     center_stat=center_stat,
                     band=band,
                 )
-
 
     # main(
     #     sync_remote=True,
