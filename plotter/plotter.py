@@ -1142,7 +1142,7 @@ if __name__ == "__main__":
         for band in ["std", "95ci"]:
             for x_axis in ["time", "steps"]:
                 main(
-                    sync_remote=True,
+                    sync_remote=False,
                     update_group_runs=False,
                     create_plots=True,
                     x_axis=x_axis,
