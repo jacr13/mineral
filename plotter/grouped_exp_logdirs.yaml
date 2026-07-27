@@ -172,6 +172,187 @@ hopper:
     run_id: yankee-oklahoma-paris-ink-enemy-Ra6I.GAIL.DFlex_hopper_64.seed120
     entity: jacr
     project: gail-sweep-dflex_hopper-slurm
+  ZOCUS-SAC-l2:
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_100
+    seed: 100
+    run_id: emma-fish-purple-zulu-uncle-yUKG.OTILSAC.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_110
+    seed: 110
+    run_id: emma-fish-purple-zulu-uncle-12oH.OTILSAC.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_1100
+    seed: 1100
+    run_id: emma-fish-purple-zulu-uncle-vrz6.OTILSAC.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_1000
+    seed: 1000
+    run_id: emma-fish-purple-zulu-uncle-vJ15.OTILSAC.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_120
+    seed: 120
+    run_id: emma-fish-purple-zulu-uncle-4EMF.OTILSAC.DFlex_hopper_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_l2/seed_1200
+    seed: 1200
+    run_id: emma-fish-purple-zulu-uncle-W7BH.OTILSAC.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  ZOCUS-SAC-OT-l2:
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: undress-leopard-mexico-winter-failed-M6Qz.OTILSAC.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: undress-leopard-mexico-winter-failed-kQej.OTILSAC.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_110
+    seed: 110
+    run_id: undress-leopard-mexico-winter-failed-4FPj.OTILSAC.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: undress-leopard-mexico-winter-failed-eTcF.OTILSAC.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_100
+    seed: 100
+    run_id: undress-leopard-mexico-winter-failed-gZbN.OTILSAC.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_l2/seed_120
+    seed: 120
+    run_id: undress-leopard-mexico-winter-failed-LRRE.OTILSAC.DFlex_hopper_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  ZOCUS-SAC-OT-cos:
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_120
+    seed: 120
+    run_id: seven-delta-charlie-louisiana-music-3K64.OTILSAC.DFlex_hopper_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: seven-delta-charlie-louisiana-music-7Wil.OTILSAC.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: seven-delta-charlie-louisiana-music-96RG.OTILSAC.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_110
+    seed: 110
+    run_id: seven-delta-charlie-louisiana-music-dGSb.OTILSAC.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_100
+    seed: 100
+    run_id: seven-delta-charlie-louisiana-music-wey0.OTILSAC.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  - logdir: workdir/OTIL_SAC_dflex_hopper_20260724_171349/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: seven-delta-charlie-louisiana-music-QNv0.OTILSAC.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_hopper-slurm
+  ZOCUS-PPO-l2:
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_100
+    seed: 100
+    run_id: jersey-aspen-eleven-fix-robin-5LyY.OTILPPO.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_110
+    seed: 110
+    run_id: jersey-aspen-eleven-fix-robin-7RXe.OTILPPO.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_120
+    seed: 120
+    run_id: jersey-aspen-eleven-fix-robin-DUH3.OTILPPO.DFlex_hopper_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_1000
+    seed: 1000
+    run_id: jersey-aspen-eleven-fix-robin-fB5B.OTILPPO.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_1100
+    seed: 1100
+    run_id: jersey-aspen-eleven-fix-robin-S2u6.OTILPPO.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_l2/seed_1200
+    seed: 1200
+    run_id: jersey-aspen-eleven-fix-robin-wpOa.OTILPPO.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  ZOCUS-PPO-OT-l2:
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_l2/seed_100
+    seed: 100
+    run_id: twenty-red-pennsylvania-black-orange-7nqL.OTILPPO.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_l2/seed_110
+    seed: 110
+    run_id: twenty-red-pennsylvania-black-orange-AgCr.OTILPPO.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: twenty-red-pennsylvania-black-orange-BZQ9.OTILPPO.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: twenty-red-pennsylvania-black-orange-3Pnd.OTILPPO.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: twenty-red-pennsylvania-black-orange-kZRD.OTILPPO.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  ZOCUS-PPO-OT-cos:
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_110
+    seed: 110
+    run_id: louisiana-cold-violet-william-spaghetti-C21J.OTILPPO.DFlex_hopper_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_100
+    seed: 100
+    run_id: louisiana-cold-violet-william-spaghetti-UCv1.OTILPPO.DFlex_hopper_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_120
+    seed: 120
+    run_id: louisiana-cold-violet-william-spaghetti-NlZr.OTILPPO.DFlex_hopper_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: louisiana-cold-violet-william-spaghetti-qBVe.OTILPPO.DFlex_hopper_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: louisiana-cold-violet-william-spaghetti-7Oga.OTILPPO.DFlex_hopper_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
+  - logdir: workdir/OTIL_PPO_dflex_hopper_20260724_171439/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: louisiana-cold-violet-william-spaghetti-dYjY.OTILPPO.DFlex_hopper_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_hopper-slurm
 ant:
   FOCUS-l2:
   - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213859/sweep_19
@@ -256,11 +437,11 @@ ant:
     run_id: idaho-vegan-glucose-lion-social-poYK.OTIL.DFlex_ant_64.seed1100
     entity: jacr
     project: OTIL_SAPO-dflex_ant-slurm-new
-  # - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_7
-  #   seed: 110
-  #   run_id: idaho-vegan-glucose-lion-social-PrnD.OTIL.DFlex_ant_64.seed110
-  #   entity: jacr
-  #   project: OTIL_SAPO-dflex_ant-slurm-new
+  - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_7
+    seed: 110
+    run_id: idaho-vegan-glucose-lion-social-PrnD.OTIL.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_SAPO-dflex_ant-slurm-new
   - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_23
     seed: 1200
     run_id: idaho-vegan-glucose-lion-social-yXne.OTIL.DFlex_ant_64.seed1200
@@ -381,6 +562,192 @@ ant:
     run_id: illinois-mars-neptune-angel-friend-15Hf.GAIL.DFlex_ant_64.seed110
     entity: jacr
     project: gail-sweep-dflex_ant-slurm
+  ZOCUS-SAC-l2:
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_1100
+    seed: 1100
+    run_id: pluto-nevada-mango-happy-uniform-cP4H.OTILSAC.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_1200
+    seed: 1200
+    run_id: pluto-nevada-mango-happy-uniform-SDml.OTILSAC.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_1000
+    seed: 1000
+    run_id: pluto-nevada-mango-happy-uniform-7BGT.OTILSAC.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_100
+    seed: 100
+    run_id: pluto-nevada-mango-happy-uniform-P7F1.OTILSAC.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_120
+    seed: 120
+    run_id: pluto-nevada-mango-happy-uniform-Q6Np.OTILSAC.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_l2/seed_110
+    seed: 110
+    run_id: pluto-nevada-mango-happy-uniform-ZOb5.OTILSAC.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  ZOCUS-SAC-OT-l2:
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_100
+    seed: 100
+    run_id: chicken-rugby-diet-north-muppet-eY8Z.OTILSAC.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_110
+    seed: 110
+    run_id: chicken-rugby-diet-north-muppet-liSS.OTILSAC.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_120
+    seed: 120
+    run_id: chicken-rugby-diet-north-muppet-nZoW.OTILSAC.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: chicken-rugby-diet-north-muppet-dFy9.OTILSAC.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: chicken-rugby-diet-north-muppet-PJQF.OTILSAC.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: chicken-rugby-diet-north-muppet-slAX.OTILSAC.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  ZOCUS-SAC-OT-cos:
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: queen-oxygen-blossom-idaho-nuts-WeRJ.OTILSAC.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_120
+    seed: 120
+    run_id: queen-oxygen-blossom-idaho-nuts-8jF9.OTILSAC.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_110
+    seed: 110
+    run_id: queen-oxygen-blossom-idaho-nuts-HTVP.OTILSAC.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_100
+    seed: 100
+    run_id: queen-oxygen-blossom-idaho-nuts-rYvw.OTILSAC.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: queen-oxygen-blossom-idaho-nuts-8xZB.OTILSAC.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  - logdir: workdir/OTIL_SAC_dflex_ant_20260724_171349/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: queen-oxygen-blossom-idaho-nuts-bN4G.OTILSAC.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_ant-slurm
+  ZOCUS-PPO-l2:
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_100
+    seed: 100
+    run_id: florida-ink-michigan-mexico-white-cKOQ.OTILPPO.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_1100
+    seed: 1100
+    run_id: florida-ink-michigan-mexico-white-jUw0.OTILPPO.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_1000
+    seed: 1000
+    run_id: florida-ink-michigan-mexico-white-TO1k.OTILPPO.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_1200
+    seed: 1200
+    run_id: florida-ink-michigan-mexico-white-vElf.OTILPPO.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_110
+    seed: 110
+    run_id: florida-ink-michigan-mexico-white-2Jxp.OTILPPO.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_l2/seed_120
+    seed: 120
+    run_id: florida-ink-michigan-mexico-white-t4az.OTILPPO.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  ZOCUS-PPO-OT-l2:
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_100
+    seed: 100
+    run_id: kentucky-india-north-emma-kilo-bOhx.OTILPPO.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_110
+    seed: 110
+    run_id: kentucky-india-north-emma-kilo-MWfe.OTILPPO.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_120
+    seed: 120
+    run_id: kentucky-india-north-emma-kilo-W3nY.OTILPPO.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: kentucky-india-north-emma-kilo-7yAf.OTILPPO.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: kentucky-india-north-emma-kilo-kOXG.OTILPPO.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: kentucky-india-north-emma-kilo-XPfz.OTILPPO.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  ZOCUS-PPO-OT-cos:
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_100
+    seed: 100
+    run_id: rugby-lithium-london-tango-mississippi-Z8XX.OTILPPO.DFlex_ant_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_110
+    seed: 110
+    run_id: rugby-lithium-london-tango-mississippi-SqHM.OTILPPO.DFlex_ant_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: rugby-lithium-london-tango-mississippi-J8ih.OTILPPO.DFlex_ant_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: rugby-lithium-london-tango-mississippi-H7M5.OTILPPO.DFlex_ant_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: rugby-lithium-london-tango-mississippi-L9hT.OTILPPO.DFlex_ant_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
+  - logdir: workdir/OTIL_PPO_dflex_ant_20260724_171439/focus_ot_cos/seed_120
+    seed: 120
+    run_id: rugby-lithium-london-tango-mississippi-zESe.OTILPPO.DFlex_ant_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_ant-slurm
 humanoid:
   FOCUS-l2:
   - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_123810/sweep_15
@@ -429,16 +796,16 @@ humanoid:
     run_id: michigan-neptune-august-thirteen-east-q7Y9.OTIL.DFlex_humanoid_64.seed120
     entity: jacr
     project: OTIL_SAPO-dflex_humanoid-slurm-new
-  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_19
-  #   seed: 1100
-  #   run_id: michigan-neptune-august-thirteen-east-FWzW.OTIL.DFlex_humanoid_64.seed1100
-  #   entity: jacr
-  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
-  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_15
-  #   seed: 1000
-  #   run_id: michigan-neptune-august-thirteen-east-D19H.OTIL.DFlex_humanoid_64.seed1000
-  #   entity: jacr
-  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
+  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_19
+    seed: 1100
+    run_id: michigan-neptune-august-thirteen-east-FWzW.OTIL.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAPO-dflex_humanoid-slurm-new
+  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_15
+    seed: 1000
+    run_id: michigan-neptune-august-thirteen-east-D19H.OTIL.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAPO-dflex_humanoid-slurm-new
   - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_3
     seed: 100
     run_id: michigan-neptune-august-thirteen-east-TvQZ.OTIL.DFlex_humanoid_64.seed100
@@ -455,16 +822,16 @@ humanoid:
     run_id: michigan-ten-magnesium-high-speaker-OIE8.OTIL.DFlex_humanoid_64.seed100
     entity: jacr
     project: OTIL_SAPO-dflex_humanoid-slurm-new
-  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_7
-  #   seed: 110
-  #   run_id: michigan-ten-magnesium-high-speaker-0L1G.OTIL.DFlex_humanoid_64.seed110
-  #   entity: jacr
-  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
-  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_19
-  #   seed: 1100
-  #   run_id: michigan-ten-magnesium-high-speaker-8o6M.OTIL.DFlex_humanoid_64.seed1100
-  #   entity: jacr
-  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
+  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_7
+    seed: 110
+    run_id: michigan-ten-magnesium-high-speaker-0L1G.OTIL.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAPO-dflex_humanoid-slurm-new
+  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_19
+    seed: 1100
+    run_id: michigan-ten-magnesium-high-speaker-8o6M.OTIL.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAPO-dflex_humanoid-slurm-new
   - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_11
     seed: 120
     run_id: michigan-ten-magnesium-high-speaker-xDO7.OTIL.DFlex_humanoid_64.seed120
@@ -481,31 +848,31 @@ humanoid:
     run_id: blue-muppet-timing-harry-orange-2ABW.ILD.DFlex_humanoid_64.seed1000
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_6
-  #   seed: 100
-  #   run_id: blue-muppet-timing-harry-orange-iDTu.ILD.DFlex_humanoid_64.seed100
-  #   entity: jacr
-  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_38
-  #   seed: 1100
-  #   run_id: blue-muppet-timing-harry-orange-ONuP.ILD.DFlex_humanoid_64.seed1100
-  #   entity: jacr
-  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_6
+    seed: 100
+    run_id: blue-muppet-timing-harry-orange-iDTu.ILD.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_38
+    seed: 1100
+    run_id: blue-muppet-timing-harry-orange-ONuP.ILD.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: ILD_SAPO-sweep-dflex_humanoid-slurm
   - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_46
     seed: 1200
     run_id: blue-muppet-timing-harry-orange-z07W.ILD.DFlex_humanoid_64.seed1200
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_22
-  #   seed: 120
-  #   run_id: blue-muppet-timing-harry-orange-zRxb.ILD.DFlex_humanoid_64.seed120
-  #   entity: jacr
-  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_14
-  #   seed: 110
-  #   run_id: blue-muppet-timing-harry-orange-3SRf.ILD.DFlex_humanoid_64.seed110
-  #   entity: jacr
-  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_22
+    seed: 120
+    run_id: blue-muppet-timing-harry-orange-zRxb.ILD.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_14
+    seed: 110
+    run_id: blue-muppet-timing-harry-orange-3SRf.ILD.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: ILD_SAPO-sweep-dflex_humanoid-slurm
   - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163740/sweep_22
     seed: 1300
     run_id: blue-muppet-timing-harry-orange-BDWG.ILD.DFlex_humanoid_64.seed1300
@@ -521,11 +888,11 @@ humanoid:
     run_id: blue-muppet-timing-harry-orange-UW0Z.ILD.DFlex_humanoid_64.seed130
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  # - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163739_01/sweep_14
-  #   seed: 140
-  #   run_id: blue-muppet-timing-harry-orange-ZKbn.ILD.DFlex_humanoid_64.seed140
-  #   entity: jacr
-  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163739_01/sweep_14
+    seed: 140
+    run_id: blue-muppet-timing-harry-orange-ZKbn.ILD.DFlex_humanoid_64.seed140
+    entity: jacr
+    project: ILD_SAPO-sweep-dflex_humanoid-slurm
   SAMfO/DACfO:
   - logdir: workdir/DFlexHumanoid10M-DAC_20260114_225153/sweep_6
     seed: 100
@@ -590,6 +957,192 @@ humanoid:
     run_id: carbon-twelve-idaho-green-football-Rxnx.GAIL.DFlex_humanoid_64.seed110
     entity: jacr
     project: gail-sweep-dflex_humanoid-slurm
+  ZOCUS-SAC-l2:
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_100
+    seed: 100
+    run_id: victor-quebec-lake-social-speaker-gveP.OTILSAC.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_110
+    seed: 110
+    run_id: victor-quebec-lake-social-speaker-HsqW.OTILSAC.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_120
+    seed: 120
+    run_id: victor-quebec-lake-social-speaker-02fW.OTILSAC.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_1000
+    seed: 1000
+    run_id: victor-quebec-lake-social-speaker-NmwN.OTILSAC.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_1100
+    seed: 1100
+    run_id: victor-quebec-lake-social-speaker-swbC.OTILSAC.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_l2/seed_1200
+    seed: 1200
+    run_id: victor-quebec-lake-social-speaker-pjPM.OTILSAC.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  ZOCUS-SAC-OT-l2:
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: oven-autumn-nevada-hydrogen-nuts-kkvr.OTILSAC.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_120
+    seed: 120
+    run_id: oven-autumn-nevada-hydrogen-nuts-36dk.OTILSAC.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: oven-autumn-nevada-hydrogen-nuts-cWmL.OTILSAC.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_100
+    seed: 100
+    run_id: oven-autumn-nevada-hydrogen-nuts-dDOu.OTILSAC.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_110
+    seed: 110
+    run_id: oven-autumn-nevada-hydrogen-nuts-glwb.OTILSAC.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: oven-autumn-nevada-hydrogen-nuts-rNQc.OTILSAC.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  ZOCUS-SAC-OT-cos:
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: whiskey-sierra-connecticut-gee-carbon-FHtv.OTILSAC.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_100
+    seed: 100
+    run_id: whiskey-sierra-connecticut-gee-carbon-gSft.OTILSAC.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_110
+    seed: 110
+    run_id: whiskey-sierra-connecticut-gee-carbon-nqai.OTILSAC.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: whiskey-sierra-connecticut-gee-carbon-8Uxt.OTILSAC.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_120
+    seed: 120
+    run_id: whiskey-sierra-connecticut-gee-carbon-xZXX.OTILSAC.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_humanoid_20260724_171349/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: whiskey-sierra-connecticut-gee-carbon-uOxK.OTILSAC.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_humanoid-slurm
+  ZOCUS-PPO-l2:
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_110
+    seed: 110
+    run_id: purple-ceiling-six-kilo-football-2wMA.OTILPPO.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_100
+    seed: 100
+    run_id: purple-ceiling-six-kilo-football-e8si.OTILPPO.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_120
+    seed: 120
+    run_id: purple-ceiling-six-kilo-football-CDfy.OTILPPO.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_1100
+    seed: 1100
+    run_id: purple-ceiling-six-kilo-football-rLf9.OTILPPO.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_1000
+    seed: 1000
+    run_id: purple-ceiling-six-kilo-football-YHzU.OTILPPO.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_l2/seed_1200
+    seed: 1200
+    run_id: purple-ceiling-six-kilo-football-v0AZ.OTILPPO.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  ZOCUS-PPO-OT-l2:
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_100
+    seed: 100
+    run_id: equal-east-ink-paris-oregon-r5u9.OTILPPO.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_120
+    seed: 120
+    run_id: equal-east-ink-paris-oregon-auaX.OTILPPO.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_110
+    seed: 110
+    run_id: equal-east-ink-paris-oregon-IRmj.OTILPPO.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: equal-east-ink-paris-oregon-26Fb.OTILPPO.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: equal-east-ink-paris-oregon-pLn7.OTILPPO.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: equal-east-ink-paris-oregon-KqwD.OTILPPO.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  ZOCUS-PPO-OT-cos:
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_100
+    seed: 100
+    run_id: sink-six-juliet-lamp-pennsylvania-79kW.OTILPPO.DFlex_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_110
+    seed: 110
+    run_id: sink-six-juliet-lamp-pennsylvania-fzn6.OTILPPO.DFlex_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_120
+    seed: 120
+    run_id: sink-six-juliet-lamp-pennsylvania-cHU2.OTILPPO.DFlex_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: sink-six-juliet-lamp-pennsylvania-6oIU.OTILPPO.DFlex_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: sink-six-juliet-lamp-pennsylvania-r4NU.OTILPPO.DFlex_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_humanoid_20260724_171439/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: sink-six-juliet-lamp-pennsylvania-0QMD.OTILPPO.DFlex_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_humanoid-slurm
 snu_humanoid:
   FOCUS-l2:
   - logdir: workdir/DFlexSNUHumanoid10M-OTIL_SHAC_20260121_211352/sweep_7
@@ -769,3 +1322,174 @@ snu_humanoid:
     run_id: illinois-romeo-nineteen-sodium-november-x3rj.GAIL.DFlex_snu_humanoid_64.seed120
     entity: jacr
     project: gail-sweep-dflex_snu_humanoid-slurm
+  ZOCUS-SAC-l2:
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_100
+    seed: 100
+    run_id: eleven-angel-maine-batman-cardinal-dmxT.OTILSAC.DFlex_snu_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_120
+    seed: 120
+    run_id: eleven-angel-maine-batman-cardinal-dXYk.OTILSAC.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_110
+    seed: 110
+    run_id: eleven-angel-maine-batman-cardinal-U2gP.OTILSAC.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_1100
+    seed: 1100
+    run_id: eleven-angel-maine-batman-cardinal-Vzkf.OTILSAC.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_1000
+    seed: 1000
+    run_id: eleven-angel-maine-batman-cardinal-ZW1Z.OTILSAC.DFlex_snu_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_l2/seed_1200
+    seed: 1200
+    run_id: eleven-angel-maine-batman-cardinal-tanv.OTILSAC.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  ZOCUS-SAC-OT-l2:
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: princess-fillet-king-muppet-paris-6EwO.OTILSAC.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_120
+    seed: 120
+    run_id: princess-fillet-king-muppet-paris-c80L.OTILSAC.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_100
+    seed: 100
+    run_id: princess-fillet-king-muppet-paris-ePqr.OTILSAC.DFlex_snu_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_1000
+    seed: 1000
+    run_id: princess-fillet-king-muppet-paris-h7l8.OTILSAC.DFlex_snu_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: princess-fillet-king-muppet-paris-uhM5.OTILSAC.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_l2/seed_110
+    seed: 110
+    run_id: princess-fillet-king-muppet-paris-yJDk.OTILSAC.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  ZOCUS-SAC-OT-cos:
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: shade-tennessee-nineteen-queen-zulu-e9QJ.OTILSAC.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: shade-tennessee-nineteen-queen-zulu-JktQ.OTILSAC.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_1000
+    seed: 1000
+    run_id: shade-tennessee-nineteen-queen-zulu-1j5u.OTILSAC.DFlex_snu_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_110
+    seed: 110
+    run_id: shade-tennessee-nineteen-queen-zulu-lplu.OTILSAC.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_120
+    seed: 120
+    run_id: shade-tennessee-nineteen-queen-zulu-sweQ.OTILSAC.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_SAC_dflex_snu_humanoid_20260724_171349/focus_ot_cos/seed_100
+    seed: 100
+    run_id: shade-tennessee-nineteen-queen-zulu-vhjj.OTILSAC.DFlex_snu_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_SAC-dflex_snu_humanoid-slurm
+  ZOCUS-PPO-l2:
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_100
+    seed: 100
+    run_id: massachusetts-grey-uniform-uniform-solar-lCXI.OTILPPO.DFlex_snu_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_110
+    seed: 110
+    run_id: massachusetts-grey-uniform-uniform-solar-jlio.OTILPPO.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_120
+    seed: 120
+    run_id: massachusetts-grey-uniform-uniform-solar-0ica.OTILPPO.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_1200
+    seed: 1200
+    run_id: massachusetts-grey-uniform-uniform-solar-9iBl.OTILPPO.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_1100
+    seed: 1100
+    run_id: massachusetts-grey-uniform-uniform-solar-t5TG.OTILPPO.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_l2/seed_1000
+    seed: 1000
+    run_id: massachusetts-grey-uniform-uniform-solar-ciSs.OTILPPO.DFlex_snu_humanoid_64.seed1000
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  ZOCUS-PPO-OT-l2:
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_l2/seed_110
+    seed: 110
+    run_id: high-coffee-neptune-tennis-georgia-JgeL.OTILPPO.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_l2/seed_120
+    seed: 120
+    run_id: high-coffee-neptune-tennis-georgia-gUPM.OTILPPO.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_l2/seed_1100
+    seed: 1100
+    run_id: high-coffee-neptune-tennis-georgia-NnNF.OTILPPO.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_l2/seed_1200
+    seed: 1200
+    run_id: high-coffee-neptune-tennis-georgia-upvl.OTILPPO.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  ZOCUS-PPO-OT-cos:
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_cos/seed_100
+    seed: 100
+    run_id: lima-football-winner-aspen-snake-Srff.OTILPPO.DFlex_snu_humanoid_64.seed100
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_cos/seed_110
+    seed: 110
+    run_id: lima-football-winner-aspen-snake-m57Y.OTILPPO.DFlex_snu_humanoid_64.seed110
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_cos/seed_120
+    seed: 120
+    run_id: lima-football-winner-aspen-snake-fehx.OTILPPO.DFlex_snu_humanoid_64.seed120
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_cos/seed_1100
+    seed: 1100
+    run_id: lima-football-winner-aspen-snake-tZQ7.OTILPPO.DFlex_snu_humanoid_64.seed1100
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm
+  - logdir: workdir/OTIL_PPO_dflex_snu_humanoid_20260724_171439/focus_ot_cos/seed_1200
+    seed: 1200
+    run_id: lima-football-winner-aspen-snake-eRIk.OTILPPO.DFlex_snu_humanoid_64.seed1200
+    entity: jacr
+    project: OTIL_PPO-dflex_snu_humanoid-slurm

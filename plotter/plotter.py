@@ -929,7 +929,7 @@ def main(
             }
             for exp in algo_values:
                 local_dir = Path(exp["logdir"])
-                if sync_remote:
+                if sync_remote and not local_dir.exists():
                     # sync exp from the remote server
                     local_dir.mkdir(parents=True, exist_ok=True)
                     sync_exp_from_remote(
