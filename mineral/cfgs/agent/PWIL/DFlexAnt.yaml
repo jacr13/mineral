@@ -1,0 +1,16 @@
+defaults:
+  - /agent/SAC/DFlexAnt@_here_
+  - _self_
+
+algo: PWIL
+
+pwil:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
+
+  observation_only: false # if true, reward matching ignores actions (state-only)
+  alpha: 5.0 # reward scale
+  beta: 5.0 # reward kernel width factor
+  time_horizon: null # null -> use env.max_episode_length

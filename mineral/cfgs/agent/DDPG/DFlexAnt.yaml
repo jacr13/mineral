@@ -1,0 +1,68 @@
+seed: ${..seed}
+algo: DDPG
+
+print_every: 10
+ckpt_every: 1000
+
+tracker_len: 100
+metrics_kwargs:
+  save_video_every: 0
+  save_video_consecutive: 0
+
+network:
+  normalize_input: True
+  encoder: null
+
+  actor: Actor
+  actor_kwargs:
+    tanh_policy: True
+    mlp_kwargs:
+      units: [512, 256, 128]
+      norm_type: LayerNorm
+      act_type: SiLU
+
+  critic: EnsembleQ
+  critic_kwargs:
+    n_critics: 2
+    mlp_kwargs:
+      units: [512, 256, 128]
+      norm_type: LayerNorm
+      act_type: SiLU
+
+ddpg:
+  multi_gpu: ${...multi_gpu}
+  num_actors: ${...task.env.numEnvs}
+
+  reward_shaper:
+    fn: scale
+    scale: 1.0
+
+  max_agent_steps: 4.1e6
+  horizon_len: 1
+  memory_size: 1e6
+  batch_size: 100
+
+  nstep: 1
+  tau: 0.005
+  gamma: 0.99
+  warm_up: 32
+  no_tgt_actor: False
+  handle_timeout: True
+
+  # TD3: delayed policy/target updates every other critic update.
+  update_actor_interval: 2
+  update_targets_interval: 2
+  mini_epochs: 8
+
+  optim_type: Adam
+  actor_optim_kwargs: {lr: 3e-4}
+  critic_optim_kwargs: {lr: 3e-4}
+  max_grad_norm: null
+
+  noise:
+    type: 'fixed'
+    decay: null
+    std_max: 0.1
+    std_min: 0.1
+    tgt_pol_std: 0.2
+    tgt_pol_noise_bound: 0.5

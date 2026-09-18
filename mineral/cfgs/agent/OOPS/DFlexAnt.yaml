@@ -1,0 +1,46 @@
+defaults:
+  - /agent/DDPG/DFlexAnt@_here_
+  - _self_
+
+algo: OOPS
+
+ddpg:
+  # OOPS's reward is only defined for a whole completed episode (it Sinkhorn-
+  # matches the episode against one full expert trajectory), so one call to
+  # explore_env must collect exactly one full episode across every env.
+  # horizon_len (and therefore warm_up) is set per-task to that env's episode
+  # length (matching its demos file), since it varies per environment.
+  warm_up: ${.horizon_len}
+  batch_size: 100
+  tau: 0.003
+  noise:
+    type: 'fixed'
+    std_max: 0.2 # expl_noise
+    std_min: 0.2
+    tgt_pol_std: 0.1 # policy_noise
+    tgt_pol_noise_bound: 0.5 # noise_clip
+
+oops:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1 # OOPS matches whole episodes; subsampling would break the length match with the env
+
+  state_action: false # false = (state, next_state) atoms, matching the paper's reported runs
+  use_match: false # optional extra "which expert step" critic feature (off in the paper's reported runs)
+  aug_time: true
+
+  reward_scale: 5.0
+  sinkhorn_eps: 0.05 # lamda1
+  sinkhorn_iters: 1000 # max_iter (paper's Hopper run uses 20000; lowered here for parallel-env cost)
+  std_clip: 0.33
+  clip_state: true
+
+  expl_noise: 0.2
+  policy_noise: 0.1
+  noise_clip: 0.5
+  actor_clip: 0.0 # 0 disables actor grad clipping, matching the paper's reported run
+  critic_clip: 25.0
+
+  pal_alpha: 0.4
+  pal_min_priority: 1.0

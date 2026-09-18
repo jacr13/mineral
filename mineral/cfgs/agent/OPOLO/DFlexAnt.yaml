@@ -1,0 +1,7 @@
+defaults:
+  - /agent/DAC/DFlexAnt@_here_
+seed: ${..seed}
+algo: OPOLO
+
+opolo:
+  alpha: 0.1 # weight of the DICE ("AlgaeDICE") off-policy correction term

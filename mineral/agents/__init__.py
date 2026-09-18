@@ -4,12 +4,30 @@ from .ddpg.ddpg import DDPG
 from .diffrl.bptt import BPTT
 from .diffrl.shac import SHAC
 from .gail.gail import GAIL
-from .otil.ild import ILD
+from .oops.oops import OOPS
+from .opolo.opolo import OPOLO
 from .otil.diffmimic import DiffMimic
+from .otil.ild import ILD
 from .otil.otil import OTIL
 from .otil.otil_ppo import OTILPPO
 from .otil.otil_sac import OTILSAC
 from .ppo.ppo import PPO
+from .pwil.pwil import PWIL
 from .sac.sac import SAC
 
-__all__ = ['BC', 'DAC', 'DDPG', 'BPTT', 'SHAC', 'OTIL', 'ILD', 'DiffMimic', 'PPO', 'SAC', 'GAIL']
+__all__ = [
+    'BC',
+    'DAC',
+    'DDPG',
+    'BPTT',
+    'SHAC',
+    'OTIL',
+    'ILD',
+    'DiffMimic',
+    'PPO',
+    'SAC',
+    'GAIL',
+    'PWIL',
+    'OPOLO',
+    'OOPS',
+]

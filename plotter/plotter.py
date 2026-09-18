@@ -15,7 +15,7 @@ from wandb_api import get_group_runs, get_rew_steps_times
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
-FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots4"
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots6"
 
 
 EXPERTS = {
@@ -960,7 +960,7 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
         return
     output_stem = Path(output_stem)
     output_stem.parent.mkdir(parents=True, exist_ok=True)
-    legend_rows = math.ceil((len(results) + 1) / 3)
+    legend_rows = math.ceil(len(results) / 3)
     fig = plt.figure(figsize=(8, 3.8 + 0.25 * legend_rows), layout="constrained")
     grid = fig.add_gridspec(2, 1, height_ratios=[0.25 * legend_rows, 3])
     legend_ax = fig.add_subplot(grid[0])
@@ -977,7 +977,6 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
                          upper=float(upper[-1]), n_environments=result["n_envs"],
                          n_runs_per_environment=json.dumps(result["n_runs_per_env"]), x_axis=x_axis,
                          environment_intervals=json.dumps(result["endpoints"])))
-    ax.axhline(1, color=COLOR.get("Expert", "gray"), linestyle="--", label="Expert")
     ax.set_xlabel(f"{'Wall-time' if x_axis == 'time' else 'Step'} progress (%)")
     ax.set_ylabel("IQM Expert-Normalized Return")
     ax.margins(x=0)
@@ -994,7 +993,7 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
     return results
 
 
-def save_combined_aggregate_iqm(results_by_axis, output_dir):
+def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("vertical", "horizontal")):
     """Save time/step IQM panels in vertical and horizontal shared-legend layouts."""
     axes_order = ("time", "steps")
     if any(not results_by_axis.get(axis) for axis in axes_order):
@@ -1008,17 +1007,17 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir):
     colors = {algo: COLOR.get(normalize_algo_key(algo), cycle[i % len(cycle)])
               for i, algo in enumerate(algorithms)}
     paths = []
-    for orientation in ("vertical", "horizontal"):
+    for orientation in orientations:
         horizontal = orientation == "horizontal"
-        ncols = 5 if horizontal else 3
-        legend_rows = math.ceil((len(algorithms) + 1) / ncols)
+        ncols = len(algorithms) if horizontal else 3
+        legend_rows = math.ceil(len(algorithms) / ncols)
         fig = plt.figure(
-            figsize=(13 if horizontal else 8, (4 if horizontal else 7) + 0.25 * legend_rows),
+            figsize=(14 if horizontal else 8, 3.0 if horizontal else 7 + 0.25 * legend_rows),
             layout="constrained",
         )
         grid = fig.add_gridspec(
             2 if horizontal else 3, 2 if horizontal else 1,
-            height_ratios=[0.25 * legend_rows] + ([3] if horizontal else [3, 3]),
+            height_ratios=[0.3 if horizontal else 0.25 * legend_rows] + ([2.2] if horizontal else [3, 3]),
         )
         legend_ax = fig.add_subplot(grid[0, :])
         legend_ax.set_axis_off()
@@ -1034,10 +1033,6 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir):
                                 linewidth=3 if algo.lower().startswith("focus") else 2)
                 ax.fill_between(x, result["lower"], result["upper"], color=colors[algo], alpha=0.2)
                 legend_handles.setdefault(algo, line)
-            expert = ax.axhline(1, color=COLOR.get("Expert", "gray"), linestyle="--", label="Expert")
-            legend_handles.setdefault("Expert", expert)
-            title = "Wall-time" if axis == "time" else "Steps"
-            ax.set_title(title)
             ax.set_xlabel(f"{'Wall-time' if axis == 'time' else 'Step'} progress (%)")
             if not horizontal or index == 0:
                 ax.set_ylabel("IQM Expert-Normalized Return")
@@ -1046,9 +1041,20 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir):
             ax.set_xticks(np.arange(0, 101, 20))
             ax.margins(x=0)
             ax.spines[["right", "top"]].set_visible(False)
-        labels = algorithms + ["Expert"]
-        legend_ax.legend([legend_handles[label] for label in labels], labels,
-                         loc="center", ncol=ncols, frameon=False, fontsize=8)
+        labels = algorithms
+        legend = legend_ax.legend(
+            [legend_handles[label] for label in labels], labels,
+            loc="center", ncol=ncols, frameon=False, fontsize=11 if horizontal else 8,
+            columnspacing=1.0, handletextpad=0.5,
+        )
+        if horizontal:
+            # Measure before layout so an oversized legend cannot collapse axes.
+            fig.set_layout_engine(None)
+            fig.canvas.draw()
+            legend_width = legend.get_window_extent(fig.canvas.get_renderer()).width / fig.dpi
+            if legend_width + 0.6 > fig.get_figwidth():
+                fig.set_size_inches(legend_width + 0.6, fig.get_figheight())
+            fig.set_layout_engine("constrained")
         path = output_dir / f"aggregate_iqm95ci_{orientation}.png"
         fig.savefig(path, dpi=200, bbox_inches="tight")
         plt.close(fig)
@@ -1172,6 +1178,7 @@ def main(
     x_axis="time",
     center_stat="mean",
     band="std",
+    aggregate_only=False,
 ):
     plotter_dir = Path(__file__).resolve().parent
     grouped_exp_path = plotter_dir / "grouped_exp_urls.yaml"
@@ -1363,6 +1370,9 @@ def main(
                         last_x = step_grid[-1]
                     print(env_name, algo, ep_rew.shape, last_x)
 
+    if create_plots and aggregate_only:
+        return build_aggregate_iqm_results(data, x_axis=x_axis)
+
     if create_plots:
         table_stem = FOLDER_TO_SAVE_PLOTS / f"final_return_table_{center_stat}{band}_{x_axis}"
         save_results_table(
@@ -1424,10 +1434,13 @@ def main(
 
 
 if __name__ == "__main__":
-    # sync exp from the remote server
+    # True: only the horizontal time/steps IQM figure. False: all outputs.
+    ONLY_HORIZONTAL_AGGREGATED_IQM = True
+
     aggregate_results = {}
-    for center_stat in ["mean", "median"]:
-        for band in ["95ci"]:
+    center_stats = ["mean"] if ONLY_HORIZONTAL_AGGREGATED_IQM else ["mean", "median"]
+    for center_stat in center_stats:
+        for band in ["95ci"]:  # ["95ci", "std"]:
             for x_axis in ["time", "steps"]:
                 aggregate_results[x_axis] = main(
                     sync_remote=False,
@@ -1436,15 +1449,11 @@ if __name__ == "__main__":
                     x_axis=x_axis,
                     center_stat=center_stat,
                     band=band,
+                    aggregate_only=ONLY_HORIZONTAL_AGGREGATED_IQM,
                 )
 
-    save_combined_aggregate_iqm(aggregate_results, FOLDER_TO_SAVE_PLOTS)
-
-    # main(
-    #     sync_remote=True,
-    #     update_group_runs=True,
-    #     create_plots=True,
-    #     x_axis="time",
-    #     center_stat="mean",
-    #     band="std",
-    # )
+    save_combined_aggregate_iqm(
+        aggregate_results,
+        FOLDER_TO_SAVE_PLOTS,
+        orientations=("horizontal",) if ONLY_HORIZONTAL_AGGREGATED_IQM else ("vertical", "horizontal"),
+    )
