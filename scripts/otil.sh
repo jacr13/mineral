@@ -28,12 +28,12 @@ PARAMS_CRITIC_RM=(
   "agent.otil.critic_reward_mapping=log_exp"
   "agent.otil.critic_reward_mapping=exp"
   "agent.otil.critic_reward_mapping=log_exp"
-  "agent.otil.critic_reward_mapping=neg"
-  "agent.otil.critic_reward_mapping=neg"
-  "agent.otil.critic_reward_mapping=exp"
-  "agent.otil.critic_reward_mapping=log_exp"
-  "agent.otil.critic_reward_mapping=exp"
-  "agent.otil.critic_reward_mapping=log_exp"
+  # "agent.otil.critic_reward_mapping=neg"
+  # "agent.otil.critic_reward_mapping=neg"
+  # "agent.otil.critic_reward_mapping=exp"
+  # "agent.otil.critic_reward_mapping=log_exp"
+  # "agent.otil.critic_reward_mapping=exp"
+  # "agent.otil.critic_reward_mapping=log_exp"
 )
 
 PARAMS_OT_COST_TYPE=(
@@ -41,12 +41,12 @@ PARAMS_OT_COST_TYPE=(
   "agent.otil.loss_ot_cost_type=l2"
   "agent.otil.loss_ot_cost_type=cosine"
   "agent.otil.loss_ot_cost_type=cosine"
-  "agent.otil.loss_ot_cost_type=l2"
-  "agent.otil.loss_ot_cost_type=l2"
-  "agent.otil.loss_ot_cost_type=l2"
-  "agent.otil.loss_ot_cost_type=l2"
-  "agent.otil.loss_ot_cost_type=cosine"
-  "agent.otil.loss_ot_cost_type=cosine"
+  # "agent.otil.loss_ot_cost_type=l2"
+  # "agent.otil.loss_ot_cost_type=l2"
+  # "agent.otil.loss_ot_cost_type=l2"
+  # "agent.otil.loss_ot_cost_type=l2"
+  # "agent.otil.loss_ot_cost_type=cosine"
+  # "agent.otil.loss_ot_cost_type=cosine"
 )
 
 PARAMS_MLP_FEATURES_DIM=(
@@ -54,12 +54,12 @@ PARAMS_MLP_FEATURES_DIM=(
   "agent.otil.loss_mlp_features_dim=64"
   "agent.otil.loss_mlp_features_dim=null"
   "agent.otil.loss_mlp_features_dim=null"
-  "agent.otil.loss_mlp_features_dim=64"
-  "agent.otil.loss_mlp_features_dim=64"
-  "agent.otil.loss_mlp_features_dim=64"
-  "agent.otil.loss_mlp_features_dim=64"
-  "agent.otil.loss_mlp_features_dim=null"
-  "agent.otil.loss_mlp_features_dim=null"
+  # "agent.otil.loss_mlp_features_dim=64"
+  # "agent.otil.loss_mlp_features_dim=64"
+  # "agent.otil.loss_mlp_features_dim=64"
+  # "agent.otil.loss_mlp_features_dim=64"
+  # "agent.otil.loss_mlp_features_dim=null"
+  # "agent.otil.loss_mlp_features_dim=null"
 )
 
 PARAMS_CRITIC_DISABLED=(
@@ -67,12 +67,12 @@ PARAMS_CRITIC_DISABLED=(
   "agent.otil.critic_disabled=false"
   "agent.otil.critic_disabled=false"
   "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=true"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
+  # "agent.otil.critic_disabled=false"
+  # "agent.otil.critic_disabled=true"
+  # "agent.otil.critic_disabled=false"
+  # "agent.otil.critic_disabled=false"
+  # "agent.otil.critic_disabled=false"
+  # "agent.otil.critic_disabled=false"
 )
 
 PARAMS_CRITIC_REWARD_SHAPPING=(
@@ -80,12 +80,12 @@ PARAMS_CRITIC_REWARD_SHAPPING=(
   "agent.otil.critic_reward_shapping=true"
   "agent.otil.critic_reward_shapping=true"
   "agent.otil.critic_reward_shapping=true"
-  "agent.otil.critic_reward_shapping=true"
-  "agent.otil.critic_reward_shapping=true"
-  "agent.otil.critic_reward_shapping=false"
-  "agent.otil.critic_reward_shapping=false"
-  "agent.otil.critic_reward_shapping=false"
-  "agent.otil.critic_reward_shapping=false"
+  # "agent.otil.critic_reward_shapping=true"
+  # "agent.otil.critic_reward_shapping=true"
+  # "agent.otil.critic_reward_shapping=false"
+  # "agent.otil.critic_reward_shapping=false"
+  # "agent.otil.critic_reward_shapping=false"
+  # "agent.otil.critic_reward_shapping=false"
 )
 
 PARAMS_AGENT_BASE=(

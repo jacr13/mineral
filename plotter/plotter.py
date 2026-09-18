@@ -1,10 +1,13 @@
 import csv
+import json
+import warnings
 import math
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from scipy.stats import trim_mean
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from utils import load_yaml, save_yaml, sync_exp_from_remote
 from wandb_api import get_group_runs, get_rew_steps_times
@@ -12,7 +15,7 @@ from wandb_api import get_group_runs, get_rew_steps_times
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
-FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots_ZOCUS"
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots4"
 
 
 EXPERTS = {
@@ -75,6 +78,15 @@ ALGOS = [
     "ZOCUS-PPO-OT-cos",
 ]
 
+IGNORE_ALGOS = [
+    "ZOCUS-SAC-l2",
+    "ZOCUS-SAC-OT-l2",
+    "ZOCUS-SAC-OT-cos",
+    "ZOCUS-PPO-l2",
+    "ZOCUS-PPO-OT-l2",
+    "ZOCUS-PPO-OT-cos",  
+]
+
 ALGO_DISPLAY = {}
 
 ALGO_INDEX = {algo: idx for idx, algo in enumerate(ALGOS)}
@@ -129,7 +141,7 @@ def normalize_center_stat(center_stat):
     center_stat = str(center_stat).lower()
     if center_stat == "media":
         center_stat = "median"
-    if center_stat not in {"mean", "median"}:
+    if center_stat not in {"mean", "median", "iqm"}:
         raise ValueError(f"Unknown center_stat: {center_stat}")
     return center_stat
 
@@ -143,15 +155,33 @@ def normalize_band(band):
     return band
 
 
+def interquartile_mean(values, axis=0):
+    """Compute a 25% trimmed mean, trimming floor(n / 4) from each tail.
+
+    With fewer than four runs, no observations are trimmed.
+    """
+    return trim_mean(values, proportiontocut=0.25, axis=axis)
+
+
+def get_center_statistic(center_stat):
+    return {"mean": np.mean, "median": np.median, "iqm": interquartile_mean}[
+        normalize_center_stat(center_stat)
+    ]
+
+
 def compute_center_and_band(values, *, center_stat="mean", band="std"):
+    """Return a standard-deviation band or a percentile bootstrap 95% CI.
+
+    Bootstrap intervals use 10,000 resamples of runs and a fixed seed.
+    They are pointwise intervals for the selected mean, median, or IQM, not a
+    simultaneous confidence band for the entire curve.
+    """
     values = np.asarray(values, dtype=np.float64)
     center_stat = normalize_center_stat(center_stat)
     band = normalize_band(band)
 
-    if center_stat == "mean":
-        center = values.mean(axis=0)
-    else:
-        center = np.median(values, axis=0)
+    statistic = get_center_statistic(center_stat)
+    center = statistic(values, axis=0)
 
     if band == "std":
         spread = values.std(axis=0)
@@ -160,19 +190,26 @@ def compute_center_and_band(values, *, center_stat="mean", band="std"):
         return center, lower, upper
 
     n_runs = values.shape[0]
-    if center_stat == "mean":
-        if n_runs < 2:
-            lower = center.copy()
-            upper = center.copy()
-        else:
-            std = values.std(axis=0, ddof=1)
-            sem = std / np.sqrt(n_runs)
-            half_width = 1.96 * sem
-            lower = center - half_width
-            upper = center + half_width
-    else:
-        lower = np.percentile(values, 2.5, axis=0)
-        upper = np.percentile(values, 97.5, axis=0)
+    if n_runs == 0:
+        raise ValueError("Bootstrap confidence intervals require at least one run")
+    if n_runs == 1:
+        return center, center.copy(), center.copy()
+
+    n_resamples = 10_000
+    rng = np.random.default_rng(0)
+    indices = rng.integers(n_runs, size=(n_resamples, n_runs))
+    flat_values = values.reshape(n_runs, -1)
+    bounds = np.empty((2, flat_values.shape[1]))
+    # Bound temporary sample arrays and reuse run draws across all points
+    # to preserve dependence within each run's trajectory.
+    chunk_size = max(1, 1_000_000 // (n_resamples * n_runs))
+    for start in range(0, flat_values.shape[1], chunk_size):
+        stop = start + chunk_size
+        samples = flat_values[:, start:stop][indices]
+        estimates = statistic(samples, axis=1)
+        bounds[:, start:stop] = np.percentile(estimates, [2.5, 97.5], axis=0)
+    lower = bounds[0].reshape(center.shape)
+    upper = bounds[1].reshape(center.shape)
 
     return center, lower, upper
 
@@ -222,6 +259,9 @@ def build_results_table(
                     continue
 
                 common_end_time = min(times[-1] for times, _ in timed_curves)
+                max_time_cap = MAX_TIME_PER_ENV.get(env_name)
+                if max_time_cap is not None and max_time_cap > 0:
+                    common_end_time = min(common_end_time, max_time_cap)
                 if common_end_time <= 0:
                     continue
                 n_points = min(returns.size for _, returns in timed_curves)
@@ -236,6 +276,9 @@ def build_results_table(
                     np.asarray(steps, dtype=np.float64) for steps in step_grids if steps is not None and len(steps) > 0
                 ]
                 final_x = min(steps[-1] for steps in valid_steps) if valid_steps else np.nan
+                max_steps_cap = MAX_STEPS_PER_ENV.get(env_name)
+                if max_steps_cap is not None and not np.isnan(final_x):
+                    final_x = min(final_x, max_steps_cap)
                 final_x_unit = "steps"
             else:
                 raise ValueError(f"Unknown x_axis: {x_axis}")
@@ -394,12 +437,8 @@ def plot_results_like_first(
         ax = axes[ax_idx]
         env_data = data[env_name]
 
-        if env_name == "hopper":
-            center_stat_ = "mean"
-            band_ = "std"
-        else:
-            center_stat_ = center_stat
-            band_ = band
+        center_stat_ = center_stat
+        band_ = band
 
         # Determine common x
         n_points = None
@@ -763,6 +802,163 @@ def plot_single_env(
     plt.close(fig)
 
 
+def equal_environment_iqm(values, weights):
+    """Average the middle 50% of weighted score mass along the penultimate axis.
+
+    Each environment has total mass 1 / n_environments. Observations crossing
+    the 25% or 75% boundary contribute only their overlapping mass.
+    """
+    order = np.argsort(values, axis=-2)
+    sorted_values = np.take_along_axis(values, order, axis=-2)
+    weights = np.broadcast_to(np.asarray(weights)[:, None], values.shape)
+    sorted_weights = np.take_along_axis(weights, order, axis=-2)
+    upper_mass = np.cumsum(sorted_weights, axis=-2)
+    lower_mass = upper_mass - sorted_weights
+    retained = np.maximum(0, np.minimum(upper_mass, 0.75) - np.maximum(lower_mass, 0.25))
+    return np.sum(sorted_values * retained, axis=-2) / 0.5
+
+
+def compute_aggregate_iqm(values, *, n_resamples=10_000, seed=0):
+    """Compute equally weighted task IQM with a stratified bootstrap CI.
+
+    Accept one (seed, point) array per environment, with unequal seed counts.
+    Resample the original number of seeds independently within each fixed
+    environment, preserving whole trajectories across training points.
+    """
+    arrays = [np.asarray(value, dtype=np.float64) for value in values]
+    if not arrays or any(a.ndim != 2 or 0 in a.shape for a in arrays):
+        raise ValueError("Expected nonempty (seed, point) arrays per environment")
+    if len({a.shape[1] for a in arrays}) != 1:
+        raise ValueError("All environments must use the same number of points")
+    if any(not np.isfinite(a).all() for a in arrays):
+        raise ValueError("Aggregate scores must be finite")
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be positive")
+    n_envs, n_points = len(arrays), arrays[0].shape[1]
+    counts = [a.shape[0] for a in arrays]
+    weights = np.concatenate([np.full(n, 1 / (n_envs * n)) for n in counts])
+    center = equal_environment_iqm(np.concatenate(arrays), weights)
+    rng = np.random.default_rng(seed)
+    indices = [rng.integers(n, size=(n_resamples, n)) for n in counts]
+    bounds = np.empty((2, n_points))
+    chunk_size = max(1, 1_000_000 // (n_resamples * sum(counts)))
+    for start in range(0, n_points, chunk_size):
+        samples = np.concatenate([
+            a[:, start:start + chunk_size][draw] for a, draw in zip(arrays, indices)
+        ], axis=1)
+        estimates = equal_environment_iqm(samples, weights)
+        bounds[:, start:start + chunk_size] = np.percentile(estimates, [2.5, 97.5], axis=0)
+    return center, bounds[0], bounds[1]
+
+
+def build_aggregate_iqm_results(data, *, x_axis, n_points=1000):
+    """Normalize and align algorithms represented in every benchmark task."""
+    if x_axis not in {"time", "steps"}:
+        raise ValueError(f"Unknown x_axis: {x_axis}")
+    env_names = list(ENV_NAMES)
+    grid_key = "agent_times" if x_axis == "time" else "agent_steps"
+    caps = MAX_TIME_PER_ENV if x_axis == "time" else MAX_STEPS_PER_ENV
+    prepared = {env: {} for env in env_names}
+    for env in env_names:
+        for key, entry in data.get(env, {}).items():
+            algo = get_algo_display(key, ALGO_DISPLAY)
+            if algo not in ALGOS or algo == "Expert":
+                continue
+            curves = entry.get("data", [])
+            grids = entry.get(grid_key, [])
+            if len(curves) != len(grids):
+                raise ValueError(f"Missing {grid_key} for {env}/{algo}")
+            for grid, curve in zip(grids, curves):
+                grid, curve = np.asarray(grid), np.asarray(curve)
+                if (grid.ndim != 1 or curve.ndim != 1 or grid.size < 2
+                        or grid.size != curve.size or not np.isfinite(grid).all()
+                        or not np.isfinite(curve).all() or np.any(np.diff(grid) <= 0)):
+                    raise ValueError(f"Invalid aggregate curve for {env}/{algo}")
+                prepared[env].setdefault(algo, []).append((grid, curve))
+
+    eligible = []
+    for algo in ALGOS:
+        counts = [len(prepared[env].get(algo, [])) for env in env_names]
+        if not any(counts):
+            continue
+        if not all(counts):
+            warnings.warn(f"Skipping aggregate IQM for {algo}: seed counts by environment "
+                          f"{dict(zip(env_names, counts))}; at least one run per environment required", stacklevel=2)
+            continue
+        eligible.append(algo)
+    if not eligible:
+        return {}
+
+    aligned = {algo: [] for algo in eligible}
+    endpoints = {}
+    for env in env_names:
+        runs = [run for algo in eligible for run in prepared[env][algo]]
+        start = max(grid[0] for grid, _ in runs)
+        end = min(grid[-1] for grid, _ in runs)
+        if caps.get(env) is not None:
+            end = min(end, caps[env])
+        if end <= start:
+            raise ValueError(f"No shared training interval for {env}")
+        expert = float(EXPERTS[env]["mean"])
+        if not np.isfinite(expert) or expert <= 0:
+            raise ValueError(f"Positive expert return required for {env}")
+        grid = np.linspace(start, end, n_points)
+        endpoints[env] = {"start": float(start), "end": float(end)}
+        for algo in eligible:
+            aligned[algo].append(np.vstack([
+                np.interp(grid, run_grid, curve) / expert
+                for run_grid, curve in prepared[env][algo]
+            ]))
+    results = {}
+    for algo, arrays in aligned.items():
+        center, lower, upper = compute_aggregate_iqm(arrays)
+        results[algo] = dict(center=center, lower=lower, upper=upper,
+                             n_envs=len(env_names),
+                             n_runs_per_env=dict(zip(env_names, [a.shape[0] for a in arrays])),
+                             endpoints=endpoints)
+    return results
+
+
+def save_aggregate_iqm(data, output_stem, *, x_axis):
+    """Save the pooled IQM curve and final score with a stratified 95% CI."""
+    results = build_aggregate_iqm_results(data, x_axis=x_axis)
+    if not results:
+        return
+    output_stem = Path(output_stem)
+    output_stem.parent.mkdir(parents=True, exist_ok=True)
+    legend_rows = math.ceil((len(results) + 1) / 3)
+    fig = plt.figure(figsize=(8, 3.8 + 0.25 * legend_rows), layout="constrained")
+    grid = fig.add_gridspec(2, 1, height_ratios=[0.25 * legend_rows, 3])
+    legend_ax = fig.add_subplot(grid[0])
+    legend_ax.set_axis_off()
+    ax = fig.add_subplot(grid[1])
+    rows = []
+    for algo, result in results.items():
+        center, lower, upper = (result[key] for key in ("center", "lower", "upper"))
+        x = np.linspace(0, 100, len(center))
+        line, = ax.plot(x, center, label=algo, color=COLOR.get(normalize_algo_key(algo)),
+                        linewidth=3 if algo.lower().startswith("focus") else 2)
+        ax.fill_between(x, lower, upper, color=line.get_color(), alpha=0.2)
+        rows.append(dict(algorithm=algo, iqm=float(center[-1]), lower=float(lower[-1]),
+                         upper=float(upper[-1]), n_environments=result["n_envs"],
+                         n_runs_per_environment=json.dumps(result["n_runs_per_env"]), x_axis=x_axis,
+                         environment_intervals=json.dumps(result["endpoints"])))
+    ax.axhline(1, color=COLOR.get("Expert", "gray"), linestyle="--", label="Expert")
+    ax.set_xlabel(f"{'Wall-time' if x_axis == 'time' else 'Step'} progress (%)")
+    ax.set_ylabel("IQM Expert-Normalized Return")
+    ax.margins(x=0)
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.set_xticks(np.arange(0, 101, 20))
+    handles, labels = ax.get_legend_handles_labels()
+    legend_ax.legend(handles, labels, loc="center", ncol=3, frameon=False, fontsize=8)
+    fig.savefig(output_stem.with_suffix(".png"), dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    with output_stem.with_suffix(".csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def plot_median_across_envs(
     data,
     output_path,
@@ -775,7 +971,7 @@ def plot_median_across_envs(
     center_stat="mean",
     ylim_top=1.1,
 ):
-    """Builds a single curve per algo = median across environments of the per-env mean curves.
+    """Builds a single curve per algo = median across environments of the per-env center curves.
     Assumes all curves already interpolated to same n_points in your data collection step.
     """
     env_names = list(data.keys())
@@ -813,10 +1009,7 @@ def plot_median_across_envs(
             if disp not in per_algo_env_means:
                 continue
             values = np.vstack(algo_data["data"])
-            if center_stat == "mean":
-                mean = values.mean(axis=0)
-            else:
-                mean = np.median(values, axis=0)
+            mean = get_center_statistic(center_stat)(values, axis=0)
 
             if normalize_expert and expert_mean is not None and expert_mean != 0:
                 mean = mean / expert_mean
@@ -922,6 +1115,8 @@ def main(
     for env_name, algos in group_runs.items():
         data[env_name] = {}
         for algo, algo_values in algos.items():
+            if algo in IGNORE_ALGOS:
+                continue
             data[env_name][algo] = {
                 "data": [],
                 "agent_steps": [],
@@ -1123,23 +1318,18 @@ def main(
                 band=band,
             )
 
-        median_path = FOLDER_TO_SAVE_PLOTS / "median_rewards.png"
-        plot_median_across_envs(
+        save_aggregate_iqm(
             data,
-            median_path,
-            COLOR=COLOR,
-            ALGOS=ALGOS,
-            ALGO_DISPLAY=ALGO_DISPLAY,
-            EXPERTS=EXPERTS,
-            normalize_expert=True,
-            center_stat=center_stat,
+            FOLDER_TO_SAVE_PLOTS / f"aggregate_iqm95ci_{x_axis}",
+            x_axis=x_axis,
         )
+
 
 
 if __name__ == "__main__":
     # sync exp from the remote server
     for center_stat in ["mean", "median"]:
-        for band in ["std", "95ci"]:
+        for band in ["95ci"]:
             for x_axis in ["time", "steps"]:
                 main(
                     sync_remote=False,

@@ -437,11 +437,11 @@ ant:
     run_id: idaho-vegan-glucose-lion-social-poYK.OTIL.DFlex_ant_64.seed1100
     entity: jacr
     project: OTIL_SAPO-dflex_ant-slurm-new
-  - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_7
-    seed: 110
-    run_id: idaho-vegan-glucose-lion-social-PrnD.OTIL.DFlex_ant_64.seed110
-    entity: jacr
-    project: OTIL_SAPO-dflex_ant-slurm-new
+  # - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_7
+  #   seed: 110
+  #   run_id: idaho-vegan-glucose-lion-social-PrnD.OTIL.DFlex_ant_64.seed110
+  #   entity: jacr
+  #   project: OTIL_SAPO-dflex_ant-slurm-new
   - logdir: workdir/DFlexAnt10M-OTIL_SHAC_20260120_213858/sweep_23
     seed: 1200
     run_id: idaho-vegan-glucose-lion-social-yXne.OTIL.DFlex_ant_64.seed1200
@@ -796,16 +796,16 @@ humanoid:
     run_id: michigan-neptune-august-thirteen-east-q7Y9.OTIL.DFlex_humanoid_64.seed120
     entity: jacr
     project: OTIL_SAPO-dflex_humanoid-slurm-new
-  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_19
-    seed: 1100
-    run_id: michigan-neptune-august-thirteen-east-FWzW.OTIL.DFlex_humanoid_64.seed1100
-    entity: jacr
-    project: OTIL_SAPO-dflex_humanoid-slurm-new
-  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_15
-    seed: 1000
-    run_id: michigan-neptune-august-thirteen-east-D19H.OTIL.DFlex_humanoid_64.seed1000
-    entity: jacr
-    project: OTIL_SAPO-dflex_humanoid-slurm-new
+  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_19
+  #   seed: 1100
+  #   run_id: michigan-neptune-august-thirteen-east-FWzW.OTIL.DFlex_humanoid_64.seed1100
+  #   entity: jacr
+  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
+  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_15
+  #   seed: 1000
+  #   run_id: michigan-neptune-august-thirteen-east-D19H.OTIL.DFlex_humanoid_64.seed1000
+  #   entity: jacr
+  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
   - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_071045/sweep_3
     seed: 100
     run_id: michigan-neptune-august-thirteen-east-TvQZ.OTIL.DFlex_humanoid_64.seed100
@@ -822,16 +822,16 @@ humanoid:
     run_id: michigan-ten-magnesium-high-speaker-OIE8.OTIL.DFlex_humanoid_64.seed100
     entity: jacr
     project: OTIL_SAPO-dflex_humanoid-slurm-new
-  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_7
-    seed: 110
-    run_id: michigan-ten-magnesium-high-speaker-0L1G.OTIL.DFlex_humanoid_64.seed110
-    entity: jacr
-    project: OTIL_SAPO-dflex_humanoid-slurm-new
-  - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_19
-    seed: 1100
-    run_id: michigan-ten-magnesium-high-speaker-8o6M.OTIL.DFlex_humanoid_64.seed1100
-    entity: jacr
-    project: OTIL_SAPO-dflex_humanoid-slurm-new
+  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_7
+  #   seed: 110
+  #   run_id: michigan-ten-magnesium-high-speaker-0L1G.OTIL.DFlex_humanoid_64.seed110
+  #   entity: jacr
+  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
+  # - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_19
+  #   seed: 1100
+  #   run_id: michigan-ten-magnesium-high-speaker-8o6M.OTIL.DFlex_humanoid_64.seed1100
+  #   entity: jacr
+  #   project: OTIL_SAPO-dflex_humanoid-slurm-new
   - logdir: workdir/DFlexHumanoid10M-OTIL_SHAC_20260121_111202/sweep_11
     seed: 120
     run_id: michigan-ten-magnesium-high-speaker-xDO7.OTIL.DFlex_humanoid_64.seed120
@@ -848,31 +848,31 @@ humanoid:
     run_id: blue-muppet-timing-harry-orange-2ABW.ILD.DFlex_humanoid_64.seed1000
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_6
-    seed: 100
-    run_id: blue-muppet-timing-harry-orange-iDTu.ILD.DFlex_humanoid_64.seed100
-    entity: jacr
-    project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_38
-    seed: 1100
-    run_id: blue-muppet-timing-harry-orange-ONuP.ILD.DFlex_humanoid_64.seed1100
-    entity: jacr
-    project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_6
+  #   seed: 100
+  #   run_id: blue-muppet-timing-harry-orange-iDTu.ILD.DFlex_humanoid_64.seed100
+  #   entity: jacr
+  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_38
+  #   seed: 1100
+  #   run_id: blue-muppet-timing-harry-orange-ONuP.ILD.DFlex_humanoid_64.seed1100
+  #   entity: jacr
+  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
   - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154109/sweep_46
     seed: 1200
     run_id: blue-muppet-timing-harry-orange-z07W.ILD.DFlex_humanoid_64.seed1200
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_22
-    seed: 120
-    run_id: blue-muppet-timing-harry-orange-zRxb.ILD.DFlex_humanoid_64.seed120
-    entity: jacr
-    project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_14
-    seed: 110
-    run_id: blue-muppet-timing-harry-orange-3SRf.ILD.DFlex_humanoid_64.seed110
-    entity: jacr
-    project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_22
+  #   seed: 120
+  #   run_id: blue-muppet-timing-harry-orange-zRxb.ILD.DFlex_humanoid_64.seed120
+  #   entity: jacr
+  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  # - logdir: workdir/DFlexHumanoid10M-ILD_20260122_154108/sweep_14
+  #   seed: 110
+  #   run_id: blue-muppet-timing-harry-orange-3SRf.ILD.DFlex_humanoid_64.seed110
+  #   entity: jacr
+  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
   - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163740/sweep_22
     seed: 1300
     run_id: blue-muppet-timing-harry-orange-BDWG.ILD.DFlex_humanoid_64.seed1300
@@ -888,11 +888,11 @@ humanoid:
     run_id: blue-muppet-timing-harry-orange-UW0Z.ILD.DFlex_humanoid_64.seed130
     entity: jacr
     project: ILD_SAPO-sweep-dflex_humanoid-slurm
-  - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163739_01/sweep_14
-    seed: 140
-    run_id: blue-muppet-timing-harry-orange-ZKbn.ILD.DFlex_humanoid_64.seed140
-    entity: jacr
-    project: ILD_SAPO-sweep-dflex_humanoid-slurm
+  # - logdir: workdir/DFlexHumanoid10M-ILD_20260123_163739_01/sweep_14
+  #   seed: 140
+  #   run_id: blue-muppet-timing-harry-orange-ZKbn.ILD.DFlex_humanoid_64.seed140
+  #   entity: jacr
+  #   project: ILD_SAPO-sweep-dflex_humanoid-slurm
   SAMfO/DACfO:
   - logdir: workdir/DFlexHumanoid10M-DAC_20260114_225153/sweep_6
     seed: 100
