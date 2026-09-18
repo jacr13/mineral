@@ -28,11 +28,18 @@ run: train_eval
 seed: 110
 
 sweep:
-  seed: [100, 110, 120]
-  agent.oops.sinkhorn_eps: [0.01, 0.05, 0.1]
-  agent.oops.reward_scale: [1.0, 5.0, 10.0]
-  agent.oops.state_action: [true, false]
-  agent.oops.aug_time: [true, false]
+  seed: [100, 110, 120, 1000, 1100, 1200]
+  # agent.oops.sinkhorn_eps: [0.01, 0.05, 0.1]  (0.05 matches the paper's reported lamda1)
+  agent.oops.sinkhorn_eps: 0.05
+  # agent.oops.reward_scale: [1.0, 5.0, 10.0]  (5.0 matches the paper's reported reward_scale)
+  agent.oops.reward_scale: 5.0
+  # agent.oops.state_action: [true, false]  (false matches the paper's reported runs)
+  agent.oops.state_action: false
+  # agent.oops.aug_time: [true, false]  (true matches the paper's reported --aug_time runs)
+  agent.oops.aug_time: true
+  # sinkhorn convergence vs. per-episode compute: 1000 is the repo default,
+  # 20000 matches the paper's own reported Hopper run.
+  agent.oops.sinkhorn_iters: [1000, 5000, 20000]
 
 spawner:
   runtime: "7h30m"
