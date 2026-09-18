@@ -365,28 +365,62 @@ def save_results_table(
         writer.writeheader()
         writer.writerows(rows)
 
-    env_names = list(dict.fromkeys(row["environment_name"] for row in rows))
+    band = normalize_band(band)
+    present_envs = list(dict.fromkeys(row["environment_name"] for row in rows))
+    preferred_envs = ["Hopper", "Ant", "Humanoid", "SNU Humanoid"]
+    env_names = [env for env in preferred_envs if env in present_envs]
+    env_names.extend(env for env in present_envs if env not in env_names)
     algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
+    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "ILD",
+                       "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
+    order = {name: index for index, name in enumerate(preferred_algos)}
+    algo_names.sort(key=lambda name: (name.startswith("FOCUS"), order.get(name, -1)))
     values_by_env_algo = {(row["environment_name"], row["algorithm_display"]): row for row in rows}
+    best_by_env = {
+        env: max((row["center"] for row in rows
+                  if row["environment_name"] == env and row["algorithm_display"] != "Expert"
+                  and np.isfinite(row["center"])), default=None)
+        for env in env_names
+    }
+    method_labels = {
+        "FOCUS-l2": r"\mytitleshort-L2",
+        "FOCUS-OT-l2": r"\mytitleshort-OT-L2",
+        "FOCUS-OT-cos": r"\mytitleshort-OT-Cos",
+    }
 
-    def format_cell(row):
+    def format_cell(row, env):
         if row is None:
             return "--"
         if band == "std":
             spread = max(row["center"] - row["lower"], row["upper"] - row["center"])
-            return rf"{row['center']:.3f} $\pm$ {spread:.3f}"
-        return rf"{row['center']:.3f} [{row['lower']:.3f}, {row['upper']:.3f}]"
+            content = rf"{row['center']:.3f} \pm {spread:.3f}"
+        else:
+            # Preserve asymmetric bootstrap intervals exactly.
+            content = rf"{row['center']:.3f}\;[{row['lower']:.3f}, {row['upper']:.3f}]"
+        if row["algorithm_display"] != "Expert" and row["center"] == best_by_env[env]:
+            content = rf"\mathbf{{{content}}}"
+        return f"${content}$"
 
     latex_lines = [
-        rf"\begin{{tabular}}{{l{'c' * len(algo_names)}}}",
-        r"\toprule",
-        "Environment & " + " & ".join(_latex_escape(name) for name in algo_names) + r" \\",
-        r"\midrule",
+        rf"\begin{{tabular}}{{l{'c' * len(env_names)}}}",
+        r"  \toprule",
+        "  Method & " + " & ".join(_latex_escape(name) for name in env_names) + r" \\",
+        r"  \midrule",
+        "",
     ]
-    for env_name in env_names:
-        cells = [format_cell(values_by_env_algo.get((env_name, algo_name))) for algo_name in algo_names]
-        latex_lines.append(_latex_escape(env_name) + " & " + " & ".join(cells) + r" \\")
-    latex_lines.extend([r"\bottomrule", r"\end{tabular}", ""])
+    focus_started = False
+    for index, algo_name in enumerate(algo_names):
+        if algo_name.startswith("FOCUS") and not focus_started:
+            if index:
+                latex_lines.extend([r"  \midrule", ""])
+            focus_started = True
+        latex_lines.append("  " + method_labels.get(algo_name, _latex_escape(algo_name)))
+        for env_index, env_name in enumerate(env_names):
+            cell = format_cell(values_by_env_algo.get((env_name, algo_name)), env_name)
+            ending = r" \\" if env_index == len(env_names) - 1 else ""
+            latex_lines.append("  & " + cell + ending)
+        latex_lines.append("")
+    latex_lines.extend([r"  \bottomrule", r"\end{tabular}", ""])
     tex_path.write_text("\n".join(latex_lines), encoding="utf-8")
 
     return csv_path, tex_path
@@ -957,6 +991,69 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    return results
+
+
+def save_combined_aggregate_iqm(results_by_axis, output_dir):
+    """Save time/step IQM panels in vertical and horizontal shared-legend layouts."""
+    axes_order = ("time", "steps")
+    if any(not results_by_axis.get(axis) for axis in axes_order):
+        return []
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    algorithms = list(dict.fromkeys(
+        algo for axis in axes_order for algo in results_by_axis[axis]
+    ))
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = {algo: COLOR.get(normalize_algo_key(algo), cycle[i % len(cycle)])
+              for i, algo in enumerate(algorithms)}
+    paths = []
+    for orientation in ("vertical", "horizontal"):
+        horizontal = orientation == "horizontal"
+        ncols = 5 if horizontal else 3
+        legend_rows = math.ceil((len(algorithms) + 1) / ncols)
+        fig = plt.figure(
+            figsize=(13 if horizontal else 8, (4 if horizontal else 7) + 0.25 * legend_rows),
+            layout="constrained",
+        )
+        grid = fig.add_gridspec(
+            2 if horizontal else 3, 2 if horizontal else 1,
+            height_ratios=[0.25 * legend_rows] + ([3] if horizontal else [3, 3]),
+        )
+        legend_ax = fig.add_subplot(grid[0, :])
+        legend_ax.set_axis_off()
+        panels = []
+        legend_handles = {}
+        for index, axis in enumerate(axes_order):
+            ax = fig.add_subplot(grid[1, index] if horizontal else grid[index + 1, 0],
+                                 sharey=panels[0] if panels else None)
+            panels.append(ax)
+            for algo, result in results_by_axis[axis].items():
+                x = np.linspace(0, 100, len(result["center"]))
+                line, = ax.plot(x, result["center"], label=algo, color=colors[algo],
+                                linewidth=3 if algo.lower().startswith("focus") else 2)
+                ax.fill_between(x, result["lower"], result["upper"], color=colors[algo], alpha=0.2)
+                legend_handles.setdefault(algo, line)
+            expert = ax.axhline(1, color=COLOR.get("Expert", "gray"), linestyle="--", label="Expert")
+            legend_handles.setdefault("Expert", expert)
+            title = "Wall-time" if axis == "time" else "Steps"
+            ax.set_title(title)
+            ax.set_xlabel(f"{'Wall-time' if axis == 'time' else 'Step'} progress (%)")
+            if not horizontal or index == 0:
+                ax.set_ylabel("IQM Expert-Normalized Return")
+            else:
+                ax.tick_params(labelleft=False)
+            ax.set_xticks(np.arange(0, 101, 20))
+            ax.margins(x=0)
+            ax.spines[["right", "top"]].set_visible(False)
+        labels = algorithms + ["Expert"]
+        legend_ax.legend([legend_handles[label] for label in labels], labels,
+                         loc="center", ncol=ncols, frameon=False, fontsize=8)
+        path = output_dir / f"aggregate_iqm95ci_{orientation}.png"
+        fig.savefig(path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        paths.append(path)
+    return paths
 
 
 def plot_median_across_envs(
@@ -1318,7 +1415,7 @@ def main(
                 band=band,
             )
 
-        save_aggregate_iqm(
+        return save_aggregate_iqm(
             data,
             FOLDER_TO_SAVE_PLOTS / f"aggregate_iqm95ci_{x_axis}",
             x_axis=x_axis,
@@ -1328,10 +1425,11 @@ def main(
 
 if __name__ == "__main__":
     # sync exp from the remote server
+    aggregate_results = {}
     for center_stat in ["mean", "median"]:
         for band in ["95ci"]:
             for x_axis in ["time", "steps"]:
-                main(
+                aggregate_results[x_axis] = main(
                     sync_remote=False,
                     update_group_runs=False,
                     create_plots=True,
@@ -1339,6 +1437,8 @@ if __name__ == "__main__":
                     center_stat=center_stat,
                     band=band,
                 )
+
+    save_combined_aggregate_iqm(aggregate_results, FOLDER_TO_SAVE_PLOTS)
 
     # main(
     #     sync_remote=True,

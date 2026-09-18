@@ -256,7 +256,7 @@ class DAC(SAC):
             "discriminator/fake": torch.stack(losses["fake"]).mean().item() if len(losses["fake"]) > 0 else 0.0,
         }
 
-    def update_actor(self, obs, next_obs=None):
+    def update_actor(self, obs):
         self.critic.requires_grad_(False)
         obs = self._normalize_obs_dict(obs)
         z = self.encoder(obs)
@@ -267,11 +267,21 @@ class DAC(SAC):
         actor_loss = (self.get_alpha() * log_prob - Q).mean()
 
         inv_reg_loss = None
-        if self.inverse_model is not None and next_obs is not None and self.inv_reg_coef > 0.0:
-            next_obs = self._normalize_obs_dict(next_obs)
+        if self.inverse_model is not None and self.inv_reg_coef > 0.0:
+            exp_obs, _, exp_next_obs = self._sample_batch(
+                self.demos["obs"],
+                self.demos["act"],
+                self.inv_batch_size,
+                dones=self.demos["done"],
+                next_obs_rollout=self.demos["next_obs"],
+            )
             with torch.no_grad():
-                inv_pred = self.inverse_model(obs, next_obs)
-            inv_reg_loss = F.mse_loss(actions, inv_pred)
+                pseudo_actions = self.inverse_model(exp_obs, exp_next_obs)
+            exp_z = self.encoder(exp_obs)
+            if self.sac_config.get("actor_detach_encoder", False):
+                exp_z = {k: v.detach() for k, v in exp_z.items()} if isinstance(exp_z, dict) else exp_z.detach()
+            exp_actions = self.get_actions(z=exp_z, sample=False)
+            inv_reg_loss = F.mse_loss(exp_actions, pseudo_actions)
             actor_loss = actor_loss + self.inv_reg_coef * inv_reg_loss
 
         grad_norm = self.optimizer_update(self.actor_optim, actor_loss)
@@ -312,7 +322,7 @@ class DAC(SAC):
                     results["loss/inverse_model"].append(inv_loss)
 
             if self.mini_epoch % self.sac_config.update_actor_interval == 0:
-                actor_loss, alpha_loss, entropy, actor_grad_norm, inv_reg_loss = self.update_actor(obs, next_obs)
+                actor_loss, alpha_loss, entropy, actor_grad_norm, inv_reg_loss = self.update_actor(obs)
                 results["loss/actor"].append(actor_loss)
                 if alpha_loss is not None:
                     results["loss/alpha"].append(alpha_loss)

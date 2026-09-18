@@ -63,10 +63,10 @@ PARAMS_MLP_FEATURES_DIM=(
 )
 
 PARAMS_CRITIC_DISABLED=(
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
-  "agent.otil.critic_disabled=false"
+  "agent.otil.critic_disabled=true"
+  "agent.otil.critic_disabled=true"
+  "agent.otil.critic_disabled=true"
+  "agent.otil.critic_disabled=true"
   # "agent.otil.critic_disabled=false"
   # "agent.otil.critic_disabled=true"
   # "agent.otil.critic_disabled=false"

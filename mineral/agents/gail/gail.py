@@ -473,19 +473,18 @@ class GAIL(PPO):
 
                 inv_reg_loss = None
                 if self.inverse_model is not None and self.inv_reg_coef > 0.0:
-                    start, end = self.storage.last_range
-                    flat_indices = torch.arange(start, end, device=self.device)
-                    next_obs, valid_mask = self._next_obs_from_indices(flat_indices)
-                    if valid_mask.any():
-                        mask_cpu = valid_mask.cpu()
-                        obs_inv = self._mask_obs_dict(obs_dict, valid_mask, mask_cpu)
-                        next_obs_inv = self._mask_obs_dict(next_obs, valid_mask, mask_cpu)
-                        obs_inv = self._normalize_obs_dict(obs_inv)
-                        next_obs_inv = self._normalize_obs_dict(next_obs_inv)
-                        with torch.no_grad():
-                            inv_pred = self.inverse_model(obs_inv, next_obs_inv)
-                        inv_reg_loss = F.mse_loss(mu[valid_mask], inv_pred)
-                        loss = loss + self.inv_reg_coef * inv_reg_loss
+                    exp_obs, _, exp_next_obs = self._sample_batch(
+                        self.demos["obs"],
+                        self.demos["act"],
+                        self.inv_batch_size,
+                        dones=self.demos["done"],
+                        next_obs_rollout=self.demos["next_obs"],
+                    )
+                    with torch.no_grad():
+                        pseudo_actions = self.inverse_model(exp_obs, exp_next_obs)
+                    exp_mu = self.model(exp_obs)['mu']
+                    inv_reg_loss = F.mse_loss(exp_mu, pseudo_actions)
+                    loss = loss + self.inv_reg_coef * inv_reg_loss
 
                 if self.dapg_config is not None:
                     demo_actor_loss, demo_nll_loss = self.update_dapg()
