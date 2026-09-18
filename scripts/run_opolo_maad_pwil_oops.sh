@@ -77,6 +77,11 @@ for ((b=0; b<N_BASELINES; b++)); do
         wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
     fi
 
+    # Snapshot the queue right before submitting, so the batch size below is a
+    # delta rather than an absolute count -- correct even if other jobs (e.g.
+    # an opolo run launched earlier, outside this script) are already queued.
+    jobs_before="$(job_count)"
+
     set_args=(
         --set "wandb.project=${name}-sweep-${env}-slurm"
         --set "${steps_key}=100000000"
@@ -98,14 +103,17 @@ for ((b=0; b<N_BASELINES; b++)); do
         --env_files "${env}.yaml" \
         --deploy_now
 
-    # Learn batch size from the first ever submission (since you start from 0 jobs).
+    # Learn batch size from the first ever submission, as the delta in queue
+    # size (not its raw post-submission value), so pre-existing jobs from
+    # other launches don't get miscounted as part of this batch.
     if [[ -z "$BATCH_JOBS" ]]; then
         sleep "$SETTLE_SECONDS"
-        BATCH_JOBS="$(job_count)"
-        echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
+        jobs_after="$(job_count)"
+        BATCH_JOBS=$(( jobs_after - jobs_before ))
+        echo "Detected batch jobs (delta): ${BATCH_JOBS} (before=${jobs_before}, after=${jobs_after})"
 
-        if [[ "$BATCH_JOBS" -eq 0 ]]; then
-        echo "WARNING: Detected 0 jobs after submission. SLURM may be delayed, or submission failed." >&2
+        if [[ "$BATCH_JOBS" -le 0 ]]; then
+        echo "WARNING: Detected non-positive batch size (${BATCH_JOBS}). SLURM may be delayed, or submission failed." >&2
         fi
         if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
         echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}. The cap cannot be enforced with this MAX_JOBS." >&2
