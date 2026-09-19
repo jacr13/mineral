@@ -67,8 +67,10 @@ class OOPS(Agent):
         environment sequentially and processes episodes as they arrive. This
         repo runs many synchronized, fixed-length parallel environments, so
         `explore_env` simply collects one full episode across *all* of them
-        per call (`timesteps == max_episode_length`, enforced) and computes
-        every env's OT reward at once afterward -- no staging buffer needed.
+        per call (`timesteps == self.horizon`, enforced, where `self.horizon`
+        is the expert demos' own trajectory length -- see `__init__`) and
+        computes every env's OT reward at once afterward -- no staging buffer
+        needed.
       - The reference bootstraps its policy-input normalizer from a mix of
         early random-exploration data and the expert demonstrations, with a
         floor on the standard deviation. This class instead uses this repo's
@@ -118,7 +120,17 @@ class OOPS(Agent):
         # --- Demos + OT rewarder ---
         demos_config = self.oops_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
-        self.horizon = int(self.oops_config.get("time_horizon", 0)) or self.env.max_episode_length
+        # The demos are the fixed artifact here: OOPSRewarder needs the agent's
+        # collected episode and the expert trajectory to be the exact same
+        # length (Sinkhorn's cost matrix must be square). So this defaults to
+        # the DEMOS' own (already-subsampled) trajectory length, not
+        # `env.max_episode_length` -- those can disagree (e.g. some of this
+        # repo's DFlex demo files were recorded with fewer steps than that
+        # env's current default episode length), and `env.max_episode_length`
+        # would silently be the wrong number to match `ddpg.horizon_len`
+        # against.
+        configured_horizon = self.oops_config.get("time_horizon", None)
+        self.horizon = int(configured_horizon) if configured_horizon else int(self.demos["act"].shape[1])
         self.oops_rewarder = OOPSRewarder(
             self.demos,
             device=self.device,
