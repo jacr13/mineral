@@ -1,0 +1,100 @@
+\subsection{Best-of-\texorpdfstring{$K$}{K} Phase-Rescue Diagnostic}
+\label{sec:phase_rescue}
+
+The best-of-$K$ coverage argument in \refsec{sec:method} provides intuition
+about candidate coverage under independent sampling; it does not itself
+establish recovery of phase-compatible candidates. We therefore use an
+offline paired diagnostic on held-out expert demonstrations to isolate
+this mechanism.
+
+For each environment, the first eight demonstrations form the reference
+bank and the next 32 (zero-based demonstration indices 8--39) provide
+query windows. Beyond the eight demonstrations used for training, these
+32 additional demonstrations are used only for this offline diagnostic;
+they are not supplied to policy optimization. We sample 512 query windows
+without replacement from all valid windows (stride one), and construct
+four candidate pools per query, giving 2048 paired comparisons. Each
+window contains 32 state transitions, represented by concatenated
+successive observations. We use unstandardized transition features for
+OT with cosine ground cost, Sinkhorn regularization $0.1$, and 60
+iterations. The $K=1$ condition receives a reference window sampled
+uniformly from those whose circular phase error is within $0.04$ cycles
+of the requested mismatch. The $K=8$ condition receives that same window
+plus seven reference windows sampled uniformly with replacement.
+The requested mismatch here is $0.5$ cycles; discretization and the
+sampling tolerance mean the realized mismatch need not equal $0.5$.
+
+\paragraph{Period and shared phase reference.}
+Phase estimation uses a separate standardized copy of the reference
+observations. Means and population standard deviations are computed
+across all valid timesteps of the eight reference demonstrations;
+dimensions with standard deviation at most $10^{-4}$ are excluded.
+For each integer lag $\ell$, we compute the mean squared difference
+between standardized observations at $t$ and $t+\ell$, averaging first
+over valid timesteps and dimensions within each reference demonstration
+and then equally over the eight demonstrations. We discard the first
+100 timesteps for this calculation. The inclusive lag ranges are
+$[10,90]$ for Hopper, $[8,80]$ for Ant, and $[8,120]$ for both humanoids.
+We select the strict interior local minimum with the lowest score;
+if none exists, we select the lowest-scoring lag over the full range.
+This yields the period $P$ in simulation steps.
+
+For each environment, we take observations at zero-based indices
+$100,\ldots,100+P-1$ of the first reference demonstration as the cycle
+template. This is \emph{one shared template per environment}, not a
+separate template for each demonstration. Each reference window is
+assigned a discrete phase $p(c)\in\{0,\ldots,P-1\}$ by comparing its
+first eight standardized observations with the eight observations
+starting at each circular offset of the template (wrapping modulo $P$)
+and choosing the offset with minimum squared Euclidean distance.
+The query target phase $p^\star(q)$ is the phase of its nearest reference
+window under time-aligned squared Euclidean distance over the first
+eight unstandardized transition vectors, using all observation coordinates
+in both states of each transition and searching the entire
+reference bank independently of the sampled pool and OT scores.
+Ties are resolved by the first minimum in index order.
+
+\paragraph{Metrics and uncertainty.}
+The circular phase error is
+\[
+ e(q,c)=\frac{\min\{|p(c)-p^\star(q)|,
+ P-|p(c)-p^\star(q)|\}}{P}\in[0,0.5].
+\]
+A candidate is phase-compatible if $e(q,c)\leq0.10$ cycles.
+Coverage is the percentage of augmented pools containing at least one
+phase-compatible candidate.
+Let $c_1$ be the shared candidate and $\hat c_8$ the candidate with
+minimum OT cost in the augmented pool. A rescue occurs when
+$e(q,c_1)>0.10$ and $e(q,\hat c_8)\leq0.10$; phase improvement means
+$e(q,\hat c_8)<e(q,c_1)$. Coverage, rescue, and improvement percentages
+use all 2048 pairs as their denominator. Mean phase errors describe
+the minimum-cost candidate, not the soft-weighted mixture.
+We report pointwise 95\% percentile confidence intervals from 5000
+bootstrap draws of query trajectories with replacement. The cluster
+population consists of the query trajectories with at least one sampled
+window. In these runs, all 32 held-out trajectories (demonstration indices
+8--39) contributed windows; each bootstrap draw therefore samples 32
+trajectory IDs with replacement. A trajectory with no sampled windows
+would be excluded from the cluster population. All windows
+and pool repetitions from a sampled trajectory remain together;
+statistics are recomputed over the resulting pairs. The reference
+bank and phase template remain fixed, so these intervals quantify
+query-trajectory sampling uncertainty conditional on those references.
+The sampling seed is 0 and the bootstrap seed is 12345.
+For Hopper, Ant, and Humanoid, the discrete phases and the mismatch
+interval $[0.46,0.50]$ admit only one circular mismatch magnitude:
+$18/37$, $11/23$, and $10/20$, respectively. Their $K=1$ errors are
+therefore fixed by construction, giving zero-width bootstrap intervals
+(up to floating-point precision). SNU Humanoid admits both $14/30$ and
+$15/30$, so its baseline error can vary.
+
+% Copy the generated tables.tex here when inserting this section into the manuscript.
+\input{docs/phase_rescue/tables.tex}
+
+\input{docs/phase_rescue/k_sweep_appendix.tex}
+
+This diagnostic measures recovery of phase-compatible candidates in
+held-out expert windows. It does not directly measure policy return,
+gradient alignment, or the effect of the soft-weighted training objective,
+and does not guarantee robustness when compatible candidates are absent
+or under arbitrary distribution shift.

@@ -279,6 +279,8 @@ def build_criterion(args: argparse.Namespace):
     if args.criterion == "ot":
         return OTSinkhornCriterion(
             cost_type=args.ot_cost,
+            eps=args.ot_eps,
+            iters=args.ot_iters,
             use_huber_speedup=False,
         )
     if args.criterion == "l2":

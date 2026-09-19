@@ -1,0 +1,26 @@
+\paragraph{Effect of candidate-pool size.}
+We extend the half-cycle diagnostic to $K\in\{4,8,16\}$ using nested
+candidate pools and the same 2048 query--pool pairs per environment.
+The $K=4$ pool consists of the first four candidates of each verified
+$K=8$ pool, including the shared mismatched candidate. The $K=16$ pool
+appends eight independent, uniformly sampled reference windows with
+replacement (additional-candidate seed 67890). We retain the original
+query windows, phase labels, and $K=8$ pools, and verify their OT costs
+by recomputation. Thus the $K=8$ results are unchanged.
+Coverage and rescue retain the same definitions with the selected
+candidate taken from the corresponding $K$-candidate pool.
+
+\input{docs/phase_rescue/k_sweep_table.tex}
+
+Increasing $K$ improves coverage and rescue rates and reduces mean
+selected phase error in all four environments. From $K=8$ to $K=16$,
+rescue increases by 10.3, 18.0, 13.7, and 15.1 percentage points for
+Hopper, Ant, Humanoid, and SNU Humanoid, respectively. Paired 95\%
+trajectory-cluster bootstrap intervals for these increases are
+$[8.5,12.3]$, $[16.4,19.7]$, $[12.0,15.4]$, and $[13.2,17.1]$ percentage
+points. These intervals are computed on within-pair differences,
+using the same trajectory-cluster resampling procedure, and are
+pointwise without multiplicity correction. The phase-error reduction
+from $K=8$ to $K=16$ is smaller than from $K=4$ to $K=8$ in every
+environment. These results concern minimum-cost selection on held-out
+expert windows, not policy-training performance.

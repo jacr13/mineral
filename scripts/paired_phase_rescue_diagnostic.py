@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--bootstrap-samples",
         type=int,
         default=5000,
-        help="Number of trajectory-cluster bootstrap samples for 95% confidence intervals.",
+        help="Number of trajectory-cluster bootstrap samples for 95%% confidence intervals.",
     )
     parser.add_argument(
         "--bootstrap-seed",
@@ -399,6 +399,9 @@ def paired_summary(
     repeated_trajectory_ids = data["query_trajectory_ids"][repeated_query_ids]
 
     bootstrap_metrics = {
+        "rescue_fraction_all": (rescue.float(), None),
+        "k1_phase_error_mean": (k1_phase_error, None),
+        "best_of_k_phase_error_mean": (best_phase_error, None),
         "best_of_k_candidate_coverage_fraction": (
             coverage.float(),
             None,
@@ -670,6 +673,10 @@ def main() -> None:
 
     metadata = {
         "environment": args.env,
+        "arguments": {key: str(value) if isinstance(value, Path) else value
+                      for key, value in vars(args).items() if key != "generator"},
+        "torch_version": torch.__version__,
+        "phase_reference_scope": "one shared template per environment, not per demonstration",
         "expert_path": str(data["expert_path"]),
         "rollout_path": str(data["rollout_path"]) if data["rollout_path"] else None,
         "query_source": data["query_source"],

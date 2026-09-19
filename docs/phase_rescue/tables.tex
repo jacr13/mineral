@@ -1,0 +1,35 @@
+\begin{table}[H]
+\centering\small
+\setlength{\tabcolsep}{0.35em}
+\begin{tabular}{lccc}
+\toprule
+Environment & Coverage (\%) & Candidate rescued (\%) & Phase improved (\%) \\
+\midrule
+Hopper & 78.2 [76.5, 79.9] & 46.3 [43.6, 48.9] & 96.8 [95.9, 97.7] \\
+Ant & 82.0 [80.2, 83.8] & 63.4 [60.9, 65.9] & 98.5 [98.0, 99.1] \\
+Humanoid & 85.2 [83.8, 86.7] & 64.0 [62.1, 65.9] & 97.1 [96.5, 97.7] \\
+SNU Humanoid & 85.1 [83.8, 86.5] & 72.0 [70.1, 73.9] & 99.3 [99.0, 99.6] \\
+\bottomrule
+\end{tabular}
+\caption{Paired phase-rescue diagnostic at a target half-cycle mismatch.
+Entries are point estimates [95\% trajectory-cluster bootstrap CI].
+All percentages use all 2048 query--pool pairs per environment.}
+\label{tab:phase_rescue}
+\end{table}
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrcc}
+\toprule
+Environment & Period $P$ (steps) & Phase error $K=1$ & Phase error $K=8$ \\
+\midrule
+Hopper & 37 & 0.486 [0.486, 0.486] & 0.147 [0.139, 0.156] \\
+Ant & 23 & 0.478 [0.478, 0.478] & 0.102 [0.098, 0.107] \\
+Humanoid & 20 & 0.500 [0.500, 0.500] & 0.121 [0.116, 0.125] \\
+SNU Humanoid & 30 & 0.477 [0.477, 0.478] & 0.095 [0.092, 0.099] \\
+\bottomrule
+\end{tabular}
+\caption{Mean circular phase errors in gait cycles [95\% trajectory-cluster
+bootstrap CI]. Phase labels use a single shared reference-cycle template
+per environment.}
+\label{tab:phase_rescue_errors}
+\end{table}
