@@ -41,4 +41,4 @@ sweep:
   agent.otil.loss_use_detached_prev_obs: false
 
 spawner:
-  runtime: "1h"
+  runtime: "8h"
