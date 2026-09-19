@@ -337,7 +337,14 @@ class OOPS(Agent):
             self.set_train()
             results = self.update_net(self.memory)
 
-            metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
+            # Some entries (e.g. "grad_norm/actor") are None whenever the
+            # corresponding clip value is disabled (e.g. actor_clip == 0, the
+            # paper's own default) -- drop those rather than stacking them.
+            metrics = {
+                k: torch.mean(torch.stack(values)).item()
+                for k, v in results.items()
+                if (values := [x for x in v if x is not None])
+            }
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
             metrics.update({f"oops/{k}": v.item() for k, v in self._last_oops_stats.items()})
