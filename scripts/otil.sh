@@ -211,7 +211,7 @@ for env_idx in "${!ENVS[@]}"; do
         --sweep \
         --sweep_max 150 \
         --base_algo "${base_algo}" \
-        --set "wandb.project=new_rewardshape_critic_OTIL_${base_algo}-${env}-slurm" \
+        --set "wandb.project=new_v2_critic_OTIL_${base_algo}-${env}-slurm" \
         --set "agent.shac.max_agent_steps=${max_steps}" \
         --set "${critic_rmapping}" \
         --set "${ot_cost}" \
