@@ -382,6 +382,12 @@ class OOPS(Agent):
             next_t_to_horizon = next_obs["t_to_horizon"]
             match = obs.get("match")
             next_match = next_obs.get("match")
+            # The actor's own policy-gradient step always conditions on the
+            # transition's real, recorded time-to-horizon (matching the
+            # reference's `t_H_normed = t/1000.` fed to `self.actor(...)` in
+            # its actor-loss line) -- only the critic's TD regression below
+            # trains against the (optionally time-augmented) resampled value.
+            actor_t_to_horizon = t_to_horizon
 
             if self.aug_time:
                 # Data augmentation over the time feature: retrain the (time,
@@ -407,7 +413,7 @@ class OOPS(Agent):
             results["grad_norm/critic"].append(critic_grad_norm)
 
             if self.mini_epoch % self.ddpg_config.update_actor_interval == 0:
-                actor_loss, actor_grad_norm = self.update_actor(obs_n, t_to_horizon, match)
+                actor_loss, actor_grad_norm = self.update_actor(obs_n, actor_t_to_horizon, match)
                 results["loss/actor"].append(actor_loss)
                 results["grad_norm/actor"].append(actor_grad_norm)
 
@@ -470,7 +476,45 @@ class OOPS(Agent):
         return grad_norm
 
     def eval(self):
-        raise NotImplementedError
+        self.set_eval()
+
+        obs = self.env.reset()
+        self.obs = self._convert_obs(obs)
+
+        total_eval_episodes = self.num_actors * 2
+        eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
+        with self._as_metrics(eval_metrics), torch.no_grad():
+            while self.metrics.num_episodes < total_eval_episodes:
+                # One full episode per block, exactly like `explore_env`
+                # (OOPS's actor is conditioned on time-to-horizon, so it must
+                # be fed a full, correctly-numbered episode at a time).
+                for i in range(self.horizon):
+                    if not self.env_autoresets:
+                        raise NotImplementedError
+
+                    t_to_horizon = torch.full(
+                        (self.num_actors, 1), (self.horizon - i) / float(self.horizon), device=self.device
+                    )
+                    actions = self.get_actions(self.obs, t_to_horizon, sample=True)
+
+                    next_obs, rewards, dones, infos = self.env.step(actions)
+                    next_obs = self._convert_obs(next_obs)
+
+                    done_indices = torch.where(dones)[0].tolist()
+                    self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
+
+                    self.obs = next_obs
+            self.metrics.flush_video(self.epoch)
+
+            metrics = {
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                "eval_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "eval_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                **self.metrics.result(prefix="eval"),
+            }
+            print(metrics)
+
+            self.writer.add(self.agent_steps, metrics)
 
     def set_train(self):
         self.actor.train()

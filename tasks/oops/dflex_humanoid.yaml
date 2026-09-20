@@ -3,11 +3,20 @@ task:
   env:
     env_name: humanoid
     no_grad: true
+    # OOPS assumes explore_env collects one continuous, unbroken episode of
+    # exactly ddpg.horizon_len steps (it OT-matches the whole thing against
+    # one continuous expert trajectory of the same length). DFlex envs
+    # auto-reset internally on early termination (dflex_env.py's step()),
+    # which would splice unrelated episodes together mid-rollout -- the
+    # reference implementation instead keeps stepping through a fallen/
+    # terminal state for the rest of the fixed-length block. Disable it here
+    # so the invariant holds.
+    early_termination: false
 agent:
   name: OOPS/DFlexAnt
   ddpg:
     max_agent_steps: 10000000
-    horizon_len: 984 # must match the demos' episode length
+    horizon_len: 1000 # must match the demos' padded trajectory length (act.shape[1]), not the "len984" in the filename -- demos episodes are padded to 1000
   network:
     actor_kwargs:
       mlp_kwargs:

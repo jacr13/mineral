@@ -3,6 +3,7 @@ task:
   env:
     env_name: ant
     no_grad: true
+    early_termination: false
 agent:
   name: OOPS/DFlexAnt
   ddpg:

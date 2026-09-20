@@ -3,6 +3,15 @@ task:
   env:
     env_name: hopper
     no_grad: true
+    # OOPS assumes explore_env collects one continuous, unbroken episode of
+    # exactly ddpg.horizon_len steps (it OT-matches the whole thing against
+    # one continuous expert trajectory of the same length). DFlex envs
+    # auto-reset internally on early termination (dflex_env.py's step()),
+    # which would splice unrelated episodes together mid-rollout -- the
+    # reference implementation instead keeps stepping through a fallen/
+    # terminal state for the rest of the fixed-length block. Disable it here
+    # so the invariant holds.
+    early_termination: false
 agent:
   name: OOPS/DFlexAnt
   ddpg:
