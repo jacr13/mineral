@@ -37,7 +37,7 @@ agent:
     reward_scale: 1.0
     label_smooth: 0.0
   opolo:
-    alpha: 0.1
+    alpha: 1.0 # matches td3opolo's own opolo.yml hyperparams for Humanoid-v2
 logdir: "workdir/DFlexHumanoid10M-OPOLO/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
@@ -56,11 +56,12 @@ sweep:
   agent.dac.discriminator.iters: 1
   # agent.dac.discriminator.mlp_kwargs.units: [[64, 64], [128, 128]]  (left at the per-env default set above)
   agent.dac.inverse_model.enabled: true
-  agent.dac.inverse_model.reg_coef: 10
+  agent.dac.inverse_model.reg_coef: 1
   agent.dac.inverse_model.batch_size: 512
   agent.dac.inverse_model.iters: 100
-  # agent.opolo.alpha: [0.01, 0.1, 1.0]  (0.1 matches td3opolo.py's own default)
-  agent.opolo.alpha: 0.1
+  # td3opolo's own opolo.yml hyperparams set alpha=1 for Humanoid-v2
+  # specifically (its class default, used for most other envs, is 0.1).
+  agent.opolo.alpha: 1.0
 
 spawner:
   runtime: "7h30m"

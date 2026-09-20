@@ -37,7 +37,11 @@ agent:
     reward_scale: 1.0
     label_smooth: 0.0
   opolo:
-    alpha: 0.1
+    # td3opolo's opolo.yml has no SNU-Humanoid entry (not in the paper's
+    # benchmark suite); mirroring Humanoid-v2's tuned alpha=1 as the closest
+    # morphological analog (bipedal humanoid, not Ant/Hopper) -- a judgment
+    # call, not a paper-sourced number.
+    alpha: 1.0
 logdir: "workdir/DFlexSNUHumanoid10M-OPOLO/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
@@ -56,11 +60,12 @@ sweep:
   agent.dac.discriminator.iters: 1
   # agent.dac.discriminator.mlp_kwargs.units: [[64, 64], [128, 128]]  (left at the per-env default set above)
   agent.dac.inverse_model.enabled: true
-  agent.dac.inverse_model.reg_coef: 10
+  agent.dac.inverse_model.reg_coef: 1
   agent.dac.inverse_model.batch_size: 512
   agent.dac.inverse_model.iters: 100
-  # agent.opolo.alpha: [0.01, 0.1, 1.0]  (0.1 matches td3opolo.py's own default)
-  agent.opolo.alpha: 0.1
+  # No paper value for this env; mirroring Humanoid-v2's tuned alpha=1 (see
+  # the note above the base `agent.opolo.alpha` for this task).
+  agent.opolo.alpha: 1.0
 
 spawner:
   runtime: "7h30m"

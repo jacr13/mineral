@@ -28,10 +28,10 @@ ENVS=(
 # BASELINE_TASK_NAMES=("opolo" "gail" "pwil" "oops")
 # BASELINE_STEPS_KEYS=("agent.sac.max_agent_steps" "agent.ppo.max_agent_steps" "agent.sac.max_agent_steps" "agent.ddpg.max_agent_steps")
 # BASELINE_EXTRA_SETS=("" "agent.gail.inverse_model.enabled=true" "" "")
-BASELINE_NAMES=("oops")
-BASELINE_TASK_NAMES=("oops")
-BASELINE_STEPS_KEYS=("agent.ddpg.max_agent_steps")
-BASELINE_EXTRA_SETS=("")
+BASELINE_NAMES=("opolo" "oops")
+BASELINE_TASK_NAMES=("opolo" "oops")
+BASELINE_STEPS_KEYS=("agent.sac.max_agent_steps" "agent.ddpg.max_agent_steps")
+BASELINE_EXTRA_SETS=("" "")
 
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '

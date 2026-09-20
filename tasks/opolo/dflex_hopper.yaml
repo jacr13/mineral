@@ -37,7 +37,7 @@ agent:
     reward_scale: 1.0
     label_smooth: 0.0
   opolo:
-    alpha: 0.1
+    alpha: 0.01 # matches td3opolo's own opolo.yml hyperparams for Hopper-v2
 logdir: "workdir/DFlexHopper10M-OPOLO/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
   mode: online
@@ -56,11 +56,15 @@ sweep:
   agent.dac.discriminator.iters: 1
   # agent.dac.discriminator.mlp_kwargs.units: [[64, 64], [128, 128]]  (left at the per-env default set above)
   agent.dac.inverse_model.enabled: true
-  agent.dac.inverse_model.reg_coef: 10
+  # td3opolo's own opolo.yml hyperparams set pi_reg_coeff=0.01 for Hopper-v2
+  # specifically (its default is 0.1; this repo's DAC/GAIL baselines default
+  # to 10, tuned for those, not OPOLO's own reported Hopper run).
+  agent.dac.inverse_model.reg_coef: 0.01
   agent.dac.inverse_model.batch_size: 512
   agent.dac.inverse_model.iters: 100
-  # agent.opolo.alpha: [0.01, 0.1, 1.0]  (0.1 matches td3opolo.py's own default)
-  agent.opolo.alpha: 0.1
+  # td3opolo's own opolo.yml hyperparams set alpha=0.01 for Hopper-v2
+  # specifically (its class default, used for most other envs, is 0.1).
+  agent.opolo.alpha: 0.01
 
 spawner:
   runtime: "3h30m"
