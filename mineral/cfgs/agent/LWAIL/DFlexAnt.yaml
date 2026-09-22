@@ -1,0 +1,46 @@
+defaults:
+  - /agent/DAC/DFlexAnt@_here_
+seed: ${..seed}
+algo: LWAIL
+
+dac:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
+
+  # upstream default run (run.bash/all_run.bash) uses state_state + --minus,
+  # i.e. the critic sees (obs, next_obs - obs) pairs; see `lwail.minus` below.
+  input_type: state_state
+  disc_update_freq: 1
+  discriminator:
+    iters: 30 # upstream `--f_epoch 30`, as used in run.bash/all_run.bash
+    mlp_kwargs:
+      units: [64, 64]
+      norm_type: null # upstream's `FullyConnectedNet` is plain Linear+ReLU, no norm
+      act_type: ReLU
+    encoder_kwargs: null
+    optim:
+      type: Adam
+      kwargs: { lr: 1e-3 } # upstream `--lr_f`
+
+  expert_batch_size: 2048
+  policy_batch_size: 2048
+  reward_scale: 1.0
+
+  inverse_model:
+    enabled: false
+
+lwail:
+  gp_coef: 10 # upstream `--alpha`, the gradient-penalty coefficient
+  minus: true # upstream `--minus`: critic sees (obs, next_obs - obs) instead of (obs, next_obs)
+  pretrain_iters: 2500 # upstream hardcodes 2500 epochs in `core.py::Agent.pretrain`
+
+  # upstream `--using_icvf`: embed states through a frozen, pretrained ICVF
+  # encoder before the critic. Off by default: upstream only ships ICVF
+  # checkpoints for a few D4RL Mujoco tasks (dimension-incompatible with this
+  # repo's dflex tasks) and treats ICVF pretraining itself as an external/TODO
+  # codebase. Set icvf_path to a compatible checkpoint to enable.
+  using_icvf: false
+  icvf_path: ""
+  icvf_hidden_dims: [256, 256]

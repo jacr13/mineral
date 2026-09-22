@@ -4,6 +4,7 @@ from .ddpg.ddpg import DDPG
 from .diffrl.bptt import BPTT
 from .diffrl.shac import SHAC
 from .gail.gail import GAIL
+from .lwail.lwail import LWAIL
 from .oops.oops import OOPS
 from .opolo.opolo import OPOLO
 from .otil.diffmimic import DiffMimic
@@ -30,4 +31,5 @@ __all__ = [
     'PWIL',
     'OPOLO',
     'OOPS',
+    'LWAIL',
 ]
