@@ -12,6 +12,7 @@ plotter/shac_vs_sapo/figures/
 plotter/plots*/
 OOPS_Supplementary/
 crit_no_*/
+bestofk_ablation/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

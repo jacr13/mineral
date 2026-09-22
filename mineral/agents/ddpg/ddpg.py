@@ -1,4 +1,5 @@
 import collections
+import json
 import os
 import re
 from copy import deepcopy
@@ -224,7 +225,16 @@ class DDPG(Agent):
             results = self.update_net(self.memory)
 
             # train metrics
-            metrics = {k: torch.mean(torch.stack(v)).item() for k, v in results.items()}
+            # Some result lists (e.g. `grad_norm/*` when `max_grad_norm` is
+            # unset, so `optimizer_update` returns `None`; or `loss/actor` /
+            # `grad_norm/actor` on mini-epochs where `update_actor_interval`
+            # skips the actor update) may contain `None` or be empty; skip
+            # those rather than crash on `torch.stack`.
+            metrics = {}
+            for k, v in results.items():
+                v = [x for x in v if x is not None]
+                if v:
+                    metrics[k] = torch.mean(torch.stack(v)).item()
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
 
@@ -329,7 +339,55 @@ class DDPG(Agent):
         return grad_norm
 
     def eval(self):
-        raise NotImplementedError
+        self.set_eval()
+
+        obs = self.env.reset()
+        obs = self._convert_obs(obs)
+
+        # Deterministic (no exploration noise), unlike SAC.eval()'s stochastic
+        # sampling: DDPG/TD3's policy is deterministic and `sample=True` here
+        # only adds exploration noise, which eval should not use.
+        total_eval_episodes = self.num_actors * 2
+        eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
+        with self._as_metrics(eval_metrics), torch.no_grad():
+            while self.metrics.num_episodes < total_eval_episodes:
+                if not self.env_autoresets:
+                    raise NotImplementedError
+
+                actions = self.get_actions(obs, sample=False)
+                next_obs, rewards, dones, infos = self.env.step(actions)
+                next_obs = self._convert_obs(next_obs)
+                rewards, dones = (
+                    torch.as_tensor(rewards, device=self.device),
+                    torch.as_tensor(dones, device=self.device),
+                )
+
+                done_indices = torch.where(dones)[0].tolist()
+                self.metrics.update(self.epoch, self.env, obs, rewards, done_indices, infos)
+
+                obs = next_obs
+            self.metrics.flush_video(self.epoch)
+
+            metrics = {
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                "eval_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
+                "eval_scores/episode_lengths": self.metrics.episode_trackers["lengths"].mean(),
+                **self.metrics.result(prefix="eval"),
+            }
+            print(metrics)
+
+            self.writer.add(self.agent_steps, metrics)
+            self.writer.write()
+
+            scores = {
+                "epoch": self.epoch,
+                "mini_epoch": self.mini_epoch,
+                "agent_steps": self.agent_steps,
+                "eval_scores/num_episodes": self.metrics.num_episodes,
+                "eval_scores/episode_rewards": list(self.metrics.episode_trackers["rewards"].window),
+                "eval_scores/episode_lengths": list(self.metrics.episode_trackers["lengths"].window),
+            }
+            json.dump(scores, open(os.path.join(self.logdir, "scores.json"), "w"), indent=4)
 
     def set_train(self):
         self.actor.train()
@@ -344,7 +402,32 @@ class DDPG(Agent):
         self.critic_target.eval()
 
     def save(self, f):
-        pass
+        ckpt = {
+            'epoch': self.epoch,
+            'mini_epoch': self.mini_epoch,
+            'agent_steps': self.agent_steps,
+            'obs_rms': self.obs_rms.state_dict() if self.normalize_input else None,
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict(),
+            'actor_target': self.actor_target.state_dict() if not self.ddpg_config.no_tgt_actor else None,
+            'critic_target': self.critic_target.state_dict(),
+        }
+        torch.save(ckpt, f)
 
-    def load(self, f):
-        pass
+    def load(self, f, ckpt_keys=''):
+        all_ckpt_keys = ('epoch', 'mini_epoch', 'agent_steps')
+        all_ckpt_keys += ('obs_rms', 'actor', 'critic', 'actor_target', 'critic_target')
+        ckpt = torch.load(f, map_location=self.device)
+        for k in all_ckpt_keys:
+            if not re.match(ckpt_keys, k):
+                print(f'Warning: ckpt skipped loading `{k}`')
+                continue
+            if k == 'obs_rms' and (not self.normalize_input):
+                continue
+            if k == 'actor_target' and (self.ddpg_config.no_tgt_actor):
+                continue
+
+            if hasattr(getattr(self, k), 'load_state_dict'):
+                getattr(self, k).load_state_dict(ckpt[k])
+            else:
+                setattr(self, k, ckpt[k])

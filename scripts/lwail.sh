@@ -66,7 +66,7 @@ for env in "${ENVS[@]}"; do
         --sweep \
         --sweep_max 150 \
         --set "wandb.project=lwail-sweep-${env}-slurm" \
-        --set "agent.sac.max_agent_steps=100000000" \
+        --set "agent.ddpg.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \
         --deploy_now
 
