@@ -78,10 +78,6 @@ class OOPS(Agent):
         for policy-input normalization; only the OT reward's own atom
         normalizer (`OOPSRewarder`) is fit once from the expert demos, as in
         the reference.
-      - `not_done` is taken directly from the environment's own `done` signal
-        (as elsewhere in this repo) rather than re-derived from the time
-        feature reaching zero, which is equivalent for the fixed-horizon
-        tasks this is intended for.
     """
 
     def __init__(self, full_cfg, logdir=None, **kwargs):
@@ -262,6 +258,12 @@ class OOPS(Agent):
             env_rewards_sum += rewards
 
             done_indices = torch.where(dones)[0].tolist()
+            if done_indices and i < timesteps - 1:
+                raise RuntimeError(
+                    f"OOPS environment reset before the fixed horizon at step {i + 1}/{timesteps} "
+                    f"(envs {done_indices}). Disable early termination and check simulation stability; "
+                    "OT matching cannot use a trajectory containing an automatic reset."
+                )
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
 
             if self.ddpg_config.handle_timeout:
@@ -429,7 +431,10 @@ class OOPS(Agent):
             next_x = self._augmented_state(next_obs, next_t_to_horizon, next_match)
             target_Qs = self.critic_target.get_q_values(next_x, next_actions)
             target_Q = torch.min(torch.stack(target_Qs), dim=0).values
-            target_Q = reward + (1 - done) * (self.ddpg_config.gamma**self.ddpg_config.nstep) * target_Q
+            # Reference TD3.py uses t_H_plus > 1, including for augmented time.
+            # Environment timeouts may be cleared in replay and are not this mask.
+            not_done = (next_t_to_horizon > 0).to(reward.dtype).reshape_as(reward)
+            target_Q = reward + not_done * (self.ddpg_config.gamma**self.ddpg_config.nstep) * target_Q
 
         x = self._augmented_state(obs, t_to_horizon, match)
         current_Qs = self.critic.get_q_values(x, action)

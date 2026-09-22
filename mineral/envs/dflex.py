@@ -1,3 +1,6 @@
+import inspect
+
+import torch
 from omegaconf import OmegaConf
 
 DEFAULT_DFLEXENVS_KWARGS = {
@@ -9,6 +12,23 @@ DEFAULT_DFLEXENVS_KWARGS = {
     'humanoid': {'env_name': 'HumanoidEnv', 'episode_length': 1000, 'MM_caching_frequency': 48},
     'snu_humanoid': {'env_name': 'SNUHumanoidEnv', 'episode_length': 1000, 'MM_caching_frequency': 8},
 }
+
+
+class _FixedHorizonHumanoid:
+    """Disable fall resets in legacy DFlex humanoids without changing rewards."""
+
+    def calculateReward(self):
+        super().calculateReward()
+        joint_q = self.state.joint_q.view(self.num_envs, -1)
+        joint_qd = self.state.joint_qd.view(self.num_envs, -1)
+        invalid = (
+            ~torch.isfinite(self.obs_buf).all(dim=-1)
+            | ~torch.isfinite(joint_q).all(dim=-1)
+            | ~torch.isfinite(joint_qd).all(dim=-1)
+            | (joint_q.abs() > 1e6).any(dim=-1)
+            | (joint_qd.abs() > 1e6).any(dim=-1)
+        )
+        self.reset_buf = (invalid | (self.progress_buf >= self.episode_length)).to(self.reset_buf.dtype)
 
 
 def make_envs(config):
@@ -29,6 +49,15 @@ def make_envs(config):
     import dflex.envs as DFlexEnvs
 
     env_fn = getattr(DFlexEnvs, env_name)
+    # The pinned DFlex humanoids hard-code fall resets in calculateReward;
+    # unlike Ant/Hopper, their constructors have no early_termination option.
+    if (
+        env_name in ('HumanoidEnv', 'SNUHumanoidEnv')
+        and 'early_termination' in env_kwargs
+        and 'early_termination' not in inspect.signature(env_fn).parameters
+    ):
+        if not env_kwargs.pop('early_termination'):
+            env_fn = type(f'FixedHorizon{env_name}', (_FixedHorizonHumanoid, env_fn), {})
     env = env_fn(
         num_envs=num_envs,
         device=config.sim_device,
