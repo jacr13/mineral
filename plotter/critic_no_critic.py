@@ -318,9 +318,10 @@ def build_data(
 
 
 def build_final_return_rows(data, *, center_stat="mean", band="std", normalize_expert=True):
-    """Final return per env/method: mean +/- spread across seeds, each seed
-    contributing its own last logged (interpolated) value -- not a value at
-    a shared grid point -- since seeds stop at different lengths."""
+    """Final return per env/method: center +/- spread (std band) or exact
+    [lower, upper] (95ci band) across seeds, each seed contributing its own
+    last logged (interpolated) value -- not a value at a shared grid point
+    -- since seeds stop at different lengths."""
     rows = []
     for env_name, env_data in data.items():
         expert_mean = EXPERTS.get(env_name, {}).get("mean") if EXPERTS else None
@@ -335,14 +336,14 @@ def build_final_return_rows(data, *, center_stat="mean", band="std", normalize_e
             last_idx = finite_mask.shape[1] - 1 - np.argmax(finite_mask[:, ::-1], axis=1)
             final_values = values[np.arange(values.shape[0]), last_idx][:, None]
             center, lower, upper = compute_center_and_band(final_values, center_stat=center_stat, band=band)
-            spread = max(center[0] - lower[0], upper[0] - center[0])
             rows.append(
                 {
                     "environment": env_name,
                     "environment_name": ENV_NAMES.get(env_name, env_name),
                     "method": method,
                     "center": float(center[0]),
-                    "spread": float(spread),
+                    "lower": float(lower[0]),
+                    "upper": float(upper[0]),
                     "n_runs": int(values.shape[0]),
                     "normalized_by_expert": bool(normalize_expert and expert_mean),
                 }
@@ -382,16 +383,26 @@ def save_final_return_table(
     def format_cell(row):
         if row is None:
             return "--"
-        return rf"${row['center']:.{decimals}f} \pm {row['spread']:.{decimals}f}$"
+        if normalize_band(band) == "std":
+            spread = max(row["center"] - row["lower"], row["upper"] - row["center"])
+            return rf"${row['center']:.{decimals}f} \pm {spread:.{decimals}f}$"
+        return rf"${row['center']:.{decimals}f}\;[{row['lower']:.{decimals}f}, {row['upper']:.{decimals}f}]$"
 
     return_desc = (
         "final returns normalized by each environment's expert return"
         if normalize_expert
         else "final returns"
     )
+    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[
+        normalize_center_stat(center_stat)
+    ]
+    stat_desc = (
+        f"{center_label} " r"$\pm$ standard deviation across seeds"
+        if normalize_band(band) == "std"
+        else f"{center_label} with a 95\\% bootstrap confidence interval across seeds, shown as [lower, upper]"
+    )
     caption = (
-        f"Reward-shaping and critic ablation. Values are {return_desc}, reported as mean "
-        r"$\pm$ standard deviation across seeds. Rows use "
+        f"Reward-shaping and critic ablation. Values are {return_desc}, reported as {stat_desc}. Rows use "
         r"\texttt{agent.otil.critic\_reward\_shapping=" + str(critic_reward_shapping) + "}."
     )
 
@@ -423,6 +434,18 @@ def save_final_return_table(
     tex_path.write_text("\n".join(latex_lines) + "\n", encoding="utf-8")
 
     return csv_path, tex_path
+
+
+def _curve_footnote(center_stat, band):
+    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[
+        normalize_center_stat(center_stat)
+    ]
+    band_desc = "± 1 SD" if normalize_band(band) == "std" else "a 95% bootstrap CI"
+    return (
+        f"Line = {center_label} across seeds still running at that point; shaded band = {band_desc}. "
+        "Each method's curve runs out to its longest seed's last logged step -- as shorter seeds end "
+        "(varying wall-clock cutoffs) they drop out of the average rather than being extrapolated."
+    )
 
 
 def _shared_legend(target, handles, labels, **legend_kwargs):
@@ -504,9 +527,7 @@ def plot_training_curves(
     fig.supylabel("Normalized Return" if normalize_expert else "Return", fontsize=12)
     fig.text(
         0.5, -0.01,
-        "Line = mean across seeds still running at that point; shaded band = ± 1 SD. Each method's "
-        "curve runs out to its longest seed's last logged step -- as shorter seeds end (varying "
-        "wall-clock cutoffs) they drop out of the average rather than being extrapolated.",
+        _curve_footnote(center_stat, band),
         ha="center", va="top", fontsize=8, color="#52514e",
     )
 
@@ -570,9 +591,7 @@ def plot_single_env_curves(
     _shared_legend(legend_ax, handles, labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
     fig.text(
         0.5, -0.01,
-        "Line = mean across seeds still running at that point; shaded band = ± 1 SD. Each method's "
-        "curve runs out to its longest seed's last logged step -- as shorter seeds end they drop out "
-        "of the average rather than being extrapolated.",
+        _curve_footnote(center_stat, band),
         ha="center", va="top", fontsize=7.5, color="#52514e",
     )
 

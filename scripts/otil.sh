@@ -10,13 +10,14 @@ MAX_JOBS=100
 BATCH_JOBS=""          # empty = unknown until first submit
 SETTLE_SECONDS=5       # give slurm time to show new jobs
 
-ENVS=(
-  "dflex_hopper"
-  "dflex_ant"
-  "dflex_humanoid"
-  "dflex_snu_humanoid"
-)
-
+# Full 4-env config (kept for reference / restoring the full sweep later):
+# ENVS=(
+#   "dflex_hopper"
+#   "dflex_ant"
+#   "dflex_humanoid"
+#   "dflex_snu_humanoid"
+# )
+#
 # Per-env step budget (matches plotter/plotter.py's MAX_STEPS_PER_ENV) and the
 # wall-clock budget sized to reliably reach it for the slowest observed config
 # in that env (throughput varies a lot within the same env -- not cleanly by
@@ -37,18 +38,40 @@ ENVS=(
 # `spawner.runtime`, which takes precedence over this script's --runtime flag
 # (spawner.py: a config's own spawner.runtime always overrides the CLI value)
 # -- kept in sync here so the two don't silently disagree.
+# MAX_STEPS=(
+#   10000000  # dflex_hopper
+#   10000000  # dflex_ant
+#   15000000  # dflex_humanoid
+#   15000000  # dflex_snu_humanoid
+# )
+# RUNTIMES=(
+#   "8h"   # dflex_hopper
+#   "8h"   # dflex_ant
+#   "12h"  # dflex_humanoid
+#   "12h"  # dflex_snu_humanoid
+# )
+
+# Targeted rerun: critic-logexp-l2 on Humanoid only (PARAMS row 2 below). All
+# 6 of its prior seeds landed on the same Pascal-class P100 node
+# (gpu006.baobab) and got wall-clock-capped at ~11.5h under the 12h budget,
+# while every other method's seeds (scheduled on Turing/Ampere GPUs) finished
+# in 5-10h -- see GPU_CONSTRAINT below, which keeps this rerun off Pascal
+# nodes (P100, Titan X).
+ENVS=(
+  "dflex_humanoid"
+)
 MAX_STEPS=(
-  10000000  # dflex_hopper
-  10000000  # dflex_ant
   15000000  # dflex_humanoid
-  15000000  # dflex_snu_humanoid
 )
 RUNTIMES=(
-  "8h"   # dflex_hopper
-  "8h"   # dflex_ant
   "12h"  # dflex_humanoid
-  "12h"  # dflex_snu_humanoid
 )
+
+# SLURM --constraint restricting scheduling to Turing/Ampere-class GPUs (RTX
+# 2080 Ti, RTX 3080/3090, A100, ...), based on the node AvailableFeatures seen
+# via `scontrol show node` on baobab -- excludes the older Pascal-class GPUs
+# (Tesla P100, Titan X) responsible for the slow rerun above.
+GPU_CONSTRAINT="COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"
 
 # ENVS=(
 #   # "rewarped_ant_run"
@@ -183,6 +206,11 @@ for env_idx in "${!ENVS[@]}"; do
     echo "Base algorithm: ${base_algo}"
     echo "------------------------------------------------------------"
     for ((i=0; i<N; i++)); do
+      # Targeted rerun: only row 2 (critic-logexp-l2, see comment above).
+      if [[ "$i" -ne 2 ]]; then
+        continue
+      fi
+
       critic_rmapping="${PARAMS_CRITIC_RM[$i]}"
       ot_cost="${PARAMS_OT_COST_TYPE[$i]}"
       mlp_feat="${PARAMS_MLP_FEATURES_DIM[$i]}"
@@ -207,6 +235,7 @@ for env_idx in "${!ENVS[@]}"; do
         --docker_image /home/users/c/candidor/docker/mineral.sif \
         --deployment slurm \
         --runtime "${runtime}" \
+        --gpu_constraint "${GPU_CONSTRAINT}" \
         --no-cleanup \
         --sweep \
         --sweep_max 150 \

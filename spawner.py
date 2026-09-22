@@ -45,6 +45,7 @@ CALIBERS = [
 ]
 SBATCH_GPU = "#SBATCH --gres=gpu:1{extra_gpu_params}"
 SBATCH_GPU_MEMORY = ",VramPerGpu:{gpu_memory}G"
+SBATCH_CONSTRAINT = "#SBATCH --constraint={gpu_constraint}"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
@@ -384,13 +385,17 @@ def _write_slurm_script(script_path, name, command, args):
     if args.gpu_memory is not None:
         extra_gpu_params += SBATCH_GPU_MEMORY.format(gpu_memory=args.gpu_memory)
 
+    extra_params = SBATCH_GPU.format(extra_gpu_params=extra_gpu_params)
+    if args.gpu_constraint:
+        extra_params += "\n" + SBATCH_CONSTRAINT.format(gpu_constraint=args.gpu_constraint)
+
     script_content = SBATCH_FILE_CONTENT.format(
         name=name,
         partition=partition,
         num_workers=num_workers,
         duration=duration,
         memory=memory,
-        extra_params=SBATCH_GPU.format(extra_gpu_params=extra_gpu_params),
+        extra_params=extra_params,
         modules=modules,
         command=command,
     )
@@ -642,6 +647,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--memory", type=str, default="8", help="specify the cpu memory in gb")
     parser.add_argument("--gpu_memory", type=str, default=None, help="specify the gpu memory in gb")
+    parser.add_argument(
+        "--gpu_constraint",
+        type=str,
+        default=None,
+        help="SLURM --constraint feature expression restricting GPU node type, "
+        "e.g. 'COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE' to avoid older Pascal-class "
+        "GPUs (Tesla P100, Titan X)",
+    )
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")
