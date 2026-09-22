@@ -30,6 +30,9 @@ from plotter import (
     _latex_escape,
     compute_center_and_band,
     convert_seconds_to_hours,
+    get_center_statistic,
+    normalize_band,
+    normalize_center_stat,
 )
 from wandb_api import API, get_rew_steps_times
 
@@ -59,7 +62,10 @@ CRITIC_METHODS = [
     "critic-neg-l2",
 ]
 NO_CRITIC_METHODS = [f"no-{method}" for method in CRITIC_METHODS]
-METHOD_ORDER = CRITIC_METHODS + NO_CRITIC_METHODS
+# Paired (critic-X, no-critic-X) rather than all critics then all no-critics,
+# so the table/legend put each ablation pair next to each other for a direct
+# comparison instead of two separate blocks far apart.
+METHOD_ORDER = [method for pair in zip(CRITIC_METHODS, NO_CRITIC_METHODS) for method in pair]
 ALGOS = ["Expert"] + METHOD_ORDER
 ALGO_INDEX = {algo: idx for idx, algo in enumerate(ALGOS)}
 
@@ -147,8 +153,9 @@ def clip_to_env_cap(ep_rew, steps, times, env_name, *, x_axis):
     This never extends a curve -- it only ever shortens it. Individual runs
     in these sweeps stop at very different points (a wall-clock SLURM limit,
     not a shared step budget: e.g. Hopper runs log only ~1.5-3M of the
-    10M-step ceiling), so per-seed truncation happens later in build_data,
-    once every seed's real extent for a given method is known.
+    10M-step ceiling); interpolate_group later pads each seed's curve with
+    NaN past its own real extent rather than truncating every seed in a
+    method down to the shortest one.
     """
     ep_rew = np.asarray(ep_rew, dtype=np.float64)
     steps = np.asarray(steps, dtype=np.float64)
@@ -179,24 +186,69 @@ def clip_to_env_cap(ep_rew, steps, times, env_name, *, x_axis):
 
 
 def interpolate_group(runs, *, n_points, smooth_window):
-    """Build a shared grid capped at the shortest contributing seed's real
-    extent, then interpolate + smooth every seed onto it.
+    """Build a shared grid spanning the longest contributing seed's real
+    extent, then interpolate + smooth every seed onto its own portion of it.
 
     `runs` is a list of (ep_rew, x) raw-history pairs (x = steps or
-    wall-time, already clipped to the env ceiling). Because the grid never
-    exceeds any seed's last logged point, np.interp never extrapolates --
-    unlike holding a run's last value flat out to a fixed global cap, which
-    would fabricate a flat tail past where that run actually stopped.
+    wall-time, already clipped to the env ceiling). A seed that stops
+    logging before the grid's end is padded with NaN past its own last
+    point rather than held flat or dropped -- so it never extrapolates, but
+    it also never truncates the whole method down to its shortest seed.
+    Downstream aggregation (compute_center_and_band_dropout) ignores those
+    NaNs, so the seed count driving the mean/band shrinks along the tail as
+    shorter seeds end, instead of capping every curve at the shortest one.
     """
     runs = [(ep_rew, x) for ep_rew, x in runs if x.size > 0]
     if not runs:
         return None
-    shared_max_x = min(x[-1] for _, x in runs)
+    shared_max_x = max(x[-1] for _, x in runs)
     if shared_max_x <= 0:
         return None
     grid = np.linspace(0, shared_max_x, num=n_points)
-    curves = [moving_average(np.interp(grid, x, ep_rew), smooth_window) for ep_rew, x in runs]
+    curves = []
+    for ep_rew, x in runs:
+        n_valid = max(int(np.searchsorted(grid, x[-1], side="right")), 1)
+        curve = moving_average(np.interp(grid[:n_valid], x, ep_rew), smooth_window)
+        if n_valid < n_points:
+            curve = np.concatenate([curve, np.full(n_points - n_valid, np.nan)])
+        curves.append(curve)
     return curves, grid
+
+
+def compute_center_and_band_dropout(values, *, center_stat="mean", band="std", n_resamples=10_000, seed=0):
+    """Like plotter.compute_center_and_band, but tolerant of the NaN tail
+    interpolate_group leaves once a seed stops logging: at each grid point
+    the statistic is taken over whichever seeds are still finite there, so
+    the effective seed count drops (n, n-1, ...) as shorter seeds end,
+    instead of the whole curve being cut to the shortest seed.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    center_stat = normalize_center_stat(center_stat)
+    band = normalize_band(band)
+    statistic = get_center_statistic(center_stat)
+
+    n_points = values.shape[1]
+    center = np.full(n_points, np.nan)
+    lower = np.full(n_points, np.nan)
+    upper = np.full(n_points, np.nan)
+    rng = np.random.default_rng(seed) if band == "95ci" else None
+
+    for i in range(n_points):
+        col = values[:, i]
+        col = col[np.isfinite(col)]
+        if col.size == 0:
+            continue
+        center[i] = statistic(col)
+        if band == "std":
+            spread = col.std()
+            lower[i], upper[i] = center[i] - spread, center[i] + spread
+        elif col.size == 1:
+            lower[i] = upper[i] = center[i]
+        else:
+            estimates = statistic(col[rng.integers(col.size, size=(n_resamples, col.size))], axis=1)
+            lower[i], upper[i] = np.percentile(estimates, [2.5, 97.5])
+
+    return center, lower, upper
 
 
 def build_data(
@@ -266,7 +318,9 @@ def build_data(
 
 
 def build_final_return_rows(data, *, center_stat="mean", band="std", normalize_expert=True):
-    """Final (last interpolated point) return per env/method: mean +/- spread across seeds."""
+    """Final return per env/method: mean +/- spread across seeds, each seed
+    contributing its own last logged (interpolated) value -- not a value at
+    a shared grid point -- since seeds stop at different lengths."""
     rows = []
     for env_name, env_data in data.items():
         expert_mean = EXPERTS.get(env_name, {}).get("mean") if EXPERTS else None
@@ -277,7 +331,10 @@ def build_final_return_rows(data, *, center_stat="mean", band="std", normalize_e
             values = np.vstack(method_data["data"])
             if normalize_expert and expert_mean:
                 values = values / expert_mean
-            center, lower, upper = compute_center_and_band(values[:, -1:], center_stat=center_stat, band=band)
+            finite_mask = np.isfinite(values)
+            last_idx = finite_mask.shape[1] - 1 - np.argmax(finite_mask[:, ::-1], axis=1)
+            final_values = values[np.arange(values.shape[0]), last_idx][:, None]
+            center, lower, upper = compute_center_and_band(final_values, center_stat=center_stat, band=band)
             spread = max(center[0] - lower[0], upper[0] - center[0])
             rows.append(
                 {
@@ -348,13 +405,11 @@ def save_final_return_table(
         "  Method & " + " & ".join(_latex_escape(name) for name in env_names) + r" \\",
         r"  \midrule",
     ]
-    seen_no_critic = False
-    for method in method_names:
-        if method.startswith("no-critic") and not seen_no_critic:
-            latex_lines.append(r"  \midrule")
-            seen_no_critic = True
+    for index, method in enumerate(method_names):
         cells = [format_cell(values_by_env_method.get((env, method))) for env in env_names]
         latex_lines.append("  " + _latex_escape(method) + " & " + " & ".join(cells) + r" \\")
+        if method.startswith("no-critic") and index != len(method_names) - 1:
+            latex_lines.append(r"  \midrule")
     latex_lines.extend(
         [
             r"  \bottomrule",
@@ -430,7 +485,7 @@ def plot_training_curves(
             if x_axis == "time":
                 x = convert_seconds_to_hours(x)
             values = np.vstack(method_data["data"])
-            mean, lower, upper = compute_center_and_band(values, center_stat=center_stat, band=band)
+            mean, lower, upper = compute_center_and_band_dropout(values, center_stat=center_stat, band=band)
             if do_normalize:
                 mean, lower, upper = mean / expert_mean, lower / expert_mean, upper / expert_mean
             color = COLOR[method]
@@ -449,8 +504,9 @@ def plot_training_curves(
     fig.supylabel("Normalized Return" if normalize_expert else "Return", fontsize=12)
     fig.text(
         0.5, -0.01,
-        "Line = mean across seeds; shaded band = ± 1 SD. Each method's curve is capped at its own "
-        "shortest seed's last logged step (runs stop at varying wall-clock cutoffs) -- never extrapolated.",
+        "Line = mean across seeds still running at that point; shaded band = ± 1 SD. Each method's "
+        "curve runs out to its longest seed's last logged step -- as shorter seeds end (varying "
+        "wall-clock cutoffs) they drop out of the average rather than being extrapolated.",
         ha="center", va="top", fontsize=8, color="#52514e",
     )
 
@@ -497,7 +553,7 @@ def plot_single_env_curves(
         if x_axis == "time":
             x = convert_seconds_to_hours(x)
         values = np.vstack(method_data["data"])
-        mean, lower, upper = compute_center_and_band(values, center_stat=center_stat, band=band)
+        mean, lower, upper = compute_center_and_band_dropout(values, center_stat=center_stat, band=band)
         if do_normalize:
             mean, lower, upper = mean / expert_mean, lower / expert_mean, upper / expert_mean
         color = COLOR[method]
@@ -514,8 +570,9 @@ def plot_single_env_curves(
     _shared_legend(legend_ax, handles, labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
     fig.text(
         0.5, -0.01,
-        "Line = mean across seeds; shaded band = ± 1 SD. Each method's curve is capped at its own "
-        "shortest seed's last logged step -- never extrapolated.",
+        "Line = mean across seeds still running at that point; shaded band = ± 1 SD. Each method's "
+        "curve runs out to its longest seed's last logged step -- as shorter seeds end they drop out "
+        "of the average rather than being extrapolated.",
         ha="center", va="top", fontsize=7.5, color="#52514e",
     )
 
@@ -558,7 +615,7 @@ def main(
 
     plot_training_curves(
         data,
-        FOLDER_TO_SAVE_PLOTS / f"critic_no_critic_curves_{x_axis}{suffix}.png",
+        FOLDER_TO_SAVE_PLOTS / f"critic_no_critic_curves_{center_stat}{band}_{x_axis}{suffix}.png",
         x_axis=x_axis,
         center_stat=center_stat,
         band=band,
@@ -570,7 +627,7 @@ def main(
         plot_single_env_curves(
             env_name,
             env_data,
-            per_env_dir / f"{env_name}_{x_axis}{suffix}.png",
+            per_env_dir / f"{env_name}_{center_stat}{band}_{x_axis}{suffix}.png",
             x_axis=x_axis,
             center_stat=center_stat,
             band=band,

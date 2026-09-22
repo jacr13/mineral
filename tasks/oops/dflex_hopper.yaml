@@ -11,7 +11,7 @@ task:
     # reference implementation instead keeps stepping through a fallen/
     # terminal state for the rest of the fixed-length block. Disable it here
     # so the invariant holds.
-    early_termination: false
+    +early_termination: false
 agent:
   name: OOPS/DFlexAnt
   ddpg:

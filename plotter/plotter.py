@@ -1,7 +1,7 @@
 import csv
 import json
-import warnings
 import math
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -86,7 +86,7 @@ IGNORE_ALGOS = [
     "ZOCUS-SAC-OT-cos",
     "ZOCUS-PPO-l2",
     "ZOCUS-PPO-OT-l2",
-    "ZOCUS-PPO-OT-cos",  
+    "ZOCUS-PPO-OT-cos",
 ]
 
 ALGO_DISPLAY = {}
@@ -166,9 +166,7 @@ def interquartile_mean(values, axis=0):
 
 
 def get_center_statistic(center_stat):
-    return {"mean": np.mean, "median": np.median, "iqm": interquartile_mean}[
-        normalize_center_stat(center_stat)
-    ]
+    return {"mean": np.mean, "median": np.median, "iqm": interquartile_mean}[normalize_center_stat(center_stat)]
 
 
 def compute_center_and_band(values, *, center_stat="mean", band="std"):
@@ -373,15 +371,19 @@ def save_results_table(
     env_names = [env for env in preferred_envs if env in present_envs]
     env_names.extend(env for env in present_envs if env not in env_names)
     algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
-    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "ILD",
-                       "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
+    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "ILD", "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
     order = {name: index for index, name in enumerate(preferred_algos)}
     algo_names.sort(key=lambda name: (name.startswith("FOCUS"), order.get(name, -1)))
     values_by_env_algo = {(row["environment_name"], row["algorithm_display"]): row for row in rows}
     best_by_env = {
-        env: max((row["center"] for row in rows
-                  if row["environment_name"] == env and row["algorithm_display"] != "Expert"
-                  and np.isfinite(row["center"])), default=None)
+        env: max(
+            (
+                row["center"]
+                for row in rows
+                if row["environment_name"] == env and row["algorithm_display"] != "Expert" and np.isfinite(row["center"])
+            ),
+            default=None,
+        )
         for env in env_names
     }
     method_labels = {
@@ -879,11 +881,9 @@ def compute_aggregate_iqm(values, *, n_resamples=10_000, seed=0):
     bounds = np.empty((2, n_points))
     chunk_size = max(1, 1_000_000 // (n_resamples * sum(counts)))
     for start in range(0, n_points, chunk_size):
-        samples = np.concatenate([
-            a[:, start:start + chunk_size][draw] for a, draw in zip(arrays, indices)
-        ], axis=1)
+        samples = np.concatenate([a[:, start : start + chunk_size][draw] for a, draw in zip(arrays, indices)], axis=1)
         estimates = equal_environment_iqm(samples, weights)
-        bounds[:, start:start + chunk_size] = np.percentile(estimates, [2.5, 97.5], axis=0)
+        bounds[:, start : start + chunk_size] = np.percentile(estimates, [2.5, 97.5], axis=0)
     return center, bounds[0], bounds[1]
 
 
@@ -906,9 +906,15 @@ def build_aggregate_iqm_results(data, *, x_axis, n_points=1000):
                 raise ValueError(f"Missing {grid_key} for {env}/{algo}")
             for grid, curve in zip(grids, curves):
                 grid, curve = np.asarray(grid), np.asarray(curve)
-                if (grid.ndim != 1 or curve.ndim != 1 or grid.size < 2
-                        or grid.size != curve.size or not np.isfinite(grid).all()
-                        or not np.isfinite(curve).all() or np.any(np.diff(grid) <= 0)):
+                if (
+                    grid.ndim != 1
+                    or curve.ndim != 1
+                    or grid.size < 2
+                    or grid.size != curve.size
+                    or not np.isfinite(grid).all()
+                    or not np.isfinite(curve).all()
+                    or np.any(np.diff(grid) <= 0)
+                ):
                     raise ValueError(f"Invalid aggregate curve for {env}/{algo}")
                 prepared[env].setdefault(algo, []).append((grid, curve))
 
@@ -918,8 +924,11 @@ def build_aggregate_iqm_results(data, *, x_axis, n_points=1000):
         if not any(counts):
             continue
         if not all(counts):
-            warnings.warn(f"Skipping aggregate IQM for {algo}: seed counts by environment "
-                          f"{dict(zip(env_names, counts))}; at least one run per environment required", stacklevel=2)
+            warnings.warn(
+                f"Skipping aggregate IQM for {algo}: seed counts by environment "
+                f"{dict(zip(env_names, counts))}; at least one run per environment required",
+                stacklevel=2,
+            )
             continue
         eligible.append(algo)
     if not eligible:
@@ -941,17 +950,20 @@ def build_aggregate_iqm_results(data, *, x_axis, n_points=1000):
         grid = np.linspace(start, end, n_points)
         endpoints[env] = {"start": float(start), "end": float(end)}
         for algo in eligible:
-            aligned[algo].append(np.vstack([
-                np.interp(grid, run_grid, curve) / expert
-                for run_grid, curve in prepared[env][algo]
-            ]))
+            aligned[algo].append(
+                np.vstack([np.interp(grid, run_grid, curve) / expert for run_grid, curve in prepared[env][algo]])
+            )
     results = {}
     for algo, arrays in aligned.items():
         center, lower, upper = compute_aggregate_iqm(arrays)
-        results[algo] = dict(center=center, lower=lower, upper=upper,
-                             n_envs=len(env_names),
-                             n_runs_per_env=dict(zip(env_names, [a.shape[0] for a in arrays])),
-                             endpoints=endpoints)
+        results[algo] = dict(
+            center=center,
+            lower=lower,
+            upper=upper,
+            n_envs=len(env_names),
+            n_runs_per_env=dict(zip(env_names, [a.shape[0] for a in arrays])),
+            endpoints=endpoints,
+        )
     return results
 
 
@@ -972,13 +984,26 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
     for algo, result in results.items():
         center, lower, upper = (result[key] for key in ("center", "lower", "upper"))
         x = np.linspace(0, 100, len(center))
-        line, = ax.plot(x, center, label=algo, color=COLOR.get(normalize_algo_key(algo)),
-                        linewidth=3 if algo.lower().startswith("focus") else 2)
+        (line,) = ax.plot(
+            x,
+            center,
+            label=algo,
+            color=COLOR.get(normalize_algo_key(algo)),
+            linewidth=3 if algo.lower().startswith("focus") else 2,
+        )
         ax.fill_between(x, lower, upper, color=line.get_color(), alpha=0.2)
-        rows.append(dict(algorithm=algo, iqm=float(center[-1]), lower=float(lower[-1]),
-                         upper=float(upper[-1]), n_environments=result["n_envs"],
-                         n_runs_per_environment=json.dumps(result["n_runs_per_env"]), x_axis=x_axis,
-                         environment_intervals=json.dumps(result["endpoints"])))
+        rows.append(
+            dict(
+                algorithm=algo,
+                iqm=float(center[-1]),
+                lower=float(lower[-1]),
+                upper=float(upper[-1]),
+                n_environments=result["n_envs"],
+                n_runs_per_environment=json.dumps(result["n_runs_per_env"]),
+                x_axis=x_axis,
+                environment_intervals=json.dumps(result["endpoints"]),
+            )
+        )
     ax.set_xlabel(f"{'Wall-time' if x_axis == 'time' else 'Step'} progress (%)")
     ax.set_ylabel("IQM Expert-Normalized Return")
     ax.margins(x=0)
@@ -1002,12 +1027,9 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
         return []
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    algorithms = list(dict.fromkeys(
-        algo for axis in axes_order for algo in results_by_axis[axis]
-    ))
+    algorithms = list(dict.fromkeys(algo for axis in axes_order for algo in results_by_axis[axis]))
     cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    colors = {algo: COLOR.get(normalize_algo_key(algo), cycle[i % len(cycle)])
-              for i, algo in enumerate(algorithms)}
+    colors = {algo: COLOR.get(normalize_algo_key(algo), cycle[i % len(cycle)]) for i, algo in enumerate(algorithms)}
     paths = []
     for orientation in orientations:
         horizontal = orientation == "horizontal"
@@ -1018,7 +1040,8 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
             layout="constrained",
         )
         grid = fig.add_gridspec(
-            2 if horizontal else 3, 2 if horizontal else 1,
+            2 if horizontal else 3,
+            2 if horizontal else 1,
             height_ratios=[0.3 if horizontal else 0.25 * legend_rows] + ([2.2] if horizontal else [3, 3]),
         )
         legend_ax = fig.add_subplot(grid[0, :])
@@ -1026,13 +1049,13 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
         panels = []
         legend_handles = {}
         for index, axis in enumerate(axes_order):
-            ax = fig.add_subplot(grid[1, index] if horizontal else grid[index + 1, 0],
-                                 sharey=panels[0] if panels else None)
+            ax = fig.add_subplot(grid[1, index] if horizontal else grid[index + 1, 0], sharey=panels[0] if panels else None)
             panels.append(ax)
             for algo, result in results_by_axis[axis].items():
                 x = np.linspace(0, 100, len(result["center"]))
-                line, = ax.plot(x, result["center"], label=algo, color=colors[algo],
-                                linewidth=3 if algo.lower().startswith("focus") else 2)
+                (line,) = ax.plot(
+                    x, result["center"], label=algo, color=colors[algo], linewidth=3 if algo.lower().startswith("focus") else 2
+                )
                 ax.fill_between(x, result["lower"], result["upper"], color=colors[algo], alpha=0.2)
                 legend_handles.setdefault(algo, line)
             ax.set_xlabel(f"{'Wall-time' if axis == 'time' else 'Step'} progress (%)")
@@ -1045,9 +1068,14 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
             ax.spines[["right", "top"]].set_visible(False)
         labels = algorithms
         legend = legend_ax.legend(
-            [legend_handles[label] for label in labels], labels,
-            loc="center", ncol=ncols, frameon=False, fontsize=11 if horizontal else 8,
-            columnspacing=1.0, handletextpad=0.5,
+            [legend_handles[label] for label in labels],
+            labels,
+            loc="center",
+            ncol=ncols,
+            frameon=False,
+            fontsize=11 if horizontal else 8,
+            columnspacing=1.0,
+            handletextpad=0.5,
         )
         if horizontal:
             # Measure before layout so an oversized legend cannot collapse axes.
@@ -1434,10 +1462,9 @@ def main(
         )
 
 
-
 if __name__ == "__main__":
     # True: only the horizontal time/steps IQM figure. False: all outputs.
-    ONLY_HORIZONTAL_AGGREGATED_IQM = True
+    ONLY_HORIZONTAL_AGGREGATED_IQM = False
 
     aggregate_results = {}
     center_stats = ["mean"] if ONLY_HORIZONTAL_AGGREGATED_IQM else ["mean", "median"]
@@ -1445,8 +1472,8 @@ if __name__ == "__main__":
         for band in ["95ci"]:  # ["95ci", "std"]:
             for x_axis in ["time", "steps"]:
                 aggregate_results[x_axis] = main(
-                    sync_remote=False,
-                    update_group_runs=False,
+                    sync_remote=True,
+                    update_group_runs=True,
                     create_plots=True,
                     x_axis=x_axis,
                     center_stat=center_stat,
