@@ -42,10 +42,10 @@ CACHE_DIR = FOLDER_TO_SAVE_PLOTS / "cache"
 
 ENTITY = "jacr"
 PROJECTS = {
-    "hopper": "new_rewardshape_critic_OTIL_SAPO-dflex_hopper-slurm",
-    "ant": "new_rewardshape_critic_OTIL_SAPO-dflex_ant-slurm",
-    "humanoid": "new_rewardshape_critic_OTIL_SAPO-dflex_humanoid-slurm",
-    "snu_humanoid": "new_rewardshape_critic_OTIL_SAPO-dflex_snu_humanoid-slurm",
+    "hopper": "new_v2_critic_OTIL_SAPO-dflex_hopper-slurm",
+    "ant": "new_v2_critic_OTIL_SAPO-dflex_ant-slurm",
+    "humanoid": "new_v2_critic_OTIL_SAPO-dflex_humanoid-slurm",
+    "snu_humanoid": "new_v2_critic_OTIL_SAPO-dflex_snu_humanoid-slurm",
 }
 
 MAPPING_LABEL = {"exp": "exp", "log_exp": "logexp", "neg": "neg"}

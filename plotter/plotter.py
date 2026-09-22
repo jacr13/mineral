@@ -48,6 +48,7 @@ COLOR = {
     "OPOLO": "#A12864",
     "GAIfO": "#7D54B2",
     "MAAD": "#DC4BDC",
+    "PWIL": "#1B998B",
     "ILD": "#FFB83D",
     "FOCUS-l2": "#5BC5DB",
     "FOCUS-OT-cos": "#A0C75C",
@@ -66,6 +67,7 @@ ALGOS = [
     "OPOLO",
     "GAIfO",
     "MAAD",
+    "PWIL",
     "ILD",
     "FOCUS-l2",
     "FOCUS-OT-l2",
@@ -371,7 +373,7 @@ def save_results_table(
     env_names = [env for env in preferred_envs if env in present_envs]
     env_names.extend(env for env in present_envs if env not in env_names)
     algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
-    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "ILD",
+    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "ILD",
                        "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
     order = {name: index for index, name in enumerate(preferred_algos)}
     algo_names.sort(key=lambda name: (name.startswith("FOCUS"), order.get(name, -1)))
