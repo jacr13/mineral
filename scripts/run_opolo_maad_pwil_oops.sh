@@ -17,21 +17,11 @@ ENVS=(
   "dflex_snu_humanoid"
 )
 
-# Four baselines, each launched via its own task config directory
-# (see spawner.py's --task_name). "maad" is not its own agent: it's GAIL
-# with the inverse-dynamics-model regularizer turned on (its inverse_model
-# is disabled by default in tasks/gail/*.yaml), so it reuses the gail task
-# configs plus one extra --set override below.
-#
-# name           | spawner --task_name | agent max_agent_steps config key
-# BASELINE_NAMES=("opolo" "maad" "pwil" "oops")
-# BASELINE_TASK_NAMES=("opolo" "gail" "pwil" "oops")
-# BASELINE_STEPS_KEYS=("agent.sac.max_agent_steps" "agent.ppo.max_agent_steps" "agent.sac.max_agent_steps" "agent.ddpg.max_agent_steps")
-# BASELINE_EXTRA_SETS=("" "agent.gail.inverse_model.enabled=true" "" "")
-BASELINE_NAMES=("opolo" "oops")
-BASELINE_TASK_NAMES=("opolo" "oops")
-BASELINE_STEPS_KEYS=("agent.sac.max_agent_steps" "agent.ddpg.max_agent_steps")
-BASELINE_EXTRA_SETS=("" "")
+# Launch only OOPS via its task config directory.
+BASELINE_NAMES=("oops")
+BASELINE_TASK_NAMES=("oops")
+BASELINE_STEPS_KEYS=("agent.ddpg.max_agent_steps")
+BASELINE_EXTRA_SETS=("")
 
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '
