@@ -10,6 +10,27 @@ from mineral.agents.oops.oops import OOPS
 
 
 class OOPSHorizonTests(unittest.TestCase):
+    def test_update_budget_scales_with_collected_transitions(self):
+        agent = OOPS.__new__(OOPS)
+        agent.ddpg_config = SimpleNamespace(mini_epochs=None)
+        agent.horizon = 1000
+        for actors in (1, 2, 64):
+            agent.num_actors = actors
+            self.assertEqual(agent._updates_per_rollout(), actors * 1000)
+        agent.ddpg_config.mini_epochs = 17
+        self.assertEqual(agent._updates_per_rollout(), 17)
+
+    def test_reported_rewards_mask_terminal_steps_without_latching(self):
+        rewards = torch.tensor([-200., -3., 5., 7.])
+        dones = torch.tensor([0, 0, 0, 1])
+        info = {'termination': torch.tensor([True, False, False, False])}
+        actual = OOPS._reported_rewards(rewards, dones, info)
+        torch.testing.assert_close(actual, torch.tensor([0., -3., 5., 0.]))
+        torch.testing.assert_close(rewards, torch.tensor([-200., -3., 5., 7.]))
+        # Like the reference, a later recovered state can earn reward again.
+        actual = OOPS._reported_rewards(rewards, torch.zeros(4), {})
+        torch.testing.assert_close(actual, rewards)
+
     def test_critic_terminal_mask_uses_time_instead_of_environment_done(self):
         agent = OOPS.__new__(OOPS)
         agent.ddpg_config = SimpleNamespace(gamma=0.9, nstep=1)

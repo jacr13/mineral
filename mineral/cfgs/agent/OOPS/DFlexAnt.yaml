@@ -11,6 +11,9 @@ ddpg:
   # horizon_len (and therefore warm_up) is set per-task to that env's episode
   # length (matching its demos file), since it varies per environment.
   warm_up: ${.horizon_len}
+  # null: one critic update per collected transition (reference: 1000/1000).
+  # Scales with num_actors * horizon_len; an integer explicitly overrides it.
+  mini_epochs: null
   batch_size: 100
   tau: 0.003
   noise:

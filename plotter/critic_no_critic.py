@@ -21,6 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+from wandb_api import API, get_rew_steps_times
 
 from plotter import (
     ENV_NAMES,
@@ -34,13 +35,12 @@ from plotter import (
     normalize_band,
     normalize_center_stat,
 )
-from wandb_api import API, get_rew_steps_times
 
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
 PLOTTER_DIR = Path(__file__).resolve().parent
-FOLDER_TO_SAVE_PLOTS = PLOTTER_DIR / "crit_no_critic"
+FOLDER_TO_SAVE_PLOTS = PLOTTER_DIR / "crit_no_critic_smoothed25"
 CACHE_DIR = FOLDER_TO_SAVE_PLOTS / "cache"
 
 ENTITY = "jacr"
@@ -257,7 +257,7 @@ def build_data(
     critic_reward_shapping=True,
     x_axis="steps",
     n_points=1000,
-    smooth_window=50,
+    smooth_window=25,
     force_refresh=False,
 ):
     envs = envs or list(PROJECTS)
@@ -321,7 +321,8 @@ def build_final_return_rows(data, *, center_stat="mean", band="std", normalize_e
     """Final return per env/method: center +/- spread (std band) or exact
     [lower, upper] (95ci band) across seeds, each seed contributing its own
     last logged (interpolated) value -- not a value at a shared grid point
-    -- since seeds stop at different lengths."""
+    -- since seeds stop at different lengths.
+    """
     rows = []
     for env_name, env_data in data.items():
         expert_mean = EXPERTS.get(env_name, {}).get("mean") if EXPERTS else None
@@ -388,14 +389,8 @@ def save_final_return_table(
             return rf"${row['center']:.{decimals}f} \pm {spread:.{decimals}f}$"
         return rf"${row['center']:.{decimals}f}\;[{row['lower']:.{decimals}f}, {row['upper']:.{decimals}f}]$"
 
-    return_desc = (
-        "final returns normalized by each environment's expert return"
-        if normalize_expert
-        else "final returns"
-    )
-    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[
-        normalize_center_stat(center_stat)
-    ]
+    return_desc = "final returns normalized by each environment's expert return" if normalize_expert else "final returns"
+    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[normalize_center_stat(center_stat)]
     stat_desc = (
         f"{center_label} " r"$\pm$ standard deviation across seeds"
         if normalize_band(band) == "std"
@@ -437,9 +432,7 @@ def save_final_return_table(
 
 
 def _curve_footnote(center_stat, band):
-    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[
-        normalize_center_stat(center_stat)
-    ]
+    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[normalize_center_stat(center_stat)]
     band_desc = "± 1 SD" if normalize_band(band) == "std" else "a 95% bootstrap CI"
     return (
         f"Line = {center_label} across seeds still running at that point; shaded band = {band_desc}. "
@@ -526,9 +519,13 @@ def plot_training_curves(
     _shared_legend(legend_ax, legend_handles, legend_labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
     fig.supylabel("Normalized Return" if normalize_expert else "Return", fontsize=12)
     fig.text(
-        0.5, -0.01,
+        0.5,
+        -0.01,
         _curve_footnote(center_stat, band),
-        ha="center", va="top", fontsize=8, color="#52514e",
+        ha="center",
+        va="top",
+        fontsize=8,
+        color="#52514e",
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -590,9 +587,13 @@ def plot_single_env_curves(
     handles, labels = ax.get_legend_handles_labels()
     _shared_legend(legend_ax, handles, labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
     fig.text(
-        0.5, -0.01,
+        0.5,
+        -0.01,
         _curve_footnote(center_stat, band),
-        ha="center", va="top", fontsize=7.5, color="#52514e",
+        ha="center",
+        va="top",
+        fontsize=7.5,
+        color="#52514e",
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -657,9 +658,17 @@ def main(
 
 
 if __name__ == "__main__":
-    main(
-        critic_reward_shapping=True,
-        x_axis="steps",
-        force_refresh=False,
-        normalize_expert=True,
-    )
+    # Mirrors plotter.py's own __main__ loop: regenerate every stat/band
+    # combo (and both normalized/raw) on every run, instead of only the
+    # meanstd default -- so the report never silently goes stale relative
+    # to the others.
+    for center_stat, band in [("mean", "std"), ("mean", "95ci"), ("median", "95ci")]:
+        for normalize_expert in (True, False):
+            main(
+                critic_reward_shapping=True,
+                x_axis="steps",
+                center_stat=center_stat,
+                band=band,
+                force_refresh=False,
+                normalize_expert=normalize_expert,
+            )

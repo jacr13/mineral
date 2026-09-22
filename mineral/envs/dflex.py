@@ -14,6 +14,23 @@ DEFAULT_DFLEXENVS_KWARGS = {
 }
 
 
+class _FixedHorizonInfo:
+    """Expose terminal signals and observations without resetting on falls."""
+
+    def calculateReward(self):
+        super().calculateReward()
+        self._terminal_obs = self.obs_buf.clone()
+        self._terminal = (self.obs_buf[:, 0] < self.termination_height) | self.reset_buf.bool()
+
+    def step(self, actions):
+        obs, reward, done, info = super().step(actions)
+        return obs, reward, done, {
+            **info,
+            'termination': self._terminal,
+            'obs_before_reset': self._terminal_obs,
+        }
+
+
 class _FixedHorizonHumanoid:
     """Disable fall resets in legacy DFlex humanoids without changing rewards."""
 
@@ -49,6 +66,7 @@ def make_envs(config):
     import dflex.envs as DFlexEnvs
 
     env_fn = getattr(DFlexEnvs, env_name)
+    fixed_horizon = env_kwargs.get('early_termination') is False
     # The pinned DFlex humanoids hard-code fall resets in calculateReward;
     # unlike Ant/Hopper, their constructors have no early_termination option.
     if (
@@ -58,6 +76,8 @@ def make_envs(config):
     ):
         if not env_kwargs.pop('early_termination'):
             env_fn = type(f'FixedHorizon{env_name}', (_FixedHorizonHumanoid, env_fn), {})
+    if fixed_horizon and env_name in ('AntEnv', 'HopperEnv', 'HumanoidEnv', 'SNUHumanoidEnv'):
+        env_fn = type(f'FixedHorizonInfo{env_name}', (_FixedHorizonInfo, env_fn), {})
     env = env_fn(
         num_envs=num_envs,
         device=config.sim_device,

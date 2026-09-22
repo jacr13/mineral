@@ -20,7 +20,9 @@ for name in ('ant', 'hopper', 'humanoid', 'snu_humanoid'):
     for step in range(1000):
         action = torch.zeros((2, env.num_actions), device='cuda:0')
         obs, reward, done, info = env.step(action)
-        fell |= obs[:, 0] < env.termination_height
+        fell |= info['obs_before_reset'][:, 0] < env.termination_height
+        assert torch.equal(info['termination'], (info['obs_before_reset'][:, 0] < env.termination_height) | done.bool())
+        assert info['obs_before_reset'].data_ptr() != obs.data_ptr()
         assert torch.isfinite(obs).all(), (name, step, 'invalid observations')
         assert torch.isfinite(reward).all(), (name, step, 'invalid rewards')
         if step < 999:

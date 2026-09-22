@@ -238,6 +238,7 @@ class OOPS(Agent):
         }
         traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
         env_rewards_sum = torch.zeros(self.num_actors, device=self.device)
+        raw_env_rewards_sum = torch.zeros_like(env_rewards_sum)
 
         for i in range(timesteps):
             if not self.env_autoresets:
@@ -254,7 +255,10 @@ class OOPS(Agent):
                 actions = self.get_actions(self.obs, t_to_horizon, sample=sample)
 
             next_obs, rewards, dones, infos = env.step(actions)
+            terminal_obs = self._convert_obs(infos.get('obs_before_reset', next_obs))
             next_obs = self._convert_obs(next_obs)
+            raw_env_rewards_sum += rewards
+            rewards = self._reported_rewards(rewards, dones, infos)
             env_rewards_sum += rewards
 
             done_indices = torch.where(dones)[0].tolist()
@@ -270,13 +274,13 @@ class OOPS(Agent):
                 dones = self._handle_timeout(dones, infos)
 
             episode_obs[:, i] = self.obs["obs"]
-            episode_second[:, i] = actions if self.state_action else next_obs["obs"]
+            episode_second[:, i] = actions if self.state_action else terminal_obs["obs"]
 
             traj_obs["obs"][:, i] = self.obs["obs"]
             traj_obs["t_to_horizon"][:, i] = t_to_horizon
             traj_actions[:, i] = actions
             traj_dones[:, i] = dones
-            traj_next_obs["obs"][:, i] = next_obs["obs"]
+            traj_next_obs["obs"][:, i] = terminal_obs["obs"]
             next_t_to_horizon = torch.full(
                 (self.num_actors, 1), max(timesteps - i - 1, 0) / float(timesteps), device=self.device
             )
@@ -302,6 +306,7 @@ class OOPS(Agent):
             "reward_mean": traj_rewards.mean(),
             "reward_std": traj_rewards.std(unbiased=False),
             "env_return_mean": env_rewards_sum.mean(),
+            "raw_env_return_mean": raw_env_rewards_sum.mean(),
             "expert_return": torch.tensor(float(self.demos["expert_return"]), device=self.device),
         }
 
@@ -374,9 +379,19 @@ class OOPS(Agent):
 
         self.save(os.path.join(self.ckpt_dir, "final.pth"))
 
+    @staticmethod
+    def _reported_rewards(rewards, dones, infos):
+        # Reference main.py zeros reward on each done step, but keeps stepping.
+        terminal = infos.get('termination', dones).bool() | dones.bool()
+        return rewards.masked_fill(terminal, 0.0)
+
+    def _updates_per_rollout(self):
+        configured = self.ddpg_config.mini_epochs
+        return self.num_actors * self.horizon if configured is None else int(configured)
+
     def update_net(self, memory):
         results = collections.defaultdict(list)
-        for _i in range(self.ddpg_config.mini_epochs):
+        for _i in range(self._updates_per_rollout()):
             self.mini_epoch += 1
             obs, action, reward, next_obs, done = memory.sample_batch(self.ddpg_config.batch_size, device=self.device)
 
@@ -411,12 +426,12 @@ class OOPS(Agent):
             critic_loss, critic_grad_norm = self.update_critic(
                 obs_n, action, reward, next_obs_n, done, t_to_horizon, next_t_to_horizon, match, next_match
             )
-            results["loss/critic"].append(critic_loss)
+            results["loss/critic"].append(critic_loss.detach())
             results["grad_norm/critic"].append(critic_grad_norm)
 
             if self.mini_epoch % self.ddpg_config.update_actor_interval == 0:
                 actor_loss, actor_grad_norm = self.update_actor(obs_n, actor_t_to_horizon, match)
-                results["loss/actor"].append(actor_loss)
+                results["loss/actor"].append(actor_loss.detach())
                 results["grad_norm/actor"].append(actor_grad_norm)
 
             if self.mini_epoch % self.ddpg_config.update_targets_interval == 0:
@@ -504,6 +519,7 @@ class OOPS(Agent):
 
                     next_obs, rewards, dones, infos = self.env.step(actions)
                     next_obs = self._convert_obs(next_obs)
+                    rewards = self._reported_rewards(rewards, dones, infos)
 
                     done_indices = torch.where(dones)[0].tolist()
                     self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
