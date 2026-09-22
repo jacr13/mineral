@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Ablation over the best-of-K pool size (agent.otil.loss_best_of_k_k) for the
-# two OT-based FOCUS/OTIL variants (FOCUS-OT-L2 and FOCUS-OT-Cos). Mirrors
-# scripts/otilsac.sh's launch pattern, restricted to a single environment and
-# a K sweep instead of a variant sweep.
+# Extend the existing best-of-K ablation (wandb projects
+# jacr/bestofk_OTIL_SAPO-dflex_{env}-slurm-new) with 3 additional seeds.
 #
-# Default footprint: 1 env x 2 variants x 6 K values x 3 seeds = 36 jobs.
-# Trim K_VALUES / SEEDS below to shrink that further if time is tight.
+# The original sweep (OTIL/FOCUS-SAPO base, K in {1,2,4,8,16}, OT cost in
+# {l2, cosine}) only used seeds 100/110/120 -- see
+# scripts/rerun_missing_bestofk_seeds.sh for the one gap in that original
+# run. This script adds seeds 1000/1100/1200 (matching the 6-seed convention
+# used elsewhere, e.g. scripts/otilsac.sh) on top of it, submitting straight
+# into the same wandb projects so plotter/bestofk_ablation.py picks them up
+# automatically and the per-condition seed count goes from 3 to 6 (tighter
+# bootstrap CIs).
+#
+# Footprint: 4 envs x 5 K values x 2 costs x 3 seeds = 120 jobs. Trim
+# ENVS/K_VALUES/SEEDS below if that's too much for the time you have.
 set -euo pipefail
 
 LOG_FILE="run_otil_k_ablation_$(date +%Y%m%d_%H%M%S).log"
@@ -18,46 +25,20 @@ MAX_JOBS=300
 BATCH_JOBS=""
 SETTLE_SECONDS=5
 
-# "sac" or "ppo". Both variants use best-of-K matching (imitation_loss_type=ot);
-# SAC is the default here since it is the cheaper of the two to get an early
-# read on K sensitivity.
-BASE_ALGO="sac"
+SEEDS=(1000 1100 1200)
 
-ENV="dflex_ant"
-RUNTIME="8h"
-MAX_AGENT_STEPS=10000000
+# K values matching the original sweep.
+K_VALUES=(1 2 4 8 16)
 
-SEEDS=(100 110 120)
+# ot_cost -> embedding dim|reward mapping, matching the original sweep
+# (verified against the surviving runs' resolved wandb configs).
+declare -A MLP_DIM=( [l2]=64 [cosine]=null )
+declare -A REWARD_MAPPING=( [l2]=exp [cosine]=log_exp )
+COSTS=(l2 cosine)
 
-# K values to sweep, bracketing the FOCUS default of K=8.
-K_VALUES=(1 2 4 8 16 32)
-
-# variant name|OT cost type|embedding dim|reward mapping
-# (matches the focus_ot_l2 / focus_ot_cos rows of scripts/otilsac.sh, minus
-# the plain-L2 non-OT variant, which the K ablation doesn't target)
-VARIANTS=(
-  "ot_l2|l2|64|exp"
-  "ot_cos|cosine|null|log_exp"
-)
-
-case "$BASE_ALGO" in
-  sac)
-    TASK_NAME="otilsac"
-    WANDB_PROJECT_PREFIX="OTIL_K_ABLATION_SAC"
-    STEPS_KEY="agent.sac.max_agent_steps"
-    LOGDIR_PREFIX="OTIL_K_ABLATION_SAC"
-    ;;
-  ppo)
-    TASK_NAME="otilppo"
-    WANDB_PROJECT_PREFIX="OTIL_K_ABLATION_PPO"
-    STEPS_KEY="agent.ppo.max_agent_steps"
-    LOGDIR_PREFIX="OTIL_K_ABLATION_PPO"
-    ;;
-  *)
-    echo "ERROR: unknown BASE_ALGO '${BASE_ALGO}' (expected sac or ppo)." >&2
-    exit 1
-    ;;
-esac
+# env -> slurm runtime, matching the original sweep's per-env wall-clock cap.
+declare -A RUNTIME=( [hopper]="3h30m" [ant]="4h" [humanoid]="7h30m" [snu_humanoid]="7h30m" )
+ENVS=(hopper ant humanoid snu_humanoid)
 
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '
@@ -84,68 +65,73 @@ wait_until_room_for_next_batch() {
 }
 
 echo "============================================================"
-echo "Launching OTIL K ablation (${BASE_ALGO}) on ${ENV}"
-echo "K values: ${K_VALUES[*]}"
-echo "Seeds: ${SEEDS[*]}"
+echo "Extending bestofk OTIL/FOCUS-SAPO ablation with seeds: ${SEEDS[*]}"
+echo "Envs: ${ENVS[*]}  K values: ${K_VALUES[*]}  Costs: ${COSTS[*]}"
 echo "MAX_JOBS=${MAX_JOBS}"
 echo "============================================================"
 
 git pull
 
-for variant_row in "${VARIANTS[@]}"; do
-  IFS="|" read -r variant ot_cost mlp_dim reward_mapping <<<"${variant_row}"
+for env in "${ENVS[@]}"; do
+  runtime="${RUNTIME[$env]}"
 
-  for k in "${K_VALUES[@]}"; do
-    condition="${variant}_k${k}"
+  for cost in "${COSTS[@]}"; do
+    mlp_dim="${MLP_DIM[$cost]}"
+    reward_mapping="${REWARD_MAPPING[$cost]}"
 
-    echo "------------------------------------------------------------"
-    echo "Config: ${condition}"
-    echo "  ot_cost=${ot_cost}  embedding_dim=${mlp_dim}  reward_mapping=${reward_mapping}  K=${k}"
-    echo "------------------------------------------------------------"
+    for k in "${K_VALUES[@]}"; do
+      condition="k${k}_${cost}"
 
-    for seed in "${SEEDS[@]}"; do
-      echo "  Seed: ${seed}"
-      if [[ -n "$BATCH_JOBS" ]]; then
-        wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
-      fi
+      echo "------------------------------------------------------------"
+      echo "Config: env=${env} K=${k} ot_cost=${cost} runtime=${runtime}"
+      echo "------------------------------------------------------------"
 
-      python spawner.py \
-        --task_name "${TASK_NAME}" \
-        --docker \
-        --docker_image /home/users/c/candidor/docker/mineral.sif \
-        --deployment slurm \
-        --runtime "${RUNTIME}" \
-        --no-cleanup \
-        --set "seed=${seed}" \
-        --set "logdir=workdir/${LOGDIR_PREFIX}_${ENV}_${RUN_STAMP}/${condition}/seed_${seed}" \
-        --set "wandb.project=${WANDB_PROJECT_PREFIX}-${ENV}-slurm" \
-        --set "${STEPS_KEY}=${MAX_AGENT_STEPS}" \
-        --set "agent.otil.input_type=state_state" \
-        --set "agent.otil.imitation_loss_type=ot" \
-        --set "agent.otil.loss_ot_cost_type=${ot_cost}" \
-        --set "agent.otil.loss_mlp_features_dim=${mlp_dim}" \
-        --set "agent.otil.critic_reward_mapping=${reward_mapping}" \
-        --set "agent.otil.critic_reward_shapping=false" \
-        --set "agent.otil.loss_best_of_k_k=${k}" \
-        --env_files "${ENV}.yaml" \
-        --deploy_now
-
-      if [[ -z "$BATCH_JOBS" ]]; then
-        sleep "$SETTLE_SECONDS"
-        BATCH_JOBS="$(job_count)"
-        echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
-        if [[ "$BATCH_JOBS" -eq 0 ]]; then
-          echo "WARNING: Detected 0 jobs after submission." >&2
+      for seed in "${SEEDS[@]}"; do
+        echo "  Seed: ${seed}"
+        if [[ -n "$BATCH_JOBS" ]]; then
+          wait_until_room_for_next_batch "$MAX_JOBS" "$BATCH_JOBS"
         fi
-        if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
-          echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}." >&2
+
+        python spawner.py \
+          --task_name otil \
+          --docker \
+          --docker_image /home/users/c/candidor/docker/mineral.sif \
+          --deployment slurm \
+          --runtime "${runtime}" \
+          --no-cleanup \
+          --set "seed=${seed}" \
+          --set "logdir=workdir/bestofk_extra_seeds_${RUN_STAMP}/${env}/${condition}/seed_${seed}" \
+          --set "wandb.project=bestofk_OTIL_SAPO-dflex_${env}-slurm-new" \
+          --set "agent.shac.max_agent_steps=100000000" \
+          --set "agent.otil.imitation_loss_type=ot" \
+          --set "agent.otil.loss_ot_cost_type=${cost}" \
+          --set "agent.otil.loss_best_of_k_k=${k}" \
+          --set "agent.otil.loss_mlp_features_dim=${mlp_dim}" \
+          --set "agent.otil.critic_reward_mapping=${reward_mapping}" \
+          --set "agent.otil.loss_use_huber_speedup=false" \
+          --set "agent.otil.loss_use_detached_prev_obs=false" \
+          --set "agent.otil.actor_value_return_type=min" \
+          --set "agent.otil.critic_reward_normalize=false" \
+          --env_files "dflex_${env}.yaml" \
+          --deploy_now
+
+        if [[ -z "$BATCH_JOBS" ]]; then
+          sleep "$SETTLE_SECONDS"
+          BATCH_JOBS="$(job_count)"
+          echo "Detected batch jobs (from empty queue): ${BATCH_JOBS}"
+          if [[ "$BATCH_JOBS" -eq 0 ]]; then
+            echo "WARNING: Detected 0 jobs after submission." >&2
+          fi
+          if [[ "$BATCH_JOBS" -gt "$MAX_JOBS" ]]; then
+            echo "WARNING: batch_jobs=${BATCH_JOBS} > MAX_JOBS=${MAX_JOBS}." >&2
+          fi
         fi
-      fi
+      done
     done
   done
 done
 
 echo "============================================================"
-echo "All jobs submitted. Once they finish, analyze with:"
-echo "  python scripts/analyze_otil_k_ablation.py workdir/${LOGDIR_PREFIX}_${ENV}_${RUN_STAMP}"
+echo "All jobs submitted. Once they finish, refresh the plots/tables with:"
+echo "  cd plotter && python bestofk_ablation.py"
 echo "============================================================"
