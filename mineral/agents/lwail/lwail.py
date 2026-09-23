@@ -53,8 +53,10 @@ class LWAIL(DDPG):
         ``icvf_model/dflex_<env_name>.pt``), ``__init__`` pretrains one from a
         random rollout of ``self.env`` and caches it there (see
         ``icvf.py::load_or_pretrain_icvf``); every later run for that path
-        (other seeds, sweeps) just loads the cached checkpoint. Off by
-        default -- set ``lwail.using_icvf: true`` to turn it on.
+        (other seeds, sweeps) just loads the cached checkpoint. On by default
+        (``LWAIL/DFlexAnt.yaml``): without it, the raw-state critic saturates
+        and the reward signal collapses on higher-dimensional envs; set
+        ``lwail.using_icvf: false`` to disable.
 
     Upstream also pretrains "f_net" for ``lwail.pretrain_iters`` steps (default
     2500, matching upstream's hardcoded value) against the warm-up random

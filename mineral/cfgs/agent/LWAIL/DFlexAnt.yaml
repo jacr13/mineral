@@ -47,12 +47,16 @@ lwail:
   pretrain_iters: 2500 # upstream hardcodes 2500 epochs in `core.py::Agent.pretrain`
 
   # upstream `--using_icvf`: embed states through a frozen ICVF encoder before
-  # the critic. Off by default: upstream only ships ICVF checkpoints for a few
-  # D4RL Mujoco tasks (dimension-incompatible with this repo's dflex tasks).
-  # When enabled, the first run for a given `icvf_path` (default:
-  # icvf_model/dflex_<env_name>.pt) pretrains one from a random rollout and
-  # caches it there; every later run (other seeds, sweeps) just loads it.
-  using_icvf: false
+  # the critic. Turned on: without it, the raw-state Wasserstein critic
+  # saturates (IPM -> -2, maximally confident) within the first ~300K steps on
+  # ant/humanoid/snu_humanoid, collapsing the reward signal almost everywhere
+  # except states identical to the demo (observed in lwail-sweep-* wandb
+  # runs); the paper's own ablation attributes exactly this robustness to
+  # ICVF as task dimensionality grows. The first run for a given `icvf_path`
+  # (default: icvf_model/dflex_<env_name>.pt) pretrains one from a random
+  # rollout and caches it there; every later run (other seeds, sweeps) just
+  # loads it.
+  using_icvf: true
   icvf_path: "" # "" = default to icvf_model/dflex_<env_name>.pt
   icvf_hidden_dims: [256, 256]
   icvf_pretrain:
