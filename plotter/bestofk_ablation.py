@@ -9,7 +9,12 @@ run carries these config fields under agent.otil:
     loss_best_of_k_k     int  -- 1, 2, 4, 8, 16
     loss_ot_cost_type    str  -- "l2" | "cosine"
 Each (loss_best_of_k_k, loss_ot_cost_type) pair maps to one "method", e.g.
-"k8-l2" or "k16-cos" (3 seeds each).
+"k8-l2" or "k16-cos" (6 seeds each: 100/110/120 from the original sweep,
+1000/1100/1200 added later). Each project also still contains some runs from
+a buggy relaunch that omitted --base_algo SAPO (resolves to the wrong,
+untuned agent=OTIL/DFlexAntSHAC instead of agent=OTIL/DFlexAntSAPO) and some
+with no eval_scores/episode_rewards logged; fetch_data filters both out and
+deduplicates reruns of the same (method, seed) by keeping the most recent.
 """
 
 import csv
@@ -66,8 +71,13 @@ def fetch_data(envs=None, force_refresh=False):
         print(f"Fetching run list for {env_name}: {ENTITY}/{project}")
         runs = list(API.runs(f"{ENTITY}/{project}", per_page=200))
 
-        raw_by_method = {method: [] for method in METHOD_ORDER}
-        skipped = 0
+        # (method, seed) -> best candidate (final_return, timestamp), so a seed
+        # rerun (e.g. scripts/rerun_missing_bestofk_seeds.sh, or an earlier
+        # buggy launch later resubmitted) contributes exactly once, keeping
+        # the most recent valid run rather than double-counting the seed.
+        best_by_seed = {}
+        skipped_no_eval = 0
+        skipped_wrong_config = 0
         for run in runs:
             if run.state != "finished":
                 continue
@@ -75,11 +85,12 @@ def fetch_data(envs=None, force_refresh=False):
             otil = cfg.get("agent", {}).get("otil", {})
             k = otil.get("loss_best_of_k_k")
             cost_type = otil.get("loss_ot_cost_type")
-            if k is None or cost_type is None:
+            seed = cfg.get("seed")
+            if k is None or cost_type is None or seed is None:
                 continue
 
             method = method_name(int(k), cost_type)
-            if method not in raw_by_method:
+            if method not in METHOD_ORDER:
                 warnings.warn(
                     f"{env_name}/{run.id}: unrecognized combo loss_best_of_k_k={k}, "
                     f"loss_ot_cost_type={cost_type} -- skipping",
@@ -87,16 +98,38 @@ def fetch_data(envs=None, force_refresh=False):
                 )
                 continue
 
+            # agent=OTIL/DFlexAntSHAC (missing --base_algo SAPO) resolves to a
+            # plain, untuned Critic/ELU/Adam setup -- a genuinely different,
+            # far less stable config from the EnsembleCritic/SiLU/AdamW/autoent
+            # one this sweep actually used (agent=OTIL/DFlexAntSAPO). A batch
+            # of reruns briefly used the wrong one; exclude those runs rather
+            # than mixing incomparable configs into the same seed bucket.
+            critic_type = cfg.get("agent", {}).get("network", {}).get("critic")
+            if critic_type != "EnsembleCritic":
+                skipped_wrong_config += 1
+                continue
+
             final_return = run.summary.get("eval_scores/episode_rewards")
             if final_return is None:
-                skipped += 1
+                skipped_no_eval += 1
                 continue
-            raw_by_method[method].append(float(final_return))
+
+            timestamp = run.summary.get("_timestamp", 0)
+            key = (method, seed)
+            if key not in best_by_seed or timestamp > best_by_seed[key][1]:
+                best_by_seed[key] = (float(final_return), timestamp)
+
+        raw_by_method = {method: [] for method in METHOD_ORDER}
+        for (method, seed), (final_return, _) in best_by_seed.items():
+            raw_by_method[method].append(final_return)
 
         data[env_name] = raw_by_method
-        if skipped:
-            print(f"  ({skipped} finished run(s) missing eval_scores/episode_rewards, skipped -- "
+        if skipped_no_eval:
+            print(f"  ({skipped_no_eval} finished run(s) missing eval_scores/episode_rewards, skipped -- "
                   "see scripts/rerun_missing_bestofk_seeds.sh)")
+        if skipped_wrong_config:
+            print(f"  ({skipped_wrong_config} finished run(s) used the wrong agent config "
+                  "(missing --base_algo SAPO), skipped)")
         for method in METHOD_ORDER:
             print(f"  {method}: {len(raw_by_method[method])} seed(s)")
 
@@ -259,7 +292,7 @@ def plot_k_ablation(data, output_path, *, center_stat="mean", band="std", normal
     y_label = f"{center_label} final return" + (" (normalized by expert)" if normalize_expert else "")
     axes[0].set_ylabel(y_label)
     axes[-1].legend(frameon=False, loc="best")
-    fig.suptitle(f"OTIL/FOCUS-SAPO: effect of best-of-K pool size on final return ({band_desc} across 3 seeds)")
+    fig.suptitle(f"OTIL/FOCUS-SAPO: effect of best-of-K pool size on final return ({band_desc} across seeds)")
     fig.tight_layout()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
