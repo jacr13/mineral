@@ -7,7 +7,7 @@ import torch
 from ...common.demos import get_demos
 from ..ddpg.ddpg import DDPG
 from ..gail.models import Discriminator
-from .models import PhiNet
+from .icvf import load_or_pretrain_icvf
 
 
 class LWAIL(DDPG):
@@ -41,13 +41,20 @@ class LWAIL(DDPG):
     Two more upstream options are ported as-is:
       - ``lwail.minus``: for ``input_type: state_state``, feed the critic
         ``next_obs - obs`` instead of raw ``next_obs`` (upstream ``--minus``).
-      - ``lwail.using_icvf``: embed states through a frozen, pretrained ICVF
-        encoder (:class:`~mineral.agents.lwail.models.PhiNet`) before feeding
-        the critic (upstream ``--using_icvf``). Upstream only ships ICVF
+      - ``lwail.using_icvf``: embed states through a frozen ICVF encoder
+        (:class:`~mineral.agents.lwail.models.PhiNet`) before feeding the
+        critic (upstream ``--using_icvf``). Upstream only ships ICVF
         checkpoints for a few D4RL Mujoco tasks (dimension-incompatible with
-        this repo's dflex tasks) and treats ICVF pretraining itself as an
-        external/TODO codebase, so this defaults to off; enabling it requires
-        supplying a compatible checkpoint via ``lwail.icvf_path``.
+        this repo's dflex tasks) and points to a separate, unfinished
+        "ICVF-PyTorch Repository (todo)" for the training code; see
+        ``icvf.py`` for a from-scratch port of that training code (of the
+        official JAX ICVF release). Nothing extra to run: the first time a
+        given ``lwail.icvf_path`` doesn't exist (default:
+        ``icvf_model/dflex_<env_name>.pt``), ``__init__`` pretrains one from a
+        random rollout of ``self.env`` and caches it there (see
+        ``icvf.py::load_or_pretrain_icvf``); every later run for that path
+        (other seeds, sweeps) just loads the cached checkpoint. Off by
+        default -- set ``lwail.using_icvf: true`` to turn it on.
 
     Upstream also pretrains "f_net" for ``lwail.pretrain_iters`` steps (default
     2500, matching upstream's hardcoded value) against the warm-up random
@@ -93,16 +100,15 @@ class LWAIL(DDPG):
         self.using_icvf = bool(self.lwail_config.get("using_icvf", False))
         self.phi_net = None
         if self.using_icvf:
-            icvf_path = self.lwail_config.get("icvf_path", None)
-            assert icvf_path, "lwail.icvf_path must be set when lwail.using_icvf=true"
             icvf_hidden_dims = list(self.lwail_config.get("icvf_hidden_dims", [256, 256]))
+            env_name = full_cfg.task.env.get("env_name", full_cfg.task.name)
+            icvf_path = self.lwail_config.get("icvf_path", None) or f"icvf_model/dflex_{env_name}.pt"
 
             obs_dim = self.obs_space["obs"][0]
-            self.phi_net = PhiNet([obs_dim] + icvf_hidden_dims).to(self.device)
-            self.phi_net.load_state_dict(torch.load(icvf_path, map_location=self.device, weights_only=False))
-            self.phi_net.eval()
-            for p in self.phi_net.parameters():
-                p.requires_grad_(False)
+            icvf_pretrain_config = dict(self.lwail_config.get("icvf_pretrain", {}))
+            self.phi_net = load_or_pretrain_icvf(
+                self.env, obs_dim, icvf_hidden_dims, icvf_path, self.device, pretrain_kwargs=icvf_pretrain_config
+            )
 
             # Rebuild the discriminator (constructed above against the raw obs
             # space) to instead operate on the ICVF-embedded state space.
