@@ -23,8 +23,8 @@ agent:
     discriminator:
       mlp_kwargs:
         units: [64, 64]
-    expert_batch_size: 2048
-    policy_batch_size: 2048
+    expert_batch_size: 4000
+    policy_batch_size: 4000
 
 logdir: "workdir/DFlexHopper10M-LWAIL/$(date +%Y%m%d-%H%M%S.%2N)"
 wandb:
@@ -36,8 +36,8 @@ seed: 130
 sweep:
   seed: [100, 110, 120, 1000, 1100, 1200]
   agent.lwail.demos.subsample_factor: 1
-  agent.lwail.expert_batch_size: 2048
-  agent.lwail.discriminator.iters: 30
+  agent.lwail.expert_batch_size: 4000
+  agent.lwail.discriminator.iters: 40
   agent.lwail.gp_coef: 10
   agent.lwail.minus: true
 

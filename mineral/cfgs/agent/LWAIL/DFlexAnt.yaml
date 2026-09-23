@@ -9,6 +9,9 @@ ddpg:
   # `torch.stack(results["grad_norm/..."])` metric summary (a pre-existing
   # DDPG bug, unrelated to LWAIL); set a real value to avoid it.
   max_grad_norm: 0.5
+  # upstream Table 8: critic LR 0.001 (actor LR stays at DDPG/DFlexAnt.yaml's
+  # own default of 3e-4, which already matches Table 8's actor LR).
+  critic_optim_kwargs: { lr: 1e-3 }
 
 lwail:
   demos:
@@ -19,9 +22,13 @@ lwail:
   # upstream default run (run.bash/all_run.bash) uses state_state + --minus,
   # i.e. the critic sees (obs, next_obs - obs) pairs; see `minus` below.
   input_type: state_state
-  disc_update_freq: 1
+  # upstream Table 8: discriminator updates every 4000 env steps. One epoch
+  # here collects `ddpg.horizon_len (1) * num_actors (64) = 64` env steps, so
+  # disc_update_freq=63 -> an update every 63*64=4032 steps, closest integer
+  # match to 4000. (Recompute this if horizon_len or num_actors changes.)
+  disc_update_freq: 63
   discriminator:
-    iters: 30 # upstream `--f_epoch 30`, as used in run.bash/all_run.bash
+    iters: 40 # upstream Table 8 "Update Epoch" (run.bash uses --f_epoch 30; code and paper disagree, using the paper's reported value)
     mlp_kwargs:
       units: [64, 64]
       norm_type: null # upstream's `FullyConnectedNet` is plain Linear+ReLU, no norm
@@ -29,10 +36,10 @@ lwail:
     encoder_kwargs: null
     optim:
       type: Adam
-      kwargs: { lr: 1e-3 } # upstream `--lr_f`
+      kwargs: { lr: 1e-3 } # upstream `--lr_f` / Table 8
 
-  expert_batch_size: 2048
-  policy_batch_size: 2048
+  expert_batch_size: 4000 # upstream Table 8: batch size = update_timestep = 4000
+  policy_batch_size: 4000
   reward_scale: 1.0
 
   gp_coef: 10 # upstream `--alpha`, the gradient-penalty coefficient
