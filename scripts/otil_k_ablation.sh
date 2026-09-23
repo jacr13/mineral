@@ -13,6 +13,16 @@
 #
 # Footprint: 4 envs x 5 K values x 2 costs x 3 seeds = 120 jobs. Trim
 # ENVS/K_VALUES/SEEDS below if that's too much for the time you have.
+#
+# IMPORTANT: --task_name otil alone resolves agent=OTIL/DFlexAntSHAC (a plain,
+# untuned Critic/ELU/Adam setup), NOT the EnsembleCritic/SiLU/AdamW/autoent
+# config the original "bestofk_OTIL_SAPO" sweep actually used
+# (agent=OTIL/DFlexAntSAPO). Confirmed via direct Hydra compose: the two
+# resolve to genuinely different networks/optimizers despite both nominally
+# extending the same SHAC/DFlexAnt base. An earlier version of this script
+# omitted --base_algo SAPO and every one of its 120 jobs silently trained
+# with the wrong, less stable config -- ~70% diverged. Do not remove
+# --base_algo SAPO below.
 set -euo pipefail
 
 LOG_FILE="run_otil_k_ablation_$(date +%Y%m%d_%H%M%S).log"
@@ -39,6 +49,14 @@ COSTS=(l2 cosine)
 # env -> slurm runtime, matching the original sweep's per-env wall-clock cap.
 declare -A RUNTIME=( [hopper]="3h30m" [ant]="4h" [humanoid]="7h30m" [snu_humanoid]="7h30m" )
 ENVS=(hopper ant humanoid snu_humanoid)
+
+# env -> max_agent_steps: the original sweep set this to 100M (never hit --
+# every run was actually stopped by the wall-clock runtime above). Set from
+# eyeballing the training curves in plotter/bestofk_ablation/ -- performance
+# is already flat well before the original 11-38M step range, so these are
+# picked as "clearly converged" points, not just "matches what old runs
+# reached": hopper 5M, ant 10M, humanoid 15M, snu_humanoid 20M.
+declare -A MAX_AGENT_STEPS=( [hopper]=5000000 [ant]=10000000 [humanoid]=15000000 [snu_humanoid]=20000000 )
 
 job_count() {
   squeue -h -u "$USER" | wc -l | tr -d ' '
@@ -74,6 +92,7 @@ git pull
 
 for env in "${ENVS[@]}"; do
   runtime="${RUNTIME[$env]}"
+  max_agent_steps="${MAX_AGENT_STEPS[$env]}"
 
   for cost in "${COSTS[@]}"; do
     mlp_dim="${MLP_DIM[$cost]}"
@@ -83,7 +102,7 @@ for env in "${ENVS[@]}"; do
       condition="k${k}_${cost}"
 
       echo "------------------------------------------------------------"
-      echo "Config: env=${env} K=${k} ot_cost=${cost} runtime=${runtime}"
+      echo "Config: env=${env} K=${k} ot_cost=${cost} runtime=${runtime} max_agent_steps=${max_agent_steps}"
       echo "------------------------------------------------------------"
 
       for seed in "${SEEDS[@]}"; do
@@ -94,6 +113,7 @@ for env in "${ENVS[@]}"; do
 
         python spawner.py \
           --task_name otil \
+          --base_algo SAPO \
           --docker \
           --docker_image /home/users/c/candidor/docker/mineral.sif \
           --deployment slurm \
@@ -102,7 +122,7 @@ for env in "${ENVS[@]}"; do
           --set "seed=${seed}" \
           --set "logdir=workdir/bestofk_extra_seeds_${RUN_STAMP}/${env}/${condition}/seed_${seed}" \
           --set "wandb.project=bestofk_OTIL_SAPO-dflex_${env}-slurm-new" \
-          --set "agent.shac.max_agent_steps=100000000" \
+          --set "agent.shac.max_agent_steps=${max_agent_steps}" \
           --set "agent.otil.imitation_loss_type=ot" \
           --set "agent.otil.loss_ot_cost_type=${cost}" \
           --set "agent.otil.loss_best_of_k_k=${k}" \
