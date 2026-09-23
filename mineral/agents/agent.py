@@ -127,9 +127,21 @@ class Agent:
             ckpt_name = f'epochs{sep}{self.epoch + 1}_steps{sep}{int(self.agent_steps / 1000)}k_{stat_name}{sep}{stat:.2f}'
             self.save(os.path.join(self.ckpt_dir, ckpt_name + '.pth'))
             latest_ckpt_path = os.path.join(self.ckpt_dir, 'latest.pth')
-            if os.path.exists(latest_ckpt_path):
+            if os.path.lexists(latest_ckpt_path):
                 os.unlink(latest_ckpt_path)
             os.symlink(ckpt_name + '.pth', latest_ckpt_path)
+
+            # Keep this checkpoint and the nine most recent epochs already on disk.
+            # Scanning the directory also bounds retention after resuming a run.
+            periodic_pattern = re.compile(rf'epochs{re.escape(sep)}(\d+)_steps{re.escape(sep)}\d+k_.+\.pth')
+            periodic_ckpts = []
+            with os.scandir(self.ckpt_dir) as entries:
+                for entry in entries:
+                    match = periodic_pattern.fullmatch(entry.name)
+                    if match and entry.name != ckpt_name + '.pth' and entry.is_file(follow_symlinks=False):
+                        periodic_ckpts.append((int(match.group(1)), entry.name))
+            for _, filename in sorted(periodic_ckpts)[:-9]:
+                os.remove(os.path.join(self.ckpt_dir, filename))
 
         better = (stat > self.best_stat if higher_better else stat < self.best_stat) if self.best_stat is not None else True
         if better:

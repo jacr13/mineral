@@ -15,7 +15,7 @@ from wandb_api import get_group_runs, get_rew_steps_times
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
-FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots6"
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots7"
 
 
 EXPERTS = {
@@ -44,11 +44,15 @@ ENV_NAMES = {"hopper": "Hopper", "ant": "Ant", "humanoid": "Humanoid", "snu_huma
 
 COLOR = {
     "Expert": "#616161",
-    "SAMfO/DACfO": "#A46750",
-    "OPOLO": "#A12864",
-    "GAIfO": "#7D54B2",
-    "MAAD": "#DC4BDC",
-    "PWIL": "#1B998B",
+    # Same hues as before, dialed from near-primary saturation down to
+    # mid-tone so they don't out-shout FOCUS/ILD's softer palette; re-validated
+    # (adjacent-pair CVD/chroma/normal-vision all pass).
+    "SAMfO/DACfO": "#3E7AE0",
+    "OPOLO": "#C5263D",
+    "GAIfO": "#ED8326",
+    "MAAD": "#DF3AA5",
+    "PWIL": "#A6780E",
+    "OOPS": "#9448C9",
     "ILD": "#FFB83D",
     "FOCUS-l2": "#5BC5DB",
     "FOCUS-OT-cos": "#A0C75C",
@@ -68,6 +72,7 @@ ALGOS = [
     "GAIfO",
     "MAAD",
     "PWIL",
+    "OOPS",
     "ILD",
     "FOCUS-l2",
     "FOCUS-OT-l2",
@@ -113,13 +118,27 @@ def algo_sort_key(algo_key, ALGO_INDEX, ALGO_DISPLAY):
     return ALGO_INDEX.get(disp, ALGO_INDEX.get(normalize_algo_key(algo_key), 10**9))
 
 
+# FOCUS variants and ILD stay solid (the figure's main track); the other six
+# imitation-learning baselines each get a distinct dash pattern since their
+# colors alone (e.g. OPOLO/MAAD, both pink-magenta hues) can be hard to tell
+# apart where curves and bands overlap.
+LINESTYLE = {
+    "Expert": "--",
+    "SAMfO/DACfO": "-.",
+    "OPOLO": ":",
+    "GAIfO": (0, (3, 1, 1, 1)),
+    "MAAD": (0, (5, 2)),
+    "PWIL": (0, (1, 1)),
+    "OOPS": (0, (3, 3, 1, 3)),
+    "ILD": "-",
+    "FOCUS-l2": "-",
+    "FOCUS-OT-l2": "-",
+    "FOCUS-OT-cos": "-",
+}
+
+
 def get_linestyle(algo_disp):
-    if algo_disp == "Expert":
-        return "--"
-    # If you want special patterns like in your first script, add them here.
-    # Example:
-    # if algo_disp.startswith("OPOLO"): return "-."
-    return "-"
+    return LINESTYLE.get(algo_disp, "-")
 
 
 def get_time_axis_max(env_data, *, max_time_cap=None):
@@ -371,7 +390,7 @@ def save_results_table(
     env_names = [env for env in preferred_envs if env in present_envs]
     env_names.extend(env for env in present_envs if env not in env_names)
     algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
-    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "ILD", "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
+    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "OOPS", "ILD", "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
     order = {name: index for index, name in enumerate(preferred_algos)}
     algo_names.sort(key=lambda name: (name.startswith("FOCUS"), order.get(name, -1)))
     values_by_env_algo = {(row["environment_name"], row["algorithm_display"]): row for row in rows}
@@ -989,7 +1008,8 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
             center,
             label=algo,
             color=COLOR.get(normalize_algo_key(algo)),
-            linewidth=3 if algo.lower().startswith("focus") else 2,
+            linewidth=1.5 if algo.lower().startswith("focus") else 1.5,
+            linestyle=get_linestyle(algo),
         )
         ax.fill_between(x, lower, upper, color=line.get_color(), alpha=0.2)
         rows.append(
@@ -1054,7 +1074,7 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
             for algo, result in results_by_axis[axis].items():
                 x = np.linspace(0, 100, len(result["center"]))
                 (line,) = ax.plot(
-                    x, result["center"], label=algo, color=colors[algo], linewidth=3 if algo.lower().startswith("focus") else 2
+                    x, result["center"], label=algo, color=colors[algo], linewidth=1.5 if algo.lower().startswith("focus") else 1.5
                 )
                 ax.fill_between(x, result["lower"], result["upper"], color=colors[algo], alpha=0.2)
                 legend_handles.setdefault(algo, line)
@@ -1171,7 +1191,7 @@ def plot_median_across_envs(
         stacked = np.vstack(curves)
         median_curve = np.median(stacked, axis=0)
 
-        lw = 3 if algo.lower().startswith("focus") else 2
+        lw = 1.5 if algo.lower().startswith("focus") else 1.5
         color_key = normalize_algo_key(algo)
         ax.plot(
             x,
@@ -1179,7 +1199,7 @@ def plot_median_across_envs(
             label=algo,
             linewidth=lw,
             color=COLOR.get(color_key, None),
-            linestyle="-",
+            linestyle=get_linestyle(algo),
         )
 
     if ylim_top is None:
@@ -1472,8 +1492,8 @@ if __name__ == "__main__":
         for band in ["95ci"]:  # ["95ci", "std"]:
             for x_axis in ["time", "steps"]:
                 aggregate_results[x_axis] = main(
-                    sync_remote=True,
-                    update_group_runs=True,
+                    sync_remote=False,
+                    update_group_runs=False,
                     create_plots=True,
                     x_axis=x_axis,
                     center_stat=center_stat,
