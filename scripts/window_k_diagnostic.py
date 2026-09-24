@@ -6,10 +6,20 @@ for Hopper, using the existing paired best-of-K phase-rescue diagnostic
 Runs the diagnostic at horizon in {8, 16, 32, 64} steps -- 22%, 43%, 87%, and
 173% of Hopper's ~37-step gait period respectively (32 is the original, used
 by the real bestofk sweep and by scripts/phase_rescue_k_sweep.py) -- for
-K in {2,4,8,16} and both OT costs, then compares rescue/coverage/phase-error
-as a function of K across window sizes. If the hypothesis holds, K's effect
-should be strongest for the sub-cycle windows (8, 16) and weakest/flattest
-once the window already covers a full cycle or more (32, 64).
+K in {2,4,8,16} across three FOCUS variants: FOCUS-OT-L2 and FOCUS-OT-Cos
+(imitation_loss_type=ot, an OT/Sinkhorn transport plan -- soft-matches
+timesteps with no order constraint), and FOCUS-L2 (imitation_loss_type=l2,
+SequenceRegressionCriterion -- strict, timestep-aligned MSE, no reordering
+at all).
+
+This variant is the control for the mechanism proposed to explain why OT
+degrades once horizon >= period: OT's transport plan can align a window with
+any phase-shifted copy of the same loop near-for-free once the window
+contains a full cycle (same poses, different entry point), eroding phase
+discrimination. FOCUS-L2's strict alignment has no such flexibility, so it
+should NOT show the same "long window hurts" degradation if that mechanism
+is actually what's happening -- if it does degrade the same way, the
+mechanism is wrong and something more general is going on.
 
 This measures matching-quality benefit only (candidate coverage/rescue/phase
 error on held-out expert windows), not downstream RL return -- same caveat
@@ -28,22 +38,28 @@ OUTPUT_ROOT = Path("workdir/window_k_diagnostic/hopper")
 REPORT_DIR = Path("docs/phase_rescue")
 
 HORIZONS = [8, 16, 32, 64]
-COSTS = ["l2", "cosine"]
+# name -> extra CLI args for paired_phase_rescue_diagnostic.py
+VARIANTS = {
+    "ot_l2": ["--criterion", "ot", "--ot-cost", "l2"],
+    "ot_cos": ["--criterion", "ot", "--ot-cost", "cosine"],
+    "l2_no_ot": ["--criterion", "l2"],
+}
+VARIANT_LABEL = {"ot_l2": "FOCUS-OT-L2", "ot_cos": "FOCUS-OT-Cos", "l2_no_ot": "FOCUS-L2 (no OT)"}
 K_VALUES = [2, 4, 8, 16]
 # Hardest controlled mismatch in the diagnostic's default sweep (half a
 # cycle) -- the condition where Best-of-K has the most room to help.
 TARGET_MISMATCH = 0.5
 
 
-def run_one(horizon, cost, k):
-    out_dir = OUTPUT_ROOT / f"h{horizon}_{cost}_k{k}"
+def run_one(horizon, variant, k):
+    out_dir = OUTPUT_ROOT / f"h{horizon}_{variant}_k{k}"
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable, str(SCRIPTS_DIR / "paired_phase_rescue_diagnostic.py"),
         "--env", "hopper",
         "--horizon", str(horizon),
         "-k", str(k),
-        "--ot-cost", cost,
+        *VARIANTS[variant],
         "--device", "cpu",
         "--seed", "0",
         "--output-dir", str(out_dir),
@@ -58,11 +74,11 @@ def run_one(horizon, cost, k):
 def main():
     rows = []
     for horizon in HORIZONS:
-        for cost in COSTS:
+        for variant in VARIANTS:
             for k in K_VALUES:
-                print(f"Running horizon={horizon} cost={cost} k={k} ...", flush=True)
-                row = run_one(horizon, cost, k)
-                rows.append({"horizon": horizon, "cost": cost, "k": k, **row})
+                print(f"Running horizon={horizon} variant={variant} k={k} ...", flush=True)
+                row = run_one(horizon, variant, k)
+                rows.append({"horizon": horizon, "variant": variant, "k": k, **row})
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     (REPORT_DIR / "window_k_diagnostic_results.json").write_text(json.dumps(rows, indent=2) + "\n")
@@ -72,23 +88,23 @@ def main():
         ("rescue_fraction_when_k1_wrong", "Rescue rate (K=1 wrong -> Best-of-K right)"),
         ("best_of_k_phase_error_mean", "Mean phase error (cycles, lower = better)"),
     ]
-    fig, axes = plt.subplots(1, len(metrics), figsize=(6 * len(metrics), 4.5))
+    fig, axes = plt.subplots(1, len(metrics), figsize=(7 * len(metrics), 4.5))
     # Sequential ramp (light -> dark) since horizon is an ordered magnitude,
     # not a category -- ColorBrewer 4-class Greens.
     color = {8: "#C7E9C0", 16: "#74C476", 32: "#31A354", 64: "#006D2C"}
-    linestyle = {"l2": "-", "cosine": "--"}
+    linestyle = {"ot_l2": "-", "ot_cos": "--", "l2_no_ot": ":"}
 
     for ax, (metric_key, metric_label) in zip(axes, metrics):
         for horizon in HORIZONS:
-            for cost in COSTS:
-                ks = [row["k"] for row in rows if row["horizon"] == horizon and row["cost"] == cost]
-                values = [row[metric_key] for row in rows if row["horizon"] == horizon and row["cost"] == cost]
+            for variant in VARIANTS:
+                ks = [row["k"] for row in rows if row["horizon"] == horizon and row["variant"] == variant]
+                values = [row[metric_key] for row in rows if row["horizon"] == horizon and row["variant"] == variant]
                 if any(v is None for v in values):
                     continue
                 ax.plot(
                     ks, values, marker="o", linewidth=2, markersize=6,
-                    color=color[horizon], linestyle=linestyle[cost],
-                    label=f"horizon={horizon}, {cost}",
+                    color=color[horizon], linestyle=linestyle[variant],
+                    label=f"horizon={horizon}, {VARIANT_LABEL[variant]}",
                 )
         ax.set_xscale("log", base=2)
         ax.set_xticks(K_VALUES)
@@ -98,7 +114,8 @@ def main():
         ax.set_title(metric_label.split("(")[0].strip())
         ax.spines[["right", "top"]].set_visible(False)
 
-    axes[-1].legend(frameon=False, fontsize=8, loc="best")
+    handles, labels = axes[-1].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, fontsize=8, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.12))
     fig.suptitle(f"Hopper: window size vs. K benefit (offline diagnostic, target_mismatch={TARGET_MISMATCH} cycles)")
     fig.tight_layout()
     out_path = REPORT_DIR / "window_k_diagnostic.png"

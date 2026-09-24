@@ -42,4 +42,5 @@ sweep:
   agent.lwail.minus: true
 
 spawner:
-  runtime: "7h30m"
+  runtime: "12h" # capped at the shared-GPU 12h max; slowest seed only reached 7.8M/15M steps in 7h (extrapolated need ~14h) so this may still fall a bit short -- the GPU constraint should help close some of that gap
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE" # avoid older Pascal-class GPUs
