@@ -38,6 +38,14 @@ class PWIL(SAC):
         if time_horizon is None:
             time_horizon = self.env.max_episode_length
         self.observation_only = bool(self.pwil_config.get("observation_only", False))
+        # With state-only atoms the reward r(s_t) computed before stepping does not depend on the executed
+        # action a_t, so credit for a_t only reaches the critic through bootstrapping. Score the state the
+        # action leads to (s_{t+1}, before any auto-reset) instead. Defaults to on for state-only atoms; with
+        # (s, a) atoms the reward already depends on a_t and is computed on the pre-step pair.
+        reward_on_next_obs = self.pwil_config.get("reward_on_next_obs", None)
+        self.reward_on_next_obs = self.observation_only if reward_on_next_obs is None else bool(reward_on_next_obs)
+        if self.reward_on_next_obs and not self.observation_only:
+            raise ValueError("pwil.reward_on_next_obs requires pwil.observation_only=true")
 
         self.pwil_rewarder = PWILRewarder(
             self.demos,
@@ -81,11 +89,20 @@ class PWIL(SAC):
             else:
                 actions = self.get_actions(obs=self.obs, sample=sample)
 
-            # PWIL reward from the pre-step observation and the executed action.
-            shaped_rewards = self.pwil_rewarder.compute_reward(self.obs, actions)
+            if not self.reward_on_next_obs:
+                # PWIL reward from the pre-step observation and the executed action.
+                shaped_rewards = self.pwil_rewarder.compute_reward(self.obs, actions)
 
-            next_obs, rewards, dones, infos = env.step(actions)
-            next_obs = self._convert_obs(next_obs)
+            next_obs_raw, rewards, dones, infos = env.step(actions)
+            next_obs = self._convert_obs(next_obs_raw)
+
+            if self.reward_on_next_obs:
+                # Reward the state reached by `actions`. `obs_before_reset` is the true s_{t+1} for envs that
+                # just auto-reset (`next_obs` is then the first observation of the new episode).
+                real_next_obs_raw = infos.get("obs_before_reset", None)
+                if real_next_obs_raw is None:
+                    real_next_obs_raw = next_obs_raw
+                shaped_rewards = self.pwil_rewarder.compute_reward(self._convert_obs(real_next_obs_raw), actions)
 
             done_indices = torch.where(dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)

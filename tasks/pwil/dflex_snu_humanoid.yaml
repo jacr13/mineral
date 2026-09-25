@@ -37,8 +37,10 @@ sweep:
   agent.pwil.demos.subsample_factor: 20
   # agent.pwil.alpha: [1.0, 5.0, 10.0]  (5.0 matches Dadashi et al.'s own default)
   agent.pwil.alpha: 5.0
-  # agent.pwil.beta: [1.0, 5.0, 10.0]  (5.0 matches Dadashi et al.'s own default)
-  agent.pwil.beta: 5.0
+  # beta=5.0 is Dadashi et al.'s default, tuned for low-dimensional (s, a) MuJoCo tasks with one demo. On these
+  # 37-76-dim state-only DFlex tasks with 8 demos it is too sharp: held-out expert episodes score <= 0.2-1.8 of
+  # the maximum alpha=5 and pwil/reward_mean is ~0, so nothing is learned. Sweep a wider kernel instead.
+  agent.pwil.beta: [1.0, 2.0, 3.0]
   # agent.pwil.observation_only: [true, false]
   agent.pwil.observation_only: true
 
