@@ -51,6 +51,20 @@ PROJECTS = {
     "snu_humanoid": "new_v2_critic_OTIL_SAPO-dflex_snu_humanoid-slurm",
 }
 
+# Runs superseded by a rerun, excluded so a method isn't averaged over both
+# batches. critic-logexp-l2 / Humanoid: the original 6 seeds all landed on a
+# Tesla P100 node (gpu006) and were wall-clock-capped at ~11.5M of the 15M
+# steps; the rerun on Turing/Ampere GPUs (scripts/otil.sh, GPU_CONSTRAINT)
+# reached the full 15M. Remove these entries to pool both batches again.
+EXCLUDED_RUN_IDS = {
+    "illinois-aspen-kilo-nebraska-london-2UoK.OTIL.DFlex_humanoid_64.seed110",
+    "illinois-aspen-kilo-nebraska-london-51Di.OTIL.DFlex_humanoid_64.seed1000",
+    "illinois-aspen-kilo-nebraska-london-6SQa.OTIL.DFlex_humanoid_64.seed1200",
+    "illinois-aspen-kilo-nebraska-london-97Pl.OTIL.DFlex_humanoid_64.seed100",
+    "illinois-aspen-kilo-nebraska-london-Dgbq.OTIL.DFlex_humanoid_64.seed120",
+    "illinois-aspen-kilo-nebraska-london-lmlz.OTIL.DFlex_humanoid_64.seed1100",
+}
+
 MAPPING_LABEL = {"exp": "exp", "log_exp": "logexp", "neg": "neg"}
 COST_LABEL = {"l2": "l2", "cosine": "cos"}
 
@@ -66,7 +80,9 @@ NO_CRITIC_METHODS = [f"no-{method}" for method in CRITIC_METHODS]
 # so the table/legend put each ablation pair next to each other for a direct
 # comparison instead of two separate blocks far apart.
 METHOD_ORDER = [method for pair in zip(CRITIC_METHODS, NO_CRITIC_METHODS) for method in pair]
-ALGOS = ["Expert"] + METHOD_ORDER
+# Expert goes last: legends fill column by column, so with it first every
+# (critic-X, no-critic-X) pair below would be shifted out of its column.
+ALGOS = METHOD_ORDER + ["Expert"]
 ALGO_INDEX = {algo: idx for idx, algo in enumerate(ALGOS)}
 
 # Categorical hues assigned in fixed order (blue, orange, aqua, yellow,
@@ -122,11 +138,11 @@ def moving_average(x, window):
     if window <= 1:
         return x
     window = min(window, x.size)
-    pad = window // 2
-    x_pad = np.pad(x, (pad, pad), mode="reflect")
+    pad_left = window // 2
+    pad_right = window - 1 - pad_left
+    x_pad = np.pad(x, (pad_left, pad_right), mode="reflect")
     kernel = np.ones(window, dtype=np.float64) / window
-    y = np.convolve(x_pad, kernel, mode="valid")
-    return y[:-1]
+    return np.convolve(x_pad, kernel, mode="valid")
 
 
 def fetch_run_history(project, run_id, *, force_refresh=False):
@@ -270,7 +286,7 @@ def build_data(
         raw_by_method = {method: [] for method in METHOD_ORDER}
 
         for run in runs:
-            if run.state != "finished":
+            if run.state != "finished" or run.id in EXCLUDED_RUN_IDS:
                 continue
             cfg = dict(run.config)
             otil = cfg.get("agent", {}).get("otil", {})
@@ -431,21 +447,11 @@ def save_final_return_table(
     return csv_path, tex_path
 
 
-def _curve_footnote(center_stat, band):
-    center_label = {"mean": "mean", "median": "median", "iqm": "interquartile mean"}[normalize_center_stat(center_stat)]
-    band_desc = "± 1 SD" if normalize_band(band) == "std" else "a 95% bootstrap CI"
-    return (
-        f"Line = {center_label} across seeds still running at that point; shaded band = {band_desc}. "
-        "Each method's curve runs out to its longest seed's last logged step -- as shorter seeds end "
-        "(varying wall-clock cutoffs) they drop out of the average rather than being extrapolated."
-    )
-
-
-def _shared_legend(target, handles, labels, **legend_kwargs):
+def _shared_legend(target, handles, labels, order=ALGOS, **legend_kwargs):
     if not handles:
         return
     map_lh = {label: handle for handle, label in zip(handles, labels)}
-    ordered_labels = [algo for algo in ALGOS if algo in map_lh]
+    ordered_labels = [algo for algo in order if algo in map_lh]
     ordered_handles = [map_lh[label] for label in ordered_labels]
     target.legend(ordered_handles, ordered_labels, frameon=False, **legend_kwargs)
 
@@ -518,15 +524,6 @@ def plot_training_curves(
 
     _shared_legend(legend_ax, legend_handles, legend_labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
     fig.supylabel("Normalized Return" if normalize_expert else "Return", fontsize=12)
-    fig.text(
-        0.5,
-        -0.01,
-        _curve_footnote(center_stat, band),
-        ha="center",
-        va="top",
-        fontsize=8,
-        color="#52514e",
-    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
@@ -549,7 +546,7 @@ def plot_single_env_curves(
 
     x_label = "Relative Time (h)" if x_axis == "time" else "Steps"
 
-    n_legend_cols = 3
+    n_legend_cols = 2
     legend_rows = math.ceil(len(ALGOS) / n_legend_cols)
     fig = plt.figure(figsize=(6.5, 4.5 + 0.22 * legend_rows), layout="constrained")
     grid = fig.add_gridspec(2, 1, height_ratios=[0.22 * legend_rows, 4.5])
@@ -585,15 +582,11 @@ def plot_single_env_curves(
     ax.spines[["right", "top"]].set_visible(False)
 
     handles, labels = ax.get_legend_handles_labels()
-    _shared_legend(legend_ax, handles, labels, loc="center", ncol=n_legend_cols, fontsize=8.5)
-    fig.text(
-        0.5,
-        -0.01,
-        _curve_footnote(center_stat, band),
-        ha="center",
-        va="top",
-        fontsize=7.5,
-        color="#52514e",
+    # Two columns, critics left / no-critics right so each pair shares a row;
+    # Expert fills the spare slot at the bottom of the left column.
+    single_env_order = CRITIC_METHODS + ["Expert"] + NO_CRITIC_METHODS
+    _shared_legend(
+        legend_ax, handles, labels, order=single_env_order, loc="center", ncol=n_legend_cols, fontsize=8.5
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -608,7 +601,7 @@ def main(
     center_stat="mean",
     band="std",
     n_points=1000,
-    smooth_window=50,
+    smooth_window=25,
     force_refresh=False,
     normalize_expert=True,
 ):

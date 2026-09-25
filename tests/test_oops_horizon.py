@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import torch
 
 from mineral.agents.oops.oops import OOPS
+from mineral.common import normalizers
 
 
 class OOPSHorizonTests(unittest.TestCase):
@@ -73,6 +74,42 @@ class OOPSHorizonTests(unittest.TestCase):
             agent.explore_env(env, 2, random=True)
         agent.oops_rewarder.compute_episode_reward.assert_not_called()
 
+    def test_training_inputs_are_normalized_once_exactly_like_acting_inputs(self):
+        agent = OOPS.__new__(OOPS)
+        agent.ddpg_config = SimpleNamespace(
+            mini_epochs=1, update_actor_interval=1, update_targets_interval=10**9, batch_size=4
+        )
+        agent.mini_epoch = 0
+        agent.horizon = 10
+        agent.aug_time = False
+        agent.normalize_input = True
+        agent.device = 'cpu'
+        rms = normalizers.RunningMeanStd((3,), with_clamp=True)
+        rms.running_mean.copy_(torch.tensor([1.0, 2.0, 3.0]))
+        rms.running_var.copy_(torch.tensor([4.0, 4.0, 4.0]))
+        agent.obs_rms = {'obs': rms}
+
+        obs = {'obs': torch.randn(4, 3) + 5.0, 't_to_horizon': torch.rand(4, 1)}
+        next_obs = {'obs': torch.randn(4, 3) + 5.0, 't_to_horizon': torch.rand(4, 1)}
+        memory = Mock()
+        memory.sample_batch.return_value = (obs, torch.zeros(4, 2), torch.zeros(4, 1), next_obs, torch.zeros(4, 1))
+        agent.update_critic = Mock(return_value=(torch.tensor(0.0), None))
+        agent.update_actor = Mock(return_value=(torch.tensor(0.0), None))
+
+        agent.update_net(memory)
+
+        # update_net must hand RAW observations to the critic/actor updates: the network
+        # input is built by `_augmented_state`, which normalizes. Normalizing in update_net
+        # too meant training saw normalize(normalize(x)) while acting saw normalize(x).
+        critic_obs = agent.update_critic.call_args.args[0]['obs']
+        critic_next_obs = agent.update_critic.call_args.args[3]['obs']
+        actor_obs = agent.update_actor.call_args.args[0]['obs']
+        torch.testing.assert_close(critic_obs, obs['obs'])
+        torch.testing.assert_close(critic_next_obs, next_obs['obs'])
+        torch.testing.assert_close(actor_obs, obs['obs'])
+        train_input = agent._augmented_state({'obs': critic_obs}, obs['t_to_horizon'])
+        act_input = agent._augmented_state({'obs': obs['obs']}, obs['t_to_horizon'])
+        torch.testing.assert_close(train_input, act_input)
 
 if __name__ == '__main__':
     unittest.main()

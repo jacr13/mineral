@@ -416,12 +416,13 @@ class OOPS(Agent):
                 t_to_horizon = t_H_plus / self.horizon
                 next_t_to_horizon = (t_H_plus - 1.0).clamp(min=0.0) / self.horizon
 
-            if self.normalize_input:
-                obs_n = {"obs": self.obs_rms["obs"].normalize(obs["obs"])}
-                next_obs_n = {"obs": self.obs_rms["obs"].normalize(next_obs["obs"])}
-            else:
-                obs_n = {"obs": obs["obs"]}
-                next_obs_n = {"obs": next_obs["obs"]}
+            # Raw observations: `_augmented_state` (used by acting, the critic and
+            # the actor alike) applies the running normalizer itself. Normalizing
+            # here as well used to normalize twice during training but only once
+            # when acting, so the networks trained on a different input
+            # distribution than the one the policy actually sees.
+            obs_n = {"obs": obs["obs"]}
+            next_obs_n = {"obs": next_obs["obs"]}
 
             critic_loss, critic_grad_norm = self.update_critic(
                 obs_n, action, reward, next_obs_n, done, t_to_horizon, next_t_to_horizon, match, next_match

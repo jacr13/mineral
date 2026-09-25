@@ -15,7 +15,10 @@ from wandb_api import get_group_runs, get_rew_steps_times
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
-FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots7"
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots8"
+
+# Moving-average window applied to every curve after interpolation (typical values: 15-50).
+SMOOTH_WINDOW = 50
 
 
 EXPERTS = {
@@ -53,6 +56,7 @@ COLOR = {
     "MAAD": "#DF3AA5",
     "PWIL": "#A6780E",
     "OOPS": "#9448C9",
+    "LWAIL": "#2B4FA0",
     "ILD": "#FFB83D",
     "FOCUS-l2": "#5BC5DB",
     "FOCUS-OT-cos": "#A0C75C",
@@ -73,6 +77,7 @@ ALGOS = [
     "MAAD",
     "PWIL",
     "OOPS",
+    "LWAIL",
     "ILD",
     "FOCUS-l2",
     "FOCUS-OT-l2",
@@ -130,11 +135,21 @@ LINESTYLE = {
     "MAAD": (0, (5, 2)),
     "PWIL": (0, (1, 1)),
     "OOPS": (0, (3, 3, 1, 3)),
+    "LWAIL": (0, (4, 1, 1, 1, 1, 1)),
     "ILD": "-",
     "FOCUS-l2": "-",
     "FOCUS-OT-l2": "-",
     "FOCUS-OT-cos": "-",
 }
+
+
+def LIGHT_IQM_INCLUDE(algo):
+    """Algorithms shown in the lighter aggregate IQM figure.
+
+    OOPS is left out (pooled IQM ~0.01 on both axes); PWIL is the strongest remaining baseline on wall-time
+    (~0.40) and has a color that's easy to tell apart from LWAIL's (though it drops to ~0.10 on steps).
+    """
+    return algo.startswith("FOCUS") or algo in {"ILD", "LWAIL", "PWIL"}
 
 
 def get_linestyle(algo_disp):
@@ -390,7 +405,19 @@ def save_results_table(
     env_names = [env for env in preferred_envs if env in present_envs]
     env_names.extend(env for env in present_envs if env not in env_names)
     algo_names = list(dict.fromkeys(row["algorithm_display"] for row in rows))
-    preferred_algos = ["SAMfO/DACfO", "OPOLO", "GAIfO", "MAAD", "PWIL", "OOPS", "ILD", "FOCUS-l2", "FOCUS-OT-l2", "FOCUS-OT-cos"]
+    preferred_algos = [
+        "SAMfO/DACfO",
+        "OPOLO",
+        "GAIfO",
+        "MAAD",
+        "PWIL",
+        "OOPS",
+        "LWAIL",
+        "ILD",
+        "FOCUS-l2",
+        "FOCUS-OT-l2",
+        "FOCUS-OT-cos",
+    ]
     order = {name: index for index, name in enumerate(preferred_algos)}
     algo_names.sort(key=lambda name: (name.startswith("FOCUS"), order.get(name, -1)))
     values_by_env_algo = {(row["environment_name"], row["algorithm_display"]): row for row in rows}
@@ -843,16 +870,21 @@ def plot_single_env(
     ordered_handles = [map_lh[l] for l in desired if l in map_lh]
     ordered_labels = [l for l in desired if l in map_lh]
 
+    # Wrap the legend into two rows: a single row of Expert + every method is wider than this
+    # 6.5" figure and gets clipped on both sides.
+    legend_ncol = math.ceil(len(ordered_labels) / 2)
+    legend_rows = math.ceil(len(ordered_labels) / legend_ncol)
     fig.legend(
         ordered_handles,
         ordered_labels,
         loc="upper center",
-        ncol=len(ordered_labels),
+        ncol=legend_ncol,
         frameon=False,
-        fontsize=5.5,
+        fontsize=6.5,
         borderaxespad=0.01,
+        columnspacing=1.2,
     )
-    fig.tight_layout(rect=[0.01, 0, 1, 0.97])
+    fig.tight_layout(rect=[0.01, 0, 1, 1 - 0.04 * legend_rows])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200)
@@ -1040,9 +1072,21 @@ def save_aggregate_iqm(data, output_stem, *, x_axis):
     return results
 
 
-def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("vertical", "horizontal")):
-    """Save time/step IQM panels in vertical and horizontal shared-legend layouts."""
+def save_combined_aggregate_iqm(
+    results_by_axis, output_dir, *, orientations=("vertical", "horizontal"), include=None, suffix=""
+):
+    """Save time/step IQM panels in vertical and horizontal shared-legend layouts.
+
+    `include` optionally restricts the plotted algorithms (a predicate on the algorithm name; each
+    algorithm's IQM curve is computed independently, so filtering doesn't change any curve), and
+    `suffix` is appended to the output filenames (e.g. "_light").
+    """
     axes_order = ("time", "steps")
+    if include is not None:
+        results_by_axis = {
+            axis: {algo: result for algo, result in results_by_axis.get(axis, {}).items() if include(algo)}
+            for axis in axes_order
+        }
     if any(not results_by_axis.get(axis) for axis in axes_order):
         return []
     output_dir = Path(output_dir)
@@ -1074,7 +1118,11 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
             for algo, result in results_by_axis[axis].items():
                 x = np.linspace(0, 100, len(result["center"]))
                 (line,) = ax.plot(
-                    x, result["center"], label=algo, color=colors[algo], linewidth=1.5 if algo.lower().startswith("focus") else 1.5
+                    x,
+                    result["center"],
+                    label=algo,
+                    color=colors[algo],
+                    linewidth=1.5 if algo.lower().startswith("focus") else 1.5,
                 )
                 ax.fill_between(x, result["lower"], result["upper"], color=colors[algo], alpha=0.2)
                 legend_handles.setdefault(algo, line)
@@ -1105,7 +1153,7 @@ def save_combined_aggregate_iqm(results_by_axis, output_dir, *, orientations=("v
             if legend_width + 0.6 > fig.get_figwidth():
                 fig.set_size_inches(legend_width + 0.6, fig.get_figheight())
             fig.set_layout_engine("constrained")
-        path = output_dir / f"aggregate_iqm95ci_{orientation}.png"
+        path = output_dir / f"aggregate_iqm95ci_{orientation}{suffix}.png"
         fig.savefig(path, dpi=200, bbox_inches="tight")
         plt.close(fig)
         paths.append(path)
@@ -1369,7 +1417,7 @@ def main(
 
                     def moving_average(x, window):
                         x = np.asarray(x, dtype=np.float64)
-                        if window <= 1:
+                        if window <= 1 or x.size <= 1:
                             return x
                         window = min(window, x.size)
                         pad = window // 2
@@ -1377,7 +1425,9 @@ def main(
                         x_pad = np.pad(x, (pad, pad), mode="reflect")
                         kernel = np.ones(window, dtype=np.float64) / window
                         y = np.convolve(x_pad, kernel, mode="valid")
-                        return y[:-1]
+                        # Even windows produce one extra point; odd windows
+                        # already match the input length. Keep the x-grid aligned.
+                        return y[:x.size]
 
                     n_points = 1000
                     if x_axis == "time":
@@ -1406,7 +1456,7 @@ def main(
                         raise ValueError(f"Unknown x_axis: {x_axis}")
 
                     # Smooth AFTER interpolation
-                    smooth_window = 50  # typical values: 15–50
+                    smooth_window = SMOOTH_WINDOW
                     ep_rew_inter = moving_average(ep_rew_inter, smooth_window)
 
                     data[env_name][algo]["data"].append(ep_rew_inter)
@@ -1505,4 +1555,13 @@ if __name__ == "__main__":
         aggregate_results,
         FOLDER_TO_SAVE_PLOTS,
         orientations=("horizontal",) if ONLY_HORIZONTAL_AGGREGATED_IQM else ("vertical", "horizontal"),
+    )
+
+    # Lighter figure with only the headline methods (FOCUS variants, ILD, LWAIL, PWIL).
+    save_combined_aggregate_iqm(
+        aggregate_results,
+        FOLDER_TO_SAVE_PLOTS,
+        orientations=("horizontal",),
+        include=LIGHT_IQM_INCLUDE,
+        suffix="_light",
     )

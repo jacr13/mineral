@@ -191,19 +191,21 @@ def plot_pooled_return_vs_k(data, output_path):
         centers, lowers, uppers = np.array(centers), np.array(lowers), np.array(uppers)
         yerr = np.vstack([centers - lowers, uppers - centers])
         ax.errorbar(
-            ks, centers, yerr=yerr, marker="o", markersize=7, linewidth=2.2, capsize=4,
-            label=f"{LABEL[cost]} (n={ns[0]}/point)", color=COLOR[cost],
+            ks, centers, yerr=yerr, markersize=7, linewidth=2.2, capsize=4,
+            marker={"l2": "o", "cosine": "s"}[cost], linestyle={"l2": "-", "cosine": "--"}[cost],
+            label=LABEL[cost], color={"l2": "#2a78d6", "cosine": "#eb6834"}[cost],
         )
 
-    ax.axhline(1.0, color="#616161", linestyle=":", linewidth=1, label="Expert")
     ax.set_xscale("log", base=2)
     ax.set_xticks(K_VALUES)
     ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
     ax.set_xlabel("Best-of-K pool size (K)")
     ax.set_ylabel("Mean final return / expert return")
-    ax.legend(frameon=False, loc="best")
+    # Zoomed on purpose (data + CIs span ~0.68-0.96) so the trend is legible;
+    # say so in the caption.
+    ax.set_ylim(0.65, 1.0)
+    ax.legend(frameon=False, loc="lower right")
     ax.spines[["right", "top"]].set_visible(False)
-    ax.set_title("OTIL/FOCUS-SAPO: final return vs K, pooled across all 4 envs (95% bootstrap CI)")
     fig.tight_layout()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

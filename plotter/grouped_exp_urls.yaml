@@ -11,6 +11,7 @@ hopper:
   MAAD: https://wandb.ai/jacr/maad-sweep-dflex_hopper-slurm/groups/sierra-batman-oklahoma-march-autumn.GAIL.DFlex_hopper_64/workspace
   PWIL: https://wandb.ai/jacr/pwil-sweep-dflex_hopper-slurm/groups/paris-november-july-fillet-idaho.PWIL.DFlex_hopper_64/workspace
   OOPS: https://wandb.ai/jacr/oops-sweep-dflex_hopper-slurm/groups/nineteen-uncle-september-paris-august.OOPS.DFlex_hopper_64/workspace
+  LWAIL: https://wandb.ai/jacr/lwail-sweep-dflex_hopper-slurm/groups/oven-hotel-gee-jersey-oven.LWAIL.DFlex_hopper_64/workspace
   ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/emma-fish-purple-zulu-uncle.OTILSAC.DFlex_hopper_64/workspace
   ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/undress-leopard-mexico-winter-failed.OTILSAC.DFlex_hopper_64/workspace
   ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_hopper-slurm/groups/seven-delta-charlie-louisiana-music.OTILSAC.DFlex_hopper_64/workspace
@@ -30,6 +31,7 @@ ant:
   MAAD: https://wandb.ai/jacr/maad-sweep-dflex_ant-slurm/groups/spring-hawaii-six-video-fanta.GAIL.DFlex_ant_64/workspace
   PWIL: https://wandb.ai/jacr/pwil-sweep-dflex_ant-slurm/groups/connecticut-four-nitrogen-speaker-nebraska.PWIL.DFlex_ant_64/workspace
   OOPS: https://wandb.ai/jacr/oops-sweep-dflex_ant-slurm/groups/triple-jupiter-fish-alaska-wisconsin.OOPS.DFlex_ant_64/workspace
+  LWAIL: https://wandb.ai/jacr/lwail-sweep-dflex_ant-slurm/groups/utah-cola-bakerloo-butter-twelve.LWAIL.DFlex_ant_64/workspace
   ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/pluto-nevada-mango-happy-uniform.OTILSAC.DFlex_ant_64/workspace
   ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/chicken-rugby-diet-north-muppet.OTILSAC.DFlex_ant_64/workspace
   ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_ant-slurm/groups/queen-oxygen-blossom-idaho-nuts.OTILSAC.DFlex_ant_64/workspace
@@ -49,6 +51,7 @@ humanoid:
   MAAD: https://wandb.ai/jacr/maad-sweep-dflex_humanoid-slurm/groups/queen-yankee-helium-nevada-avocado.GAIL.DFlex_humanoid_64/workspace
   PWIL: https://wandb.ai/jacr/pwil-sweep-dflex_humanoid-slurm/groups/diet-mexico-alaska-lima-juliet.PWIL.DFlex_humanoid_64/workspace
   OOPS: https://wandb.ai/jacr/oops-sweep-dflex_humanoid-slurm/groups/uranus-failed-comet-twelve-oven.OOPS.DFlex_humanoid_64/workspace
+  LWAIL: https://wandb.ai/jacr/lwail-sweep-dflex_humanoid-slurm/groups/grey-oregon-crazy-tango-alanine.LWAIL.DFlex_humanoid_64/workspace
   ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/victor-quebec-lake-social-speaker.OTILSAC.DFlex_humanoid_64/workspace
   ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/oven-autumn-nevada-hydrogen-nuts.OTILSAC.DFlex_humanoid_64/workspace
   ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_humanoid-slurm/groups/whiskey-sierra-connecticut-gee-carbon.OTILSAC.DFlex_humanoid_64/workspace
@@ -68,6 +71,7 @@ snu_humanoid:
   MAAD: https://wandb.ai/jacr/maad-sweep-dflex_snu_humanoid-slurm/groups/mexico-high-wolfram-august-network.GAIL.DFlex_snu_humanoid_64/workspace
   PWIL: https://wandb.ai/jacr/pwil-sweep-dflex_snu_humanoid-slurm/groups/orange-six-saturn-aspen-saturn.PWIL.DFlex_snu_humanoid_64/workspace
   OOPS: https://wandb.ai/jacr/oops-sweep-dflex_snu_humanoid-slurm/groups/kentucky-bluebird-pizza-arizona-july.OOPS.DFlex_snu_humanoid_64/workspace
+  LWAIL: https://wandb.ai/jacr/lwail-sweep-dflex_snu_humanoid-slurm/groups/minnesota-skylark-south-mexico-texas.LWAIL.DFlex_snu_humanoid_64/workspace
   ZOCUS-SAC-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/eleven-angel-maine-batman-cardinal.OTILSAC.DFlex_snu_humanoid_64/workspace
   ZOCUS-SAC-OT-l2: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/princess-fillet-king-muppet-paris.OTILSAC.DFlex_snu_humanoid_64/workspace
   ZOCUS-SAC-OT-cos: https://wandb.ai/jacr/OTIL_SAC-dflex_snu_humanoid-slurm/groups/shade-tennessee-nineteen-queen-zulu.OTILSAC.DFlex_snu_humanoid_64/workspace

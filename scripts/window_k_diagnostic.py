@@ -72,16 +72,20 @@ def run_one(horizon, variant, k):
 
 
 def main():
-    rows = []
-    for horizon in HORIZONS:
-        for variant in VARIANTS:
-            for k in K_VALUES:
-                print(f"Running horizon={horizon} variant={variant} k={k} ...", flush=True)
-                row = run_one(horizon, variant, k)
-                rows.append({"horizon": horizon, "variant": variant, "k": k, **row})
+    results_path = REPORT_DIR / "window_k_diagnostic_results.json"
+    if "--replot" in sys.argv:
+        rows = json.loads(results_path.read_text())
+    else:
+        rows = []
+        for horizon in HORIZONS:
+            for variant in VARIANTS:
+                for k in K_VALUES:
+                    print(f"Running horizon={horizon} variant={variant} k={k} ...", flush=True)
+                    row = run_one(horizon, variant, k)
+                    rows.append({"horizon": horizon, "variant": variant, "k": k, **row})
 
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    (REPORT_DIR / "window_k_diagnostic_results.json").write_text(json.dumps(rows, indent=2) + "\n")
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        results_path.write_text(json.dumps(rows, indent=2) + "\n")
 
     metrics = [
         ("best_of_k_candidate_coverage_fraction", "Candidate coverage (fraction within phase tolerance)"),
@@ -89,9 +93,10 @@ def main():
         ("best_of_k_phase_error_mean", "Mean phase error (cycles, lower = better)"),
     ]
     fig, axes = plt.subplots(1, len(metrics), figsize=(7 * len(metrics), 4.5))
-    # Sequential ramp (light -> dark) since horizon is an ordered magnitude,
-    # not a category -- ColorBrewer 4-class Greens.
-    color = {8: "#C7E9C0", 16: "#74C476", 32: "#31A354", 64: "#006D2C"}
+    # Categorical hues (validated with the dataviz palette checker, all-pairs
+    # CVD-safe): violet, orange, light blue, teal. Same horizon -> color
+    # mapping as plotter/bestofk_window16_vs_32_hopper.py.
+    color = {8: "#4a3aa7", 16: "#eb6834", 32: "#6aa1e2", 64: "#1baf7a"}
     linestyle = {"ot_l2": "-", "ot_cos": "--", "l2_no_ot": ":"}
 
     for ax, (metric_key, metric_label) in zip(axes, metrics):

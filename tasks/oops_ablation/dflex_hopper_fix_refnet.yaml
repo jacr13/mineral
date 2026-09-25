@@ -1,0 +1,55 @@
+# OOPS hopper ablation, run AFTER fixing the double observation normalization in
+# OOPS.update_net (training used normalize(normalize(x)) while acting used normalize(x)).
+# The previously plotted OOPS runs (oops-sweep-dflex_hopper-slurm) predate the fix and show a
+# flat imitation reward (oops/reward_mean ~ -3.0 for the whole run), so compare `oops/reward_mean`
+# and train_scores/episode_rewards against them.
+#
+# Arms (one file each, 3 seeds each):
+#   dflex_hopper_fix.yaml            fix only: repo's default small networks, 8 demos
+#   dflex_hopper_fix_refnet.yaml     + reference-sized networks (actor 256x256, critic 1024x1024, ReLU, no norm)
+#   dflex_hopper_fix_refnet_1demo.yaml  + a single expert demo (reference default n_demos=1)
+#
+# Launch: python spawner.py --task_name oops_ablation --deployment slurm --sweep --deploy_now ...
+
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+    +early_termination: false # OOPS needs unbroken fixed-length episodes (see tasks/oops/dflex_hopper.yaml)
+agent:
+  name: OOPS/DFlexAnt
+  ddpg:
+    max_agent_steps: 10000000
+    horizon_len: 1000 # must match the demos' episode length
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+        norm_type: null
+        act_type: ReLU
+    critic_kwargs:
+      mlp_kwargs:
+        units: [1024, 1024]
+        norm_type: null
+        act_type: ReLU
+  oops:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+      subsample_factor: 1
+    sinkhorn_iters: 1000 # 1000 vs 20000 iterations gives identical rewards on the hopper demos (checked)
+experiment: fix_refnet
+logdir: "workdir/DFlexHopperOOPSAblation-fix_refnet/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: oops-fix-ablation-hopper
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "5h"
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"

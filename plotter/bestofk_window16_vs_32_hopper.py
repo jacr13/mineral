@@ -77,7 +77,7 @@ def main():
     # -> color mapping used in docs/phase_rescue/window_k_diagnostic.png so
     # the two figures read consistently side by side. Cost is encoded by
     # linestyle/marker instead.
-    color = {16: "#74C476", 32: "#31A354"}
+    color = {16: "#eb6834", 32: "#6aa1e2"}
     linestyle = {"l2": "-", "cosine": "--"}
     marker = {"l2": "o", "cosine": "s"}
 
@@ -110,6 +110,9 @@ def main():
     ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
     ax.set_xlabel("Best-of-K pool size (K)")
     ax.set_ylabel("Mean final return / expert return")
+    # Full 0-1 range: a truncated axis would visually exaggerate differences
+    # that are only a few points of normalized return.
+    ax.set_ylim(0.0, 1.05)
     ax.legend(frameon=False, fontsize=8, loc="best")
     ax.spines[["right", "top"]].set_visible(False)
     fig.tight_layout()
