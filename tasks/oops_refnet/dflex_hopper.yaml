@@ -1,0 +1,57 @@
+# NOTE (hopper): the ablation's fix_refnet arm already ran seeds 100/110/120 with this same config; the
+# preferred way to complete the set is scripts/oops_hopper_more_seeds.sh (seeds 1000/1100/1200, same wandb
+# group as those 3). Use THIS file only if you would rather have a fresh, separate 6-seed group.
+# OOPS with the configuration that learned in the hopper ablation (tasks/oops_ablation, wandb project
+# oops-fix-ablation-hopper): the fixed OOPS.update_net (observations normalized once, as when acting) plus the
+# reference implementation's network sizes (actor 256x256, critic 1024x1024, ReLU, no norm).
+# On hopper at 1.0M env steps (expert return 4813) this reached 3400-4400 in all 6 seeds, versus
+# -600..1800 for the repo's default small networks with the same fix and ~0 for the buggy code.
+# Using 8 demos (repo-wide convention, same expert budget as the other baselines): 1 vs 8 demos made no
+# difference in the ablation. Results go to their own wandb project, separate from the old
+# oops-sweep-* projects, which were produced by the buggy code.
+
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+    # OOPS needs one continuous, unbroken fixed-length episode per rollout (it OT-matches the whole thing
+    # against one expert trajectory), so disable DFlex's automatic reset on early termination
+    # (see tasks/oops/dflex_hopper.yaml for the full explanation).
+    +early_termination: false
+agent:
+  name: OOPS/DFlexAnt
+  ddpg:
+    max_agent_steps: 10000000
+    horizon_len: 1000 # must match the demos' (padded) trajectory length
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+        norm_type: null
+        act_type: ReLU
+    critic_kwargs:
+      mlp_kwargs:
+        units: [1024, 1024]
+        norm_type: null
+        act_type: ReLU
+  oops:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+      subsample_factor: 1
+    sinkhorn_iters: 1000 # 1000 vs 20000 iterations gives identical rewards on these demos (checked on hopper/ant/humanoid)
+experiment: refnet
+logdir: "workdir/DFlexHopper10M-OOPSrefnet/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: oops-refnet-dflex_hopper-slurm
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "4h"
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"

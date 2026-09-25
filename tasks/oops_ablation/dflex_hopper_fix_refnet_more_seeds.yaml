@@ -1,0 +1,50 @@
+# Missing seeds for the hopper `fix_refnet` ablation arm (tasks/oops_ablation/dflex_hopper_fix_refnet.yaml, seeds 100/110/120):
+# adds seeds 1000/1100/1200 so hopper has the same 6 seeds as the other baselines.
+#
+# Keep EVERYTHING except `sweep.seed` identical to dflex_hopper_fix_refnet.yaml (experiment label, wandb project,
+# runtime, networks, demos, sinkhorn settings): the wandb group is a hash of the resolved config minus seed/logdir,
+# so an identical config lands these runs in the SAME wandb group as the first 3 seeds, and the plotter's single
+# group URL then covers all 6.
+
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+    +early_termination: false # OOPS needs unbroken fixed-length episodes (see tasks/oops/dflex_hopper.yaml)
+agent:
+  name: OOPS/DFlexAnt
+  ddpg:
+    max_agent_steps: 10000000
+    horizon_len: 1000 # must match the demos' episode length
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+        norm_type: null
+        act_type: ReLU
+    critic_kwargs:
+      mlp_kwargs:
+        units: [1024, 1024]
+        norm_type: null
+        act_type: ReLU
+  oops:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+      subsample_factor: 1
+    sinkhorn_iters: 1000 # 1000 vs 20000 iterations gives identical rewards on the hopper demos (checked)
+experiment: fix_refnet
+logdir: "workdir/DFlexHopperOOPSAblation-fix_refnet/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: oops-fix-ablation-hopper
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [1000, 1100, 1200]
+
+spawner:
+  runtime: "5h"
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"
