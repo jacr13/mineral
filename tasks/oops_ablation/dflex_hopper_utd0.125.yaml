@@ -1,0 +1,53 @@
+# OOPS hopper update-ratio ablation (UTD = gradient updates per collected env step).
+# WHY: the plotter compares methods up to MAX_STEPS_PER_ENV (hopper/ant 10M, humanoid/snu 15M steps), but OOPS at the
+# reference's 1 update per transition does only ~0.3-0.7M env steps/hour, so it cannot reach those step counts within a
+# 12h job (hopper ~15h, ant ~29h, humanoid ~36h, snu ~29h). Fewer updates per step is the only lever that changes that,
+# but it departs from the reference, so check on hopper that it still learns before using it on the other envs.
+# Same config as the `fix_refnet` arm (8 demos, reference-sized networks) except `agent.ddpg.mini_epochs`:
+# updates per rollout (64 envs x 1000 steps = 64000 transitions), so UTD = mini_epochs / 64000.
+#   fix_refnet_utd0.125: mini_epochs=8000 -> UTD 0.125
+# Compare return at EQUAL ENV STEPS (and at equal wall-time) against fix_refnet (UTD 1.0, seeds 100/110/120, same project).
+
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    no_grad: true
+    +early_termination: false # OOPS needs unbroken fixed-length episodes (see tasks/oops/dflex_hopper.yaml)
+agent:
+  name: OOPS/DFlexAnt
+  ddpg:
+    max_agent_steps: 10000000
+    horizon_len: 1000 # must match the demos' episode length
+    mini_epochs: 8000 # UTD 0.125
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [256, 256]
+        norm_type: null
+        act_type: ReLU
+    critic_kwargs:
+      mlp_kwargs:
+        units: [1024, 1024]
+        norm_type: null
+        act_type: ReLU
+  oops:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+      subsample_factor: 1
+    sinkhorn_iters: 1000 # 1000 vs 20000 iterations gives identical rewards on the hopper demos (checked)
+experiment: fix_refnet_utd0.125
+logdir: "workdir/DFlexHopperOOPSAblation-fix_refnet_utd0.125/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: oops-fix-ablation-hopper
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "6h"
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"

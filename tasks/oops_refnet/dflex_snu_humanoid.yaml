@@ -50,5 +50,7 @@ sweep:
   seed: [100, 110, 120, 1000, 1100, 1200]
 
 spawner:
-  runtime: "7h30m"
+  # 12h = the maximum allowed. OOPS does 1 gradient update per env step, so it only reaches ~0.3-0.7M env steps/h and
+  # will still stop well short of the plotter's step caps (see tasks/oops_ablation/dflex_hopper_utd*.yaml).
+  runtime: "12h"
   gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE"
