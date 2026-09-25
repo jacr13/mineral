@@ -45,7 +45,7 @@ wait_until_room_for_next_batch() {
 for env in "${ENVS[@]}"; do
     echo "============================================================"
     echo "Launching env: ${env}"
-    echo "WandB project: sweep-${env}-slurm-new"
+    echo "WandB project: pwil-stateonly-sweep-${env}-slurm"
     echo "MAX_JOBS=${MAX_JOBS}"
     echo "============================================================"
 
@@ -65,7 +65,8 @@ for env in "${ENVS[@]}"; do
         --no-cleanup \
         --sweep \
         --sweep_max 150 \
-        --set "wandb.project=pwil-sweep-${env}-slurm" \
+        --set "wandb.project=pwil-stateonly-sweep-${env}-slurm" \
+        --set "agent.pwil.observation_only=true" \
         --set "agent.sac.max_agent_steps=100000000" \
         --env_files "${env}.yaml" \
         --deploy_now

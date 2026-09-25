@@ -21,7 +21,7 @@ agent:
       path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
       n_trajs: 8
       subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
-    observation_only: false
+    observation_only: true
     alpha: 5.0
     beta: 5.0
 logdir: "workdir/DFlexSNUHumanoid10M-PWIL/$(date +%Y%m%d-%H%M%S.%2N)"
@@ -40,7 +40,7 @@ sweep:
   # agent.pwil.beta: [1.0, 5.0, 10.0]  (5.0 matches Dadashi et al.'s own default)
   agent.pwil.beta: 5.0
   # agent.pwil.observation_only: [true, false]
-  agent.pwil.observation_only: false
+  agent.pwil.observation_only: true
 
 spawner:
   runtime: "7h30m"

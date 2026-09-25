@@ -2,15 +2,17 @@
 # Launches every prepared OOPS experiment on the SLURM cluster, cleanly, from one place.
 #
 # Parts (all use the fixed OOPS.update_net + the paper's network sizes; see tasks/oops_refnet/*.yaml):
-#   more_seeds   hopper: seeds 1000/1100/1200 for the ablation's `fix_refnet` arm (same wandb group as its 3 seeds)   3 jobs x 5h
-#   refnet       ant, humanoid, snu_humanoid: 6 seeds each, 1 update per env step (the paper's setting)               18 jobs x 12h
+#   hopper       hopper, 6 seeds, 12h, 1 update per env step (the paper's setting)                                    6 jobs x 12h
+#   refnet       ant, humanoid, snu_humanoid: 6 seeds each, 12h, 1 update per env step                                18 jobs x 12h
 #   utd          hopper update-ratio test (UTD 0.5 / 0.25 / 0.125, 3 seeds each) -- OPTIONAL, only needed if OOPS       9 jobs x 6h
 #                should span the plotter's full 10M/15M step axis; the paper itself trains 1M steps at UTD 1
 #
-#   ./scripts/oops_all.sh                        # more_seeds + refnet   (21 jobs)
-#   PARTS="refnet" ./scripts/oops_all.sh         # choose parts
-#   PARTS="more_seeds refnet utd" ./scripts/oops_all.sh
-#   DRY_RUN=1 ./scripts/oops_all.sh              # only write the sbatch scripts under spawn/, submit nothing
+# PARTS is REQUIRED (there is deliberately no default): submitting a part twice duplicates its seeds in the same
+# wandb group, and the plotter then counts them twice. Only launch parts you have not launched yet.
+#
+#   PARTS="hopper refnet" ./scripts/oops_all.sh           # all four environments (24 jobs)
+#   PARTS="hopper" ./scripts/oops_all.sh                  # one part
+#   DRY_RUN=1 PARTS="hopper refnet" ./scripts/oops_all.sh # only write the sbatch scripts under spawn/, submit nothing
 set -euo pipefail
 
 LOG_FILE="run_$(date +%Y%m%d_%H%M%S).log"
@@ -21,14 +23,20 @@ SLURM_USER="candidor"
 POLL_SECONDS=60
 MAX_JOBS=100
 
-read -r -a PART_LIST <<< "${PARTS:-more_seeds refnet}"
+if [[ -z "${PARTS:-}" ]]; then
+  echo "ERROR: set PARTS to the part(s) to launch, e.g. PARTS=\"refnet\" ./scripts/oops_all.sh" >&2
+  echo "       valid parts: hopper refnet utd (see the header of this script)." >&2
+  echo "       No default on purpose: relaunching a part duplicates its seeds in the same wandb group." >&2
+  exit 1
+fi
+read -r -a PART_LIST <<< "$PARTS"
 
 # Each entry: "<task dir under tasks/>:<task file>:<number of jobs it submits>"
 declare -a BATCHES=()
 for part in "${PART_LIST[@]}"; do
   case "$part" in
-    more_seeds)
-      BATCHES+=("oops_ablation:dflex_hopper_fix_refnet_more_seeds.yaml:3")
+    hopper)
+      BATCHES+=("oops_refnet:dflex_hopper.yaml:6")
       ;;
     refnet)
       BATCHES+=("oops_refnet:dflex_ant.yaml:6" "oops_refnet:dflex_humanoid.yaml:6" "oops_refnet:dflex_snu_humanoid.yaml:6")
@@ -37,7 +45,7 @@ for part in "${PART_LIST[@]}"; do
       BATCHES+=("oops_ablation:dflex_hopper_utd0.5.yaml:3" "oops_ablation:dflex_hopper_utd0.25.yaml:3" "oops_ablation:dflex_hopper_utd0.125.yaml:3")
       ;;
     *)
-      echo "ERROR: unknown part '${part}' (valid: more_seeds refnet utd)" >&2
+      echo "ERROR: unknown part '${part}' (valid: hopper refnet utd)" >&2
       exit 1
       ;;
   esac
