@@ -8,7 +8,13 @@ import torch.nn as nn
 from ...common.demos import get_demos
 from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
-from .best_of_k import BestOfK, OTSinkhornCriterion, SequenceCosineCriterion, SequenceRegressionCriterion
+from .best_of_k import (
+    BestOfK,
+    OTSinkhornCriterion,
+    SequenceCosineCriterion,
+    SequenceRegressionCriterion,
+    SoftDTWCriterion,
+)
 
 
 class OTIL(SHAC):
@@ -39,6 +45,9 @@ class OTIL(SHAC):
         self.loss_ot_iters = int(self.otil_config.get("loss_ot_iters", 60))
         self.loss_ot_huber_delta = float(self.otil_config.get("loss_ot_huber_delta", 1.0))
         self.loss_best_of_k_tau = float(self.otil_config.get("loss_best_of_k_tau", 0.5))
+        # Ordered-alignment (soft-DTW) alternative to the Sinkhorn coupling.
+        self.loss_dtw_gamma = float(self.otil_config.get("loss_dtw_gamma", 0.1))
+        self.loss_dtw_normalize = self.otil_config.get("loss_dtw_normalize", "rows")
         self.loss_ot_cost_type = self.otil_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
@@ -53,7 +62,7 @@ class OTIL(SHAC):
         if self.save_plan_heatmaps and (not self.multi_gpu or self.rank == 0):
             os.makedirs(self.plan_heatmap_dir, exist_ok=True)
 
-        if self.imitation_loss_type in ["ot", "l2", "cosine"]:
+        if self.imitation_loss_type in ["ot", "l2", "cosine", "softdtw", "softdtw_subseq"]:
             if self.imitation_loss_type == "ot":
                 ot_params = dict(
                     eps=self.loss_ot_eps,
@@ -63,6 +72,18 @@ class OTIL(SHAC):
                     use_huber_speedup=self.loss_use_huber_speedup,
                 )
                 criterion = OTSinkhornCriterion(**ot_params)
+            elif self.imitation_loss_type in ("softdtw", "softdtw_subseq"):
+                # Same ground cost and the same per-step cost scale as the OT
+                # criterion (see SoftDTWCriterion); only the alignment differs.
+                subseq = self.imitation_loss_type == "softdtw_subseq"
+                criterion = SoftDTWCriterion(
+                    gamma=self.loss_dtw_gamma,
+                    cost_type=self.loss_ot_cost_type,
+                    huber_delta=self.loss_ot_huber_delta,
+                    subsequence=subseq,
+                    open_end=subseq,
+                    normalize=self.loss_dtw_normalize,
+                )
             elif self.imitation_loss_type == "l2":
                 criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
             elif self.imitation_loss_type == "cosine":

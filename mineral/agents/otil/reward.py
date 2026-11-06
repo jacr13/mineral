@@ -3,7 +3,13 @@ from copy import deepcopy
 import torch
 
 from ...common.demos import get_demos
-from .best_of_k import BestOfK, OTSinkhornCriterion, SequenceCosineCriterion, SequenceRegressionCriterion
+from .best_of_k import (
+    BestOfK,
+    OTSinkhornCriterion,
+    SequenceCosineCriterion,
+    SequenceRegressionCriterion,
+    SoftDTWCriterion,
+)
 
 
 def build_otil_loss(config, horizon_len, feature_dim, device):
@@ -16,6 +22,16 @@ def build_otil_loss(config, horizon_len, feature_dim, device):
             cost_type=config.get("loss_ot_cost_type", "l2"),
             huber_delta=float(config.get("loss_ot_huber_delta", 1.0)),
             use_huber_speedup=config.get("loss_use_huber_speedup", True),
+        )
+    elif imitation_loss_type in ("softdtw", "softdtw_subseq"):
+        subseq = imitation_loss_type == "softdtw_subseq"
+        criterion = SoftDTWCriterion(
+            gamma=float(config.get("loss_dtw_gamma", 0.1)),
+            cost_type=config.get("loss_ot_cost_type", "l2"),
+            huber_delta=float(config.get("loss_ot_huber_delta", 1.0)),
+            subsequence=subseq,
+            open_end=subseq,
+            normalize=config.get("loss_dtw_normalize", "rows"),
         )
     elif imitation_loss_type == "l2":
         criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")

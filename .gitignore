@@ -13,6 +13,8 @@ plotter/plots*/
 OOPS_Supplementary/
 crit_no_*/
 bestofk_ablation/
+mujoco_playground/
+ICLR Reviews/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

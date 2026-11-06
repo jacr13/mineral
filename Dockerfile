@@ -26,7 +26,7 @@ FROM base AS conda_setup
 
 ENV PATH=${HOME}/conda/bin:$PATH
 RUN set -eux; \
-    MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-py310_24.4.0-0-Linux-x86_64.sh"; \
+    MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-py312_24.4.0-0-Linux-x86_64.sh"; \
     wget -q "${MINICONDA_URL}" -O miniconda.sh; \
     bash miniconda.sh -b -p "${HOME}/conda"; \
     rm miniconda.sh; \
@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir poetry && \
     poetry config virtualenvs.create false
 
 WORKDIR /workspace
-COPY --chown=${USER_ID}:${GROUP_ID} pyproject.toml /workspace/
+COPY --chown=${USER_ID}:${GROUP_ID} pyproject.toml poetry.lock /workspace/
 RUN poetry install -vvv --no-interaction --no-root
 
 # --------- Final image ---------

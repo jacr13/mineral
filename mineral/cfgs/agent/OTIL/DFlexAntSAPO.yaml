@@ -29,5 +29,12 @@ otil:
   critic_reward_mapping: log_exp # neg | exp | log_exp
   critic_reward_scale: 1.0
   critic_reward_normalize: ${..shac.normalize_ret}
-  imitation_loss_type: ot # ot | l2 | cosine
+  # ot | l2 | cosine | softdtw | softdtw_subseq
+  # softdtw/softdtw_subseq swap the Sinkhorn coupling for an ordered (soft-DTW)
+  # alignment, keeping the ground cost, per-step cost scale, best-of-K softmin,
+  # reward transformation and critic identical -- the controlled
+  # "does the alignment objective matter" comparison.
+  imitation_loss_type: ot
+  loss_dtw_gamma: 0.1
+  loss_dtw_normalize: rows # rows | total | none
   actor_value_return_type: min

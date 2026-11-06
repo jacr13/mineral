@@ -15,10 +15,10 @@ from wandb_api import get_group_runs, get_rew_steps_times
 sns.set_theme()
 sns.set(rc={"axes.facecolor": "#f5f5f5"})
 
-FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots8"
+FOLDER_TO_SAVE_PLOTS = Path(__file__).resolve().parent / "plots9"
 
 # Moving-average window applied to every curve after interpolation (typical values: 15-50).
-SMOOTH_WINDOW = 50
+SMOOTH_WINDOW = 25
 
 
 EXPERTS = {
@@ -144,12 +144,8 @@ LINESTYLE = {
 
 
 def LIGHT_IQM_INCLUDE(algo):
-    """Algorithms shown in the lighter aggregate IQM figure.
-
-    OOPS is left out (pooled IQM ~0.01 on both axes); PWIL is the strongest remaining baseline on wall-time
-    (~0.40) and has a color that's easy to tell apart from LWAIL's (though it drops to ~0.10 on steps).
-    """
-    return algo.startswith("FOCUS") or algo in {"ILD", "LWAIL", "PWIL"}
+    """Algorithms shown in the lighter aggregate IQM figure: FOCUS variants, ILD, LWAIL, PWIL and OOPS."""
+    return algo.startswith("FOCUS") or algo in {"ILD", "LWAIL", "PWIL", "OOPS"}
 
 
 def get_linestyle(algo_disp):
@@ -1557,7 +1553,7 @@ if __name__ == "__main__":
         orientations=("horizontal",) if ONLY_HORIZONTAL_AGGREGATED_IQM else ("vertical", "horizontal"),
     )
 
-    # Lighter figure with only the headline methods (FOCUS variants, ILD, LWAIL, PWIL).
+    # Lighter figure with only the headline methods (FOCUS variants, ILD, LWAIL, PWIL, OOPS).
     save_combined_aggregate_iqm(
         aggregate_results,
         FOLDER_TO_SAVE_PLOTS,
