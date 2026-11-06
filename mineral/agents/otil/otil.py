@@ -31,6 +31,14 @@ class OTIL(SHAC):
         demos_config = self.otil_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
+        # Sinkhorn settings and the best-of-K softmin temperature are read from
+        # the config here; the defaults are the values every reported run used
+        # (they were previously hardcoded below, so loss_ot_eps/loss_ot_iters in
+        # the configs were silently ignored on this path).
+        self.loss_ot_eps = float(self.otil_config.get("loss_ot_eps", 0.1))
+        self.loss_ot_iters = int(self.otil_config.get("loss_ot_iters", 60))
+        self.loss_ot_huber_delta = float(self.otil_config.get("loss_ot_huber_delta", 1.0))
+        self.loss_best_of_k_tau = float(self.otil_config.get("loss_best_of_k_tau", 0.5))
         self.loss_ot_cost_type = self.otil_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
@@ -48,10 +56,10 @@ class OTIL(SHAC):
         if self.imitation_loss_type in ["ot", "l2", "cosine"]:
             if self.imitation_loss_type == "ot":
                 ot_params = dict(
-                    eps=0.1,
-                    iters=60,
+                    eps=self.loss_ot_eps,
+                    iters=self.loss_ot_iters,
                     cost_type=self.loss_ot_cost_type,
-                    huber_delta=1.0,
+                    huber_delta=self.loss_ot_huber_delta,
                     use_huber_speedup=self.loss_use_huber_speedup,
                 )
                 criterion = OTSinkhornCriterion(**ot_params)
@@ -69,6 +77,7 @@ class OTIL(SHAC):
             bok_params = dict(
                 T=self.horizon_len if self.input_type == "state" else self.horizon_len + 1,
                 K=self.loss_best_of_k_k,
+                tau=self.loss_best_of_k_tau,
                 input_type=self.input_type,
                 detach_prev_obs=self.loss_use_detached_prev_obs,
                 mlp_features_dim=self.loss_mlp_features_dim,
@@ -438,7 +447,7 @@ class OTIL(SHAC):
         self._plan_heatmap_plt = plt
         return self._plan_heatmap_plt
 
-    def _build_pseudo_rewards(self, per_step_costs: torch.Tensor, add_cost: bool = True) -> torch.Tensor:
+    def _build_pseudo_rewards(self, per_step_costs: torch.Tensor) -> torch.Tensor:
         if self.critic_reward_mapping == "neg":
             rewards = -per_step_costs
         elif self.critic_reward_mapping == "exp":
@@ -452,9 +461,9 @@ class OTIL(SHAC):
         else:
             raise NotImplementedError(self.critic_reward_mapping)
 
-        # allows gradients to flow through cost when loss is high and exp goes to 0
-        add_cost = self.critic_reward_shapping
-        if add_cost and self.critic_reward_mapping in [
+        # allows gradients to flow through cost when loss is high and exp goes to 0.
+        # NOTE: this makes the reward phi(L) - L, not phi(L), for these mappings.
+        if self.critic_reward_shapping and self.critic_reward_mapping in [
             "neg",
             "log_exp",
             "1_over_1_plus_loss",

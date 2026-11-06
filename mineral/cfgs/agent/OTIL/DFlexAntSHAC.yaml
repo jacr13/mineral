@@ -12,10 +12,17 @@ otil:
 
   input_type: state # state | state_state
   loss_ot_cost_type: l2 # l2 | huber | cosine
-  loss_use_huber_speedup: true
+  # Sinkhorn/softmin settings of the reported runs. huber_speedup computes the
+  # plan on a Huber cost while scoring with the configured cost, so it is off:
+  # every reported run set it false.
+  loss_ot_eps: 0.1
+  loss_ot_iters: 60
+  loss_ot_huber_delta: 1.0
+  loss_use_huber_speedup: false
   loss_mlp_features_dim: null
   loss_use_detached_prev_obs: true
   loss_best_of_k_k: 8
+  loss_best_of_k_tau: 0.5
 
   critic_reward_shapping: true
   critic_disabled: False

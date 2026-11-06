@@ -28,6 +28,7 @@ def build_otil_loss(config, horizon_len, feature_dim, device):
     return BestOfK(
         T=horizon_len if input_type == "state" else horizon_len + 1,
         K=int(config.get("loss_best_of_k_k", 8)),
+        tau=float(config.get("loss_best_of_k_tau", 0.5)),
         input_type=input_type,
         detach_prev_obs=config.get("loss_use_detached_prev_obs", True),
         mlp_features_dim=config.get("loss_mlp_features_dim", None),
