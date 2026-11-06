@@ -13,18 +13,26 @@
 # a controlled substitution rather than a different method.
 #
 # Usage:
-#   bash scripts/otil_softdtw.sh                  # default: SNU Humanoid + Humanoid
-#   ENVS="dflex_hopper dflex_ant" bash scripts/otil_softdtw.sh
+#   bash scripts/otil_softdtw.sh                  # all four tasks, all five rows
+#   ENVS="dflex_hopper dflex_ant" bash scripts/otil_softdtw.sh   # just these two
 #   ROWS="0 1" bash scripts/otil_softdtw.sh       # only the soft-DTW rows
 #   DRY_RUN=1 bash scripts/otil_softdtw.sh        # print the commands, submit nothing
+#
+# It prints the full job plan and the env list before submitting anything.
 set -euo pipefail
 
 USER_NAME="${USER_NAME:-candidor}"
 POLL_SECONDS=60
 MAX_JOBS="${MAX_JOBS:-100}"
 SETTLE_SECONDS=5
-BATCH_JOBS=""
+# Jobs added per submission. Seeded with the sweep's seed count and then
+# corrected from the measured queue delta. It must never be set to the total
+# queue size: with anything already queued that inflates it and every later
+# batch waits for a threshold it may never reach.
+BATCH_JOBS="${BATCH_JOBS:-6}"
 DRY_RUN="${DRY_RUN:-0}"
+# Epochs between intermediate checkpoints (default config: 100, unpruned).
+CKPT_EVERY="${CKPT_EVERY:-2000}"
 
 DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
 # Keep off Pascal nodes (P100 / Titan X): scripts/otil.sh documents that a
@@ -32,10 +40,11 @@ DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
 # in half the time.
 GPU_CONSTRAINT="${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
 
-# Priority order: the humanoids first. They are where FOCUS's headline result
-# lives and where a soft-DTW tie or win matters most; if compute runs out, the
-# Hopper/Ant rows are the ones to drop.
-ENVS="${ENVS:-dflex_snu_humanoid dflex_humanoid}"
+# All four tasks by default, humanoids first: that is the order to cancel in if
+# compute runs short (SNU Humanoid and Humanoid carry the headline result), but
+# the paper reports all four, so a comparison on two of them would be a gap a
+# reviewer could reasonably pick at.
+ENVS="${ENVS:-dflex_snu_humanoid dflex_humanoid dflex_hopper dflex_ant}"
 
 declare -A MAX_STEPS=(
   [dflex_hopper]=10000000 [dflex_ant]=10000000
@@ -62,6 +71,9 @@ declare -A RUNTIMES=(
 # OT-Cos, i.e. best-of-K silently degenerates to averaging for the bounded
 # cosine cost. These two rows are cheap and turn that observation into a result.
 # ---------------------------------------------------------------------------
+# The transport-plan gradient ablation lives in scripts/otil_gradpath.sh: it is
+# a different question (how the gradient is taken, not which alignment is used)
+# and needs its own wandb project so the provenance stays readable.
 ROW_NAME=(softdtw_k8 subseq_k1 subseq_k8 ot_l2_lowtau ot_cos_lowtau)
 ROW_LOSS=(softdtw softdtw_subseq softdtw_subseq ot ot)
 ROW_K=(8 1 8 8 8)
@@ -71,15 +83,27 @@ ROW_MLP=(64 64 64 64 null)
 
 ROWS="${ROWS:-0 1 2 3 4}"
 
+n_envs=$(wc -w <<< "$ENVS"); n_rows=$(wc -w <<< "$ROWS")
+echo "============================================================"
+echo "ENVS : $ENVS"
+echo "ROWS : $ROWS"
+echo "PLAN : ${n_envs} env(s) x ${n_rows} row(s) x 6 seeds = $(( n_envs * n_rows * 6 )) jobs"
+echo "============================================================"
+
 job_count() { squeue -h -u "$USER_NAME" | wc -l | tr -d ' '; }
 
 wait_for_room() {
-  local threshold=$(( MAX_JOBS - $1 ))
+  # $1 = how many jobs the next submission will add.
+  local need="$1"
+  local threshold=$(( MAX_JOBS - need ))
   (( threshold < 0 )) && threshold=0
   while true; do
     local n; n="$(job_count)"
-    [[ "$n" -le "$threshold" ]] && { echo "Queue ${n} <= ${threshold}; room for a batch."; break; }
-    echo "Queue ${n} > ${threshold}; sleeping ${POLL_SECONDS}s..."
+    if [[ "$n" -le "$threshold" ]]; then
+      echo "Queue ${n} <= ${threshold}; room for ${need} more."
+      break
+    fi
+    echo "Queue ${n} > ${threshold} (need room for ${need}); sleeping ${POLL_SECONDS}s..."
     sleep "$POLL_SECONDS"
   done
 }
@@ -116,6 +140,12 @@ for env in $ENVS; do
       # the runs are identified by wandb.project and the timestamp instead.
       --set "wandb.project=softdtw_OTIL_SAPO-${env}-slurm"
       --set "agent.shac.max_agent_steps=${steps}"
+      # Checkpoint volume: ckpt_every defaults to 100 epochs and nothing prunes
+      # old files, so a run leaves 50-185 .pth files (20-78 MB). Across this
+      # sweep that is tens of GB, and a disk-space purge is what destroyed the
+      # reported runs' checkpoints. These runs are scored on returns, so keep
+      # far fewer intermediate checkpoints; best/final/latest are still written.
+      --set "agent.ckpt_every=${CKPT_EVERY}"
       --set "agent.otil.imitation_loss_type=${ROW_LOSS[$i]}"
       --set "agent.otil.loss_best_of_k_k=${ROW_K[$i]}"
       --set "agent.otil.loss_best_of_k_tau=${ROW_TAU[$i]}"
@@ -136,14 +166,17 @@ for env in $ENVS; do
       printf '%q ' "${cmd[@]}"; echo; continue
     fi
 
-    [[ -n "$BATCH_JOBS" ]] && wait_for_room "$BATCH_JOBS"
+    wait_for_room "$BATCH_JOBS"
+    before="$(job_count)"
     "${cmd[@]}"
-
-    if [[ -z "$BATCH_JOBS" ]]; then
-      sleep "$SETTLE_SECONDS"
-      BATCH_JOBS="$(job_count)"
-      echo "Detected ${BATCH_JOBS} jobs per batch."
-      [[ "$BATCH_JOBS" -eq 0 ]] && echo "WARNING: 0 jobs after submission." >&2
+    sleep "$SETTLE_SECONDS"
+    after="$(job_count)"
+    delta=$(( after - before ))
+    if [[ "$delta" -gt 0 ]]; then
+      BATCH_JOBS="$delta"
+      echo "This batch added ${delta} job(s); queue now ${after}."
+    else
+      echo "WARNING: queue did not grow after submission (before=${before}, after=${after})." >&2
     fi
   done
 done

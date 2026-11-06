@@ -112,6 +112,37 @@ class ShapeSet:
             segs.append((pos[par], pos[i], 0.022))
         return segs
 
+    def muscle_polylines(self, body_X_sc, muscle_start, muscle_links, muscle_points,
+                         activation, strengths):
+        """World-space muscle paths with their activation level, for env 0.
+
+        Reproduces what ``SNUHumanoidEnv.render`` sends to the USD renderer --
+        each muscle is a polyline through its waypoints, transformed into world
+        space by the link each waypoint is attached to, coloured by
+        activation / strength (which equals the policy's action, since the env
+        sets ``muscle_activation = action * muscle_strengths``). We draw it
+        directly rather than via USD: the installed ``usd-core`` is
+        authoring-only (no UsdImagingGL / usdrecord), so a USD stage could be
+        written but not rasterised here.
+        """
+        out = []
+        n = len(muscle_start) - 1
+        for mi in range(n):
+            lo, hi = int(muscle_start[mi]), int(muscle_start[mi + 1])
+            if hi - lo < 2:
+                continue
+            pts = []
+            for w in range(lo, hi):
+                link = int(muscle_links[w])
+                if link >= self.links_per_env:
+                    break
+                bp, bq = body_X_sc[link, :3], body_X_sc[link, 3:]
+                pts.append(bp + _quat_rotate(bq, muscle_points[w]))
+            if len(pts) >= 2:
+                a = float(activation[mi]) / max(float(strengths[mi]), 1e-9)
+                out.append((np.array(pts), a))
+        return out
+
     def segments(self, body_X_sc):
         """World-space capsule segments ``[(p0, p1, radius), ...]`` for env 0."""
         out = []
@@ -179,40 +210,68 @@ def make_env(env_name, num_envs, device, episode_length):
     )
 
 
-# joint_q slice <- observation slice, per env. Derived from each env's
-# observation_from_state; velocities are not needed for kinematics.
+# joint_q slice <- observation slice, per env. Taken from each env's own
+# set_state_act / observation_from_state in dflex; only positions are needed for
+# kinematics, so the velocity rows of those methods are deliberately omitted.
 #   (joint_q destination slice, observation source slice)
 JOINT_Q_FROM_OBS = {
+    # hopper.py:235   joint_q[1:6] = obs[0:5]
     "hopper": [((1, 6), (0, 5))],
-    "ant": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (13, None))],
+    # ant.py:243      joint_q[1] = obs[0]; [3:7] = obs[1:5]; [7:] = obs[11:19]
+    "ant": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (11, 19))],
+    # humanoid.py:299 joint_q[1:2] = obs[0:1]; [3:7] = obs[1:5]; [7:] = obs[11:32]
     "humanoid": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (11, 32))],
+    # snu_humanoid.py:360 observation_from_state: [7:] -> obs[11:33]
     "snu_humanoid": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (11, 33))],
 }
 
 
 def set_joint_q_from_obs(env, obs, env_name):
-    """Write the position part of the simulator state from an observation."""
+    """Write the position part of the simulator state from an observation.
+
+    The whole state is zeroed first. Only some joint_q entries are determined by
+    the observation (horizontal translation is not), so leaving the rest from the
+    previous step lets the integrator's own divergence accumulate across frames
+    -- on Ant that reached NaN and the panel rendered empty. Zeroing makes each
+    frame depend only on its own observation.
+    """
     jq = env.state.joint_q.view(env.num_envs, -1)
+    jqd = env.state.joint_qd.view(env.num_envs, -1)
+    jq.zero_()
+    jqd.zero_()
     for (d0, d1), (s0, s1) in JOINT_Q_FROM_OBS[env_name]:
-        dst = slice(d0, d1)
-        src = slice(s0, s1)
-        tgt = jq[:, dst]
-        val = obs[:, src]
-        n = min(tgt.shape[1], val.shape[1])
+        tgt_w = jq[:, slice(d0, d1)].shape[1]
+        val = obs[:, slice(s0, s1)]
+        n = min(tgt_w, val.shape[1])
         jq[:, d0 : d0 + n] = val[:, :n]
 
 
 def _emit(shapes, env, style):
+    """Return (segments, muscles) for one frame; muscles is None unless asked."""
     bx = env.state.body_X_sc.detach().cpu().numpy()
-    if style == "skeleton":
-        jp = env.model.joint_parent.detach().cpu().numpy()
-        return shapes.skeleton_segments(bx, jp)
-    return shapes.segments(bx)
+    muscles = None
+    if style == "muscles":
+        m = env.model
+        muscles = shapes.muscle_polylines(
+            bx,
+            m.muscle_start.detach().cpu().numpy(),
+            m.muscle_links.detach().cpu().numpy(),
+            m.muscle_points.detach().cpu().numpy(),
+            m.muscle_activation.detach().cpu().numpy(),
+            env.muscle_strengths.detach().cpu().numpy(),
+        )
+        segs = shapes.skeleton_segments(bx, env.model.joint_parent.detach().cpu().numpy())
+    elif style == "skeleton":
+        segs = shapes.skeleton_segments(bx, env.model.joint_parent.detach().cpu().numpy())
+    else:
+        segs = shapes.segments(bx)
+    return segs, muscles
 
 
 def frames_from_demo(env, env_name, demos_path, n_frames, traj, device, style="capsule"):
     d = torch.load(demos_path, map_location=device)
     obs = d["obs"]["obs"] if isinstance(d["obs"], dict) else d["obs"]
+    acts = d.get("act")
     length = int(d["lengths"][traj]) if "lengths" in d else obs.shape[1]
     n = min(n_frames, length)
     shapes = ShapeSet(env.model, env.num_envs)
@@ -222,9 +281,13 @@ def frames_from_demo(env, env_name, demos_path, n_frames, traj, device, style="c
     out = []
     for t in range(n):
         set_joint_q_from_obs(env, obs[traj : traj + 1, t].expand(env.num_envs, -1), env_name)
+        # Muscle colour is activation/strength, and the env sets
+        # muscle_activation = action * strengths -- so the recorded expert
+        # action gives the demo panel faithful activations too.
+        act = zero_act if acts is None else acts[traj : traj + 1, t].expand(env.num_envs, -1)
         # FK runs on state_in.joint_q before integration, so after this step
         # body_X_sc is exactly the FK of the pose we just wrote.
-        env.step(zero_act)
+        env.step(act)
         out.append(_emit(shapes, env, style))
     return out, shapes
 
@@ -316,12 +379,26 @@ def render_video(frame_sets, labels, out_path, fps=30, track=True, dpi=100):
     all_y, all_r = [], []
     for fs in frame_sets:
         for fr in fs[:n]:
-            for s0, s1, r in fr:
+            for s0, s1, r in fr[0]:
                 all_y += [s0[1], s1[1]]
                 all_r.append(r)
     pad = (max(all_r) if all_r else 0.05) * 2.0
     y_hi = (max(all_y) + pad) if all_y else 2.0
-    half_w = max(0.75, 0.62 * y_hi)
+
+    # Half-width from the real horizontal extent about the tracked centre, not a
+    # guess from height: a wide low model (Ant) otherwise has its legs clipped.
+    half_x = 0.0
+    for fs in frame_sets:
+        for fr in fs[:n]:
+            segs, muscles = fr
+            xs = [p[0] for s0, s1, _ in segs for p in (s0, s1)]
+            if muscles:
+                xs += [float(v) for pl, _ in muscles for v in pl[:, 0]]
+            if not xs:
+                continue
+            cx_f = float(np.mean([p[0] for s0, s1, _ in segs for p in (s0, s1)])) if segs else 0.0
+            half_x = max(half_x, max(abs(x - cx_f) for x in xs))
+    half_w = max(0.6, half_x + pad)
 
     writer = imageio.get_writer(out_path, fps=fps, macro_block_size=1)
     try:
@@ -329,7 +406,7 @@ def render_video(frame_sets, labels, out_path, fps=30, track=True, dpi=100):
             fig, axes = plt.subplots(1, n_src, figsize=(4.4 * n_src, 4.4), dpi=dpi, squeeze=False)
             for k in range(n_src):
                 ax = axes[0][k]
-                segs = frame_sets[k][t]
+                segs, muscles = frame_sets[k][t]
                 xs = [p[0] for s in segs for p in (s[0], s[1])]
                 cx = float(np.mean(xs)) if track and xs else 0.0
                 # Draw each capsule as its true 2D silhouette in data
@@ -377,6 +454,28 @@ def render_video(frame_sets, labels, out_path, fps=30, track=True, dpi=100):
                     else:
                         ax.add_patch(plt.Circle(cpt, r, facecolor="none",
                                                 edgecolor=edge, lw=0.9, zorder=2 + rank + 0.5))
+                if muscles:
+                    # One polyline per muscle, coloured by activation. Low
+                    # activation stays pale so the active ones stand out --
+                    # the point of the figure is which muscles are firing.
+                    mz = [float(np.mean(pl[:, 2])) for pl, _ in muscles] or [0.0]
+                    z_lo_m, z_hi_m = min(mz), max(mz)
+                    for mi, (pl, a) in enumerate(muscles):
+                        # activation / strength is the raw action in [-1, 1];
+                        # dflex's own renderer feeds it straight to a colour
+                        # channel, so clipping at 0 matches it. Only ~16 % of
+                        # expert activations exceed 0.9 and ~56 % sit below 0.1,
+                        # so the inactive end has to be genuinely pale or the
+                        # figure reads as uniformly red.
+                        a = float(np.clip(a, 0.0, 1.0))
+                        depth = 0.0 if z_hi_m - z_lo_m < 1e-6 else (mz[mi] - z_lo_m) / (z_hi_m - z_lo_m)
+                        lo_c = np.array([0.86, 0.86, 0.89])   # inactive: light grey
+                        hi_c = np.array([0.79, 0.00, 0.10])   # fully active: crimson
+                        col = lo_c + (hi_c - lo_c) * a
+                        col = tuple(col + (1.0 - col) * 0.35 * (1.0 - depth))
+                        ax.plot(pl[:, 0] - cx, pl[:, 1], color=col,
+                                lw=0.5 + 2.2 * a, alpha=0.16 + 0.78 * a,
+                                solid_capstyle="round", zorder=40 + int(20 * a))
                 ax.fill_between([-half_w, half_w], -0.2, 0.0, color="#E8E8E8", zorder=0)
                 ax.axhline(0.0, color="#9A9A9A", lw=1.2, zorder=1)
                 ax.set_xlim(-half_w, half_w)
@@ -387,6 +486,9 @@ def render_video(frame_sets, labels, out_path, fps=30, track=True, dpi=100):
                 for sp in ax.spines.values():
                     sp.set_visible(False)
                 ax.set_title(labels[k], fontsize=11)
+            if any(fs[t][1] for fs in frame_sets):
+                fig.text(0.01, 0.015, "muscle activation: low \u2192 high",
+                         fontsize=7, color="#8A8A8A", ha="left")
             fig.text(0.99, 0.015, f"t = {t}", fontsize=8, color="#666666", ha="right")
             fig.tight_layout(rect=(0, 0.03, 1, 1))
             fig.canvas.draw()
@@ -418,15 +520,16 @@ def main():
                     help="panel title for the policy (defaults to the checkpoint name)")
     ap.add_argument("--deterministic", action="store_true",
                     help="use the mean action; default matches eval (stochastic)")
-    ap.add_argument("--style", choices=["auto", "capsule", "skeleton"], default="auto",
-                    help="auto: capsules for hopper/ant, link skeleton for the humanoids")
+    ap.add_argument("--style", choices=["auto", "capsule", "skeleton", "muscles"], default="auto",
+                    help="auto: capsules for hopper/ant, muscles for SNU Humanoid, "
+                         "link skeleton for Humanoid")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     episode_length = max(args.frames + 2, 1000)
     style = args.style
     if style == "auto":
-        style = "skeleton" if args.env in ("humanoid", "snu_humanoid") else "capsule"
+        style = {"snu_humanoid": "muscles", "humanoid": "skeleton"}.get(args.env, "capsule")
     sets, labels = [], []
 
     if args.side_by_side or args.source == "demo":

@@ -45,6 +45,9 @@ class OTIL(SHAC):
         self.loss_ot_iters = int(self.otil_config.get("loss_ot_iters", 60))
         self.loss_ot_huber_delta = float(self.otil_config.get("loss_ot_huber_delta", 1.0))
         self.loss_best_of_k_tau = float(self.otil_config.get("loss_best_of_k_tau", 0.5))
+        # False differentiates through the Sinkhorn iterations instead of using
+        # the fixed-coupling surrogate; True is what every reported run used.
+        self.loss_ot_detach_plan = bool(self.otil_config.get("loss_ot_detach_plan", True))
         # Ordered-alignment (soft-DTW) alternative to the Sinkhorn coupling.
         self.loss_dtw_gamma = float(self.otil_config.get("loss_dtw_gamma", 0.1))
         self.loss_dtw_normalize = self.otil_config.get("loss_dtw_normalize", "rows")
@@ -70,6 +73,7 @@ class OTIL(SHAC):
                     cost_type=self.loss_ot_cost_type,
                     huber_delta=self.loss_ot_huber_delta,
                     use_huber_speedup=self.loss_use_huber_speedup,
+                    detach_plan=self.loss_ot_detach_plan,
                 )
                 criterion = OTSinkhornCriterion(**ot_params)
             elif self.imitation_loss_type in ("softdtw", "softdtw_subseq"):

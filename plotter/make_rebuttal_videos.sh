@@ -49,10 +49,32 @@ for name in "${!HOPPER_RUNS[@]}"; do
       --frames "$FRAMES" --out "$OUT/hopper_expert_vs_${name}.mp4"
 done
 
-# --- On the cluster, add the other three tasks the same way ------------------
-# for env/demos/logdir in the reported runs of grouped_exp_logdirs.yaml:
-#   "$PY" plotter/render_rollout.py --side-by-side --env snu_humanoid \
-#       --demos "$D_SNU" --logdir <reported logdir> \
-#       --frames "$FRAMES" --out "$OUT/snu_humanoid_expert_vs_focus_ot_l2.mp4"
+# --- Ant / Humanoid / SNU Humanoid ------------------------------------------
+# The January-2026 *reported* runs lost their ckpt/ directories to a disk-space
+# purge on the cluster; only their logs survive. These are the best surviving
+# FOCUS checkpoints, all on the SAPO backbone and all at or above expert return.
+# Three of the four reproduce a reported variant's configuration exactly; the
+# SNU one does not, so its label says so. Labels here are deliberately precise:
+# do not relabel these as the reported runs.
+#
+#   env           run                                            config vs reported
+#   ant           DFlexAnt10M-OTIL_20251218_125325/sweep_18       = FOCUS-OT-L2  (1.01x expert)
+#   humanoid      DFlexHumanoid10M-OTIL_20251229_211257/sweep_1   = FOCUS-OT-Cos (1.01x expert)
+#   snu_humanoid  DFlexSNUHumanoid10M-OTIL_20251216_230614/sweep_36  near OT-L2: mlp=32, log_exp (1.02x expert)
+
+"$PY" plotter/render_rollout.py --side-by-side --env ant \
+    --demos "$D_ANT" --logdir plotter/workdir/DFlexAnt10M-OTIL_20251218_125325/sweep_18 \
+    --label "FOCUS-OT-L2" --frames "$FRAMES" \
+    --out "$OUT/ant_expert_vs_focus_ot_l2.mp4"
+
+"$PY" plotter/render_rollout.py --side-by-side --env humanoid \
+    --demos "$D_HUM" --logdir plotter/workdir/DFlexHumanoid10M-OTIL_20251229_211257/sweep_1 \
+    --label "FOCUS-OT-Cos" --frames "$FRAMES" \
+    --out "$OUT/humanoid_expert_vs_focus_ot_cos.mp4"
+
+"$PY" plotter/render_rollout.py --side-by-side --env snu_humanoid \
+    --demos "$D_SNU" --logdir plotter/workdir/DFlexSNUHumanoid10M-OTIL_20251216_230614/sweep_36 \
+    --label "FOCUS-OT-L2 variant (mlp 32, log-exp)" --frames "$FRAMES" \
+    --out "$OUT/snu_humanoid_expert_vs_focus.mp4"
 
 echo "videos written to $OUT"

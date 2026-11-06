@@ -86,6 +86,7 @@ class OTSinkhornCriterion(BestOfKCriterion):
         use_huber_speedup: bool = False,
         cost_type: Literal["huber", "l2", "cosine"] = "l2",
         huber_delta: float = 1.0,
+        detach_plan: bool = True,
     ):
         super().__init__()
         self.eps = eps
@@ -93,6 +94,12 @@ class OTSinkhornCriterion(BestOfKCriterion):
         self.use_huber_speedup = use_huber_speedup
         self.cost_type = cost_type
         self.huber_delta = huber_delta
+        # detach_plan=True (the default, and what every reported run did) gives a
+        # fixed-coupling surrogate gradient: the actor gradient flows through the
+        # cost matrix only, at a frozen coupling. Setting it False differentiates
+        # through the Sinkhorn iterations as well, which is what the paper's text
+        # describes. Kept configurable so the two can be compared directly.
+        self.detach_plan = detach_plan
 
     def _cost_matrix(
         self,
@@ -131,7 +138,8 @@ class OTSinkhornCriterion(BestOfKCriterion):
             C, _ = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
             P = log_sinkhorn(C, eps=self.eps, iters=self.iters)  # [B*K, T, T]
 
-        plan_costs = (P.detach() * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
+        P_eff = P.detach() if self.detach_plan else P
+        plan_costs = (P_eff * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
         Lk = plan_costs.sum(dim=-1)  # [B, K]
         info = {
             "per_step_costs": plan_costs,

@@ -17,6 +17,9 @@ otil:
   # every reported run set it false.
   loss_ot_eps: 0.1
   loss_ot_iters: 60
+  # false = differentiate through the Sinkhorn iterations (paper text);
+  # true = fixed-coupling surrogate, which is what the reported runs did.
+  loss_ot_detach_plan: true
   loss_ot_huber_delta: 1.0
   loss_use_huber_speedup: false
   loss_mlp_features_dim: null
