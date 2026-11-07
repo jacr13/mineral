@@ -33,6 +33,9 @@ BATCH_JOBS="${BATCH_JOBS:-6}"
 DRY_RUN="${DRY_RUN:-0}"
 # Epochs between intermediate checkpoints (default config: 100, unpruned).
 CKPT_EVERY="${CKPT_EVERY:-2000}"
+# STEPS overrides the per-env interaction budget (used for the extended-budget
+# run that matches how far the reported baselines actually got).
+STEPS_OVERRIDE="${STEPS:-}"
 
 DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
 # Keep off Pascal nodes (P100 / Titan X): scripts/otil.sh documents that a
@@ -54,6 +57,7 @@ declare -A RUNTIMES=(
   [dflex_hopper]=8h [dflex_ant]=8h
   [dflex_humanoid]=12h [dflex_snu_humanoid]=12h
 )
+RUNTIME_OVERRIDE="${RUNTIME:-}"
 
 # ---------------------------------------------------------------------------
 # Sweep rows. Index-aligned; each is one batch of 6 seeds per env.
@@ -110,7 +114,7 @@ wait_for_room() {
 
 for env in $ENVS; do
   steps="${MAX_STEPS[$env]}"
-  runtime="${RUNTIMES[$env]}"
+  runtime="${RUNTIME_OVERRIDE:-${RUNTIMES[$env]}}"
   echo "============================================================"
   echo "env=${env}  max_agent_steps=${steps}  runtime=${runtime}"
   echo "============================================================"
@@ -139,7 +143,7 @@ for env in $ENVS; do
       # "sweep-critic-reward" (it comes from the task yaml's sweep.logdir);
       # the runs are identified by wandb.project and the timestamp instead.
       --set "wandb.project=softdtw_OTIL_SAPO-${env}-slurm"
-      --set "agent.shac.max_agent_steps=${steps}"
+      --set "agent.shac.max_agent_steps=${STEPS_OVERRIDE:-${steps}}"
       # Checkpoint volume: ckpt_every defaults to 100 epochs and nothing prunes
       # old files, so a run leaves 50-185 .pth files (20-78 MB). Across this
       # sweep that is tens of GB, and a disk-space purge is what destroyed the

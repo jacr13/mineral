@@ -53,6 +53,8 @@ declare -A RUNTIMES=(
   [dflex_hopper]=8h [dflex_ant]=8h
   [dflex_humanoid]=12h [dflex_snu_humanoid]=12h
 )
+# RUNTIME=12h overrides every env (the shared-gpu partition ceiling).
+RUNTIME_OVERRIDE="${RUNTIME:-}"
 
 n_envs=$(wc -w <<< "$ENVS"); n_arms=$(wc -w <<< "$ARMS")
 echo "============================================================"
@@ -79,7 +81,7 @@ wait_for_room() {
 }
 
 for env in $ENVS; do
-  steps="${MAX_STEPS[$env]}"; runtime="${RUNTIMES[$env]}"
+  steps="${MAX_STEPS[$env]}"; runtime="${RUNTIME_OVERRIDE:-${RUNTIMES[$env]}}"
   echo "------------------------------------------------------------"
   echo "env=${env}  max_agent_steps=${steps}  runtime=${runtime}"
   echo "------------------------------------------------------------"

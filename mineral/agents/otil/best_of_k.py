@@ -78,6 +78,44 @@ class BestOfKCriterion(nn.Module):
         raise NotImplementedError
 
 
+def ground_cost_matrix(
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    cost_type: Literal["huber", "l2", "cosine"] = "l2",
+    huber_delta: float = 1.0,
+    force_huber: bool = False,
+) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    """Pairwise ground cost between two feature sequences.
+
+    Shared by every criterion. This is a plain distance computation -- it has
+    nothing to do with Sinkhorn or with optimal transport, and lives outside
+    OTSinkhornCriterion so that the soft-DTW path visibly does not depend on
+    the OT path.
+
+    Args:
+        X, Y: ``[B, T, d]`` feature sequences.
+        cost_type: "l2" (squared Euclidean), "cosine" (1 - cos), or "huber".
+        huber_delta: transition point of the Huber cost.
+        force_huber: use the Huber cost regardless of ``cost_type``; returns the
+            squared-L2 matrix as the second element so a caller can align on one
+            cost and score with the other.
+
+    Returns:
+        ``(C, C_sq_l2_or_None)``.
+    """
+    if force_huber or cost_type == "huber":
+        C2 = pairwise_sqdist(X, Y).clamp_min(1e-12)
+        C = torch.sqrt(C2 + 1e-12)
+        quad = 0.5 * C2
+        lin = huber_delta * (C - 0.5 * huber_delta)
+        return torch.where(C <= huber_delta, quad, lin), C2
+    if cost_type == "cosine":
+        return pairwise_cosine_distance(X, Y), None
+    if cost_type == "l2":
+        return pairwise_sqdist(X, Y), None
+    raise ValueError(f"Invalid cost_type: {cost_type}")
+
+
 class OTSinkhornCriterion(BestOfKCriterion):
     def __init__(
         self,
@@ -107,23 +145,12 @@ class OTSinkhornCriterion(BestOfKCriterion):
         Y: torch.Tensor,
         use_huber: bool | None = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        use_huber = use_huber or (self.cost_type == "huber")
-
-        # X, Y: [BK, T, d]
-        if use_huber:
-            C2 = pairwise_sqdist(X, Y).clamp_min(1e-12)
-            C = torch.sqrt(C2 + 1e-12)
-            delta = self.huber_delta
-            quad = 0.5 * C2
-            lin = delta * (C - 0.5 * delta)
-            return torch.where(C <= delta, quad, lin), C2
-        elif self.cost_type == "cosine":
-            C = pairwise_cosine_distance(X, Y)
-            return C, None
-        elif self.cost_type == "l2":
-            return pairwise_sqdist(X, Y), None
-        else:
-            raise ValueError(f"Invalid cost_type: {self.cost_type}")
+        return ground_cost_matrix(
+            X, Y,
+            cost_type=self.cost_type,
+            huber_delta=self.huber_delta,
+            force_huber=bool(use_huber),
+        )
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
@@ -258,6 +285,10 @@ def soft_dtw(
 class SoftDTWCriterion(BestOfKCriterion):
     """Ordered-alignment counterpart of :class:`OTSinkhornCriterion`.
 
+    Uses **no Sinkhorn and no optimal transport**: the alignment is the soft-DTW
+    dynamic program. It shares only the ground cost with the OT criterion, via
+    the module-level :func:`ground_cost_matrix`.
+
     Everything outside the alignment itself -- ground cost, per-step cost
     construction, best-of-K softmin, reward transformation, critic -- is shared
     with the OT criterion, so swapping the two isolates the alignment objective.
@@ -295,16 +326,18 @@ class SoftDTWCriterion(BestOfKCriterion):
         if normalize not in ("rows", "total", "none"):
             raise ValueError(f"Invalid normalize: {normalize}")
         self.normalize = normalize
-        # Reuse the OT criterion's ground costs verbatim so the two differ only
-        # in the alignment.
-        self._cost = OTSinkhornCriterion(cost_type=cost_type, huber_delta=huber_delta)
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
         sim_f_tiled = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
         exp_f_flat = exp_f.contiguous().view(B * K, T, d)
 
-        C, _ = self._cost._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, L]
+        # Same ground cost as the OT criterion, via the shared free function.
+        # No Sinkhorn anywhere on this path: the alignment is the DP recursion
+        # in soft_dtw() below.
+        C, _ = ground_cost_matrix(
+            sim_f_tiled, exp_f_flat, cost_type=self.cost_type, huber_delta=self.huber_delta
+        )  # [B*K, T, L]
 
         # soft_dtw needs grad w.r.t. C to read off the alignment matrix.
         C_for_align = C.detach().requires_grad_(True)
