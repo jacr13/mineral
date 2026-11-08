@@ -1,5 +1,6 @@
 import collections
 import os
+from contextlib import nullcontext
 from copy import deepcopy
 
 import torch
@@ -229,6 +230,18 @@ class OTIL(SHAC):
         return results
 
     def compute_actor_loss(self):
+        # The score-function estimator never differentiates through the
+        # simulator, so building the pathwise graph over the rollout is not just
+        # wasted work -- nothing ever backprops through it, so it is not freed
+        # by actor_loss.backward() and memory climbs every epoch until CUDA OOM
+        # (observed at epoch ~82 on Hopper, ~10 on SNU Humanoid, whose actor is
+        # larger). Roll out under no_grad in that mode; the gradient comes
+        # solely from recomputing log pi(a|s) in _score_function_actor_loss.
+        rollout_ctx = torch.no_grad() if self.actor_grad_estimator == "score_function" else nullcontext()
+        with rollout_ctx:
+            return self._compute_actor_loss_inner()
+
+    def _compute_actor_loss_inner(self):
         with torch.no_grad():
             if self.obs_rms is not None:
                 obs_rms = deepcopy(self.obs_rms)
@@ -401,7 +414,11 @@ class OTIL(SHAC):
         if self.actor_grad_estimator == "pathwise":
             actor_loss = -returns.mean()
         else:
-            actor_loss = self._score_function_actor_loss(step_rewards, next_vs_live, info)
+            # Re-enable grad: the enclosing no_grad covers the rollout only.
+            # obs_buf/action_buf are detached stores, so this builds a graph
+            # spanning just the actor, which is what we want to differentiate.
+            with torch.enable_grad():
+                actor_loss = self._score_function_actor_loss(step_rewards, next_vs_live, info)
 
         self.agent_steps += self.horizon_len * self.num_envs
         return actor_loss, info
