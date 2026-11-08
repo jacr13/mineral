@@ -13,6 +13,7 @@
 #   B  SNU seed-stability, 12 fresh seeds                  12 jobs
 #   D  rerun the ZO-PPO cells that never reached budget    24 jobs
 #   F  simulator-derivative isolation (opt-in)             24 jobs
+#   U  unbalanced OT, relaxed marginals (opt-in)           24 jobs
 #                                                    ---------------
 #                                             72 jobs, or 96 with F
 #
@@ -204,11 +205,70 @@ if [[ " $BATCHES " == *" F "* ]]; then
   done
 fi
 
+# --- U. unbalanced OT: relaxed marginals (Q9cS's fragmented plans) ----------
+# Q9cS: "Some transport plans in Fig. 3(c) and Fig. 9(f)(h) show fragmented
+# patterns, potentially caused by the uniform marginal constraints of OT, which
+# that Open-end DTW could potentially avoid this issue."
+#
+# Balanced OT must move every unit of agent mass somewhere, so an agent state
+# with no good expert match is still coupled to something. Relaxing the
+# marginals with a KL penalty of strength rho lets mass go unmatched. Smaller
+# rho = more relaxation; rho -> inf recovers balanced OT exactly (verified to
+# 1.9e-8 in the unit test).
+#
+# No balanced arm is launched here: batch A's `pathwise` arm is already the
+# reported FOCUS-OT-L2 configuration run fresh on all four envs, and the
+# balanced code path is bit-identical before and after the unbalanced addition
+# (verified: dloss/dLk/dgrad all 0.000e+00). Compare against that.
+#
+# NOTE this is double-edged. If relaxing the marginals clearly *improves*
+# results, the published balanced choice is suboptimal in an obvious way; that
+# is worth knowing before a reviewer suggests it, but report it plainly rather
+# than burying it.
+if [[ " $BATCHES " == *" U "* ]]; then
+  banner "U. unbalanced OT  (2 envs x 2 rho x 6 seeds = 24 jobs)"
+  for env in ${U_ENVS:-dflex_snu_humanoid dflex_humanoid}; do
+    steps="${MAX_STEPS[$env]}"
+    for rho in ${U_RHOS:-1.0 0.1}; do
+      echo "  ${env} / rho=${rho}"
+      cmd=(python spawner.py
+        --task_name otil --docker
+        --docker_image "${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+        --deployment slurm --runtime "$RUNTIME"
+        --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
+        --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
+        --set "wandb.project=unbalancedot_OTIL_SAPO-${env}-slurm"
+        --set "agent.shac.max_agent_steps=${steps}"
+        --set "agent.ckpt_every=${CKPT_EVERY}"
+        --set "agent.otil.loss_ot_marginal_rho=${rho}"
+        --set "agent.otil.imitation_loss_type=ot"
+        --set "agent.otil.loss_ot_cost_type=l2"
+        --set "agent.otil.loss_best_of_k_k=8"
+        --set "agent.otil.loss_best_of_k_tau=0.5"
+        --set "agent.otil.loss_mlp_features_dim=64"
+        --set "agent.otil.loss_ot_detach_plan=true"
+        --set "agent.otil.actor_grad_estimator=pathwise"
+        --set "agent.otil.critic_reward_mapping=exp"
+        --set "agent.otil.loss_use_huber_speedup=false"
+        --set "agent.otil.loss_use_detached_prev_obs=false"
+        --set "agent.otil.critic_disabled=false"
+        --set "agent.otil.critic_reward_shapping=true"
+        --env_files "${env}.yaml"
+        --deploy_now)
+      if [[ "$DRY_RUN" == "1" ]]; then printf '%q ' "${cmd[@]}"; echo; continue; fi
+      wait_for_room "$BATCH_JOBS"
+      before="$(job_count)"; "${cmd[@]}"; sleep "$SETTLE_SECONDS"; after="$(job_count)"
+      delta=$(( after - before )); [[ "$delta" -gt 0 ]] && BATCH_JOBS="$delta"
+    done
+  done
+fi
+
 echo
 echo "Submitted. Projects to watch:"
 echo "  gradpath_OTIL_SAPO-dflex_{hopper,ant,humanoid}-slurm"
 echo "  seedstability_OTIL_SAPO-dflex_snu_humanoid-slurm"
 echo "  rerun_OTIL_PPO-dflex_{snu_humanoid,humanoid}-slurm"
-echo "  gradestimator_OTIL_SAPO-dflex_{snu_humanoid,hopper}-slurm   (batch F)"
+echo "  gradestimator_OTIL_SAPO-dflex_*-slurm                       (batch F)"
+echo "  unbalancedot_OTIL_SAPO-dflex_{snu_humanoid,humanoid}-slurm  (batch U)"
 echo
 echo "Then: python plotter/rebuttal_plots.py --refresh"
