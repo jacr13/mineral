@@ -38,4 +38,8 @@ sweep:
   seed: [100, 110, 120, 130, 140]
 
 spawner:
-  skip: true
+  # The other tasks/sapo/*.yaml carry skip: true so that already-trained
+  # experts are not respawned by a bulk launch. This expert does not exist yet,
+  # so it must be spawnable.
+  skip: false
+  runtime: "4h"
