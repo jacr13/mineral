@@ -12,8 +12,9 @@
 #   A  gradient path on the three envs it has not run on   36 jobs
 #   B  SNU seed-stability, 12 fresh seeds                  12 jobs
 #   D  rerun the ZO-PPO cells that never reached budget    24 jobs
+#   F  simulator-derivative isolation (opt-in)             24 jobs
 #                                                    ---------------
-#                                                          72 jobs
+#                                             72 jobs, or 96 with F
 #
 # Batch C (soft-DTW at 26M) was considered and dropped: the paper reports at
 # 15M, its figures truncate at 15M, and the reported numbers were verified to
@@ -26,12 +27,35 @@ export CKPT_EVERY="${CKPT_EVERY:-2000}"   # ckpt_every=100 unpruned is what fill
 export MAX_JOBS="${MAX_JOBS:-100}"
 DRY_RUN="${DRY_RUN:-0}"
 export DRY_RUN
-BATCHES="${BATCHES:-A B D}"
+BATCHES="${BATCHES:-A B D}"   # add F for the gradient-estimator isolation
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(dirname "$HERE")"
 cd "$REPO"
 
 banner() { echo; echo "============================================================"; echo "$1"; echo "============================================================"; }
+
+# Per-env interaction budget. The sub-scripts declare their own copy; batch B/D/F
+# submit spawner directly from here and need it too.
+declare -A MAX_STEPS=(
+  [dflex_hopper]=10000000 [dflex_ant]=10000000
+  [dflex_humanoid]=15000000 [dflex_snu_humanoid]=15000000
+)
+SETTLE_SECONDS="${SETTLE_SECONDS:-5}"
+BATCH_JOBS="${BATCH_JOBS:-6}"
+POLL_SECONDS="${POLL_SECONDS:-60}"
+USER_NAME="${USER_NAME:-candidor}"
+
+job_count() { squeue -h -u "$USER_NAME" | wc -l | tr -d ' '; }
+wait_for_room() {
+  local need="$1"; local threshold=$(( MAX_JOBS - need ))
+  (( threshold < 0 )) && threshold=0
+  while true; do
+    local n; n="$(job_count)"
+    [[ "$n" -le "$threshold" ]] && { echo "Queue ${n} <= ${threshold}; room for ${need}."; break; }
+    echo "Queue ${n} > ${threshold} (need ${need}); sleeping ${POLL_SECONDS}s..."
+    sleep "$POLL_SECONDS"
+  done
+}
 
 # --- A. transport-plan gradient on hopper / ant / humanoid -------------------
 # SNU already ran and is the headline result (fixed coupling 0.70 vs
@@ -128,10 +152,63 @@ if [[ " $BATCHES " == *" D "* ]]; then
   done
 fi
 
+# --- F. isolating the simulator derivative (zDN4's Z3) -----------------------
+# Table 13 compares FOCUS against ZO-FOCUS, which swaps the entire actor-critic
+# for PPO/SAC -- and the audit showed it is not even reward-matched (C5), so it
+# cannot isolate what the simulator derivatives contribute. This batch changes
+# exactly one thing: the gradient estimator.
+#
+#   pathwise       = FOCUS as published, return differentiated through the sim
+#   score_function = identical objective, reward, critic, network and horizon;
+#                    REINFORCE with the critic as baseline
+#
+# Note simply detaching observations is not an option: the objective depends on
+# the policy only through the dynamics, so the actor would get no gradient at
+# all. Both arms run fresh so the comparison is not confounded by code or
+# hardware drift.
+if [[ " $BATCHES " == *" F "* ]]; then
+  banner "F. gradient-estimator isolation  (2 envs x 2 arms x 6 seeds = 24 jobs)"
+  for env in ${F_ENVS:-dflex_snu_humanoid dflex_hopper}; do
+    steps="${MAX_STEPS[$env]}"
+    for est in pathwise score_function; do
+      echo "  ${env} / ${est}"
+      cmd=(python spawner.py
+        --task_name otil --docker
+        --docker_image "${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+        --deployment slurm --runtime "$RUNTIME"
+        --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
+        --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
+        --set "wandb.project=gradestimator_OTIL_SAPO-${env}-slurm"
+        --set "agent.shac.max_agent_steps=${steps}"
+        --set "agent.ckpt_every=${CKPT_EVERY}"
+        --set "agent.otil.actor_grad_estimator=${est}"
+        --set "agent.otil.imitation_loss_type=ot"
+        --set "agent.otil.loss_ot_cost_type=l2"
+        --set "agent.otil.loss_best_of_k_k=8"
+        --set "agent.otil.loss_best_of_k_tau=0.5"
+        --set "agent.otil.loss_mlp_features_dim=64"
+        --set "agent.otil.loss_ot_detach_plan=true"
+        --set "agent.otil.critic_reward_mapping=exp"
+        --set "agent.otil.loss_use_huber_speedup=false"
+        --set "agent.otil.loss_use_detached_prev_obs=false"
+        --set "agent.otil.critic_disabled=false"
+        --set "agent.otil.critic_reward_shapping=true"
+        --env_files "${env}.yaml"
+        --deploy_now)
+      if [[ "$DRY_RUN" == "1" ]]; then printf '%q ' "${cmd[@]}"; echo; continue; fi
+      wait_for_room "$BATCH_JOBS"
+      before="$(job_count)"; "${cmd[@]}"; sleep "$SETTLE_SECONDS"; after="$(job_count)"
+      delta=$(( after - before ))
+      [[ "$delta" -gt 0 ]] && BATCH_JOBS="$delta"
+    done
+  done
+fi
+
 echo
 echo "Submitted. Projects to watch:"
 echo "  gradpath_OTIL_SAPO-dflex_{hopper,ant,humanoid}-slurm"
 echo "  seedstability_OTIL_SAPO-dflex_snu_humanoid-slurm"
 echo "  rerun_OTIL_PPO-dflex_{snu_humanoid,humanoid}-slurm"
+echo "  gradestimator_OTIL_SAPO-dflex_{snu_humanoid,hopper}-slurm   (batch F)"
 echo
 echo "Then: python plotter/rebuttal_plots.py --refresh"

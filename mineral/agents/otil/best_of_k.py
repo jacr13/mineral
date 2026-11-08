@@ -22,6 +22,66 @@ def pairwise_cosine_distance(X: torch.Tensor, Y: torch.Tensor, eps: float = 1e-8
     return 1.0 - sim
 
 
+def log_sinkhorn_unbalanced(
+    C: torch.Tensor,
+    eps: float = 0.1,
+    iters: int = 60,
+    rho: float = 1.0,
+) -> torch.Tensor:
+    """Entropic OT with *relaxed* marginals (unbalanced Sinkhorn).
+
+    Reviewer Q9cS: "Some transport plans in Fig. 3(c) and Fig. 9(f)(h) show
+    fragmented patterns, potentially caused by the uniform marginal constraints
+    of OT". Balanced OT must move every unit of agent mass somewhere, so an
+    agent state with no good expert match is still forced to couple with
+    something -- which is what produces the fragmented rows.
+
+    Unbalanced OT replaces the hard marginal constraints with KL penalties of
+    strength ``rho``, letting the plan leave mass unmatched when nothing fits.
+    The standard scaling form multiplies each Sinkhorn update by
+    ``rho / (rho + eps)`` (Chizat et al., 2018; Sejourne et al., 2019);
+    ``rho -> inf`` recovers the balanced iteration exactly, which is asserted
+    in the tests.
+
+    Args:
+        C: ``[B, T, L]`` cost matrix.
+        eps: entropic regularisation.
+        iters: Sinkhorn iterations.
+        rho: marginal relaxation. Smaller = more mass may go unmatched.
+    """
+    B, T, _ = C.shape
+    log_K = -C / eps
+    log_u = torch.zeros(B, T, device=C.device, dtype=C.dtype)
+    log_v = torch.zeros(B, T, device=C.device, dtype=C.dtype)
+    log_a = torch.full(
+        (B, T),
+        -torch.log(torch.tensor(T, device=C.device, dtype=C.dtype)),
+        device=C.device,
+        dtype=C.dtype,
+    )
+    log_b = log_a.clone()
+    scale = rho / (rho + eps)
+
+    lse = torch.logsumexp
+    for _ in range(iters):
+        log_u = scale * (log_a - lse(log_K + log_v.unsqueeze(1), dim=-1))
+        log_v = scale * (log_b - lse(log_K.transpose(-2, -1) + log_u.unsqueeze(1), dim=-1))
+
+    P = (log_u.unsqueeze(-1) + log_K + log_v.unsqueeze(-2)).exp()
+
+    # Relaxing the marginals also frees the plan's total mass: it rises from
+    # 1.0 (balanced) to ~15 at rho=0.01 on random costs. Downstream the per-step
+    # cost is <C, mu>, so that would rescale the reward by the same factor and
+    # the comparison against balanced OT would be measuring scale rather than
+    # the marginal relaxation -- the same confound found between the L2 and
+    # cosine ground costs. Renormalising the *total* mass to 1 fixes the scale
+    # while leaving the relative row masses free, which is the whole point:
+    # an agent state with no good expert match can still carry less mass than
+    # its neighbours.
+    P = P / P.sum(dim=(-2, -1), keepdim=True).clamp_min(1e-12)
+    return P
+
+
 def log_sinkhorn(C: torch.Tensor, eps: float = 0.1, iters: int = 60) -> torch.Tensor:
     B, T, _ = C.shape
     log_K = -C / eps
@@ -125,6 +185,7 @@ class OTSinkhornCriterion(BestOfKCriterion):
         cost_type: Literal["huber", "l2", "cosine"] = "l2",
         huber_delta: float = 1.0,
         detach_plan: bool = True,
+        marginal_rho: Optional[float] = None,
     ):
         super().__init__()
         self.eps = eps
@@ -138,6 +199,9 @@ class OTSinkhornCriterion(BestOfKCriterion):
         # through the Sinkhorn iterations as well, which is what the paper's text
         # describes. Kept configurable so the two can be compared directly.
         self.detach_plan = detach_plan
+        # None = balanced OT (uniform marginals, as published). A float relaxes
+        # the marginals so unmatched agent states need not be coupled.
+        self.marginal_rho = marginal_rho
 
     def _cost_matrix(
         self,
@@ -152,6 +216,11 @@ class OTSinkhornCriterion(BestOfKCriterion):
             force_huber=bool(use_huber),
         )
 
+    def _plan(self, C):
+        if self.marginal_rho is None:
+            return log_sinkhorn(C, eps=self.eps, iters=self.iters)
+        return log_sinkhorn_unbalanced(C, eps=self.eps, iters=self.iters, rho=self.marginal_rho)
+
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
         sim_f_tiled = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
@@ -160,10 +229,10 @@ class OTSinkhornCriterion(BestOfKCriterion):
         if not self.cost_type == "huber" and self.use_huber_speedup:
             # use huber cost for sinkhorn speedup, but final cost is l2
             C_huber, C = self._cost_matrix(sim_f_tiled, exp_f_flat, use_huber=True)  # [B*K, T, T]
-            P = log_sinkhorn(C_huber, eps=self.eps, iters=self.iters)  # [B*K, T, T]
+            P = self._plan(C_huber)  # [B*K, T, T]
         else:
             C, _ = self._cost_matrix(sim_f_tiled, exp_f_flat)  # [B*K, T, T]
-            P = log_sinkhorn(C, eps=self.eps, iters=self.iters)  # [B*K, T, T]
+            P = self._plan(C)  # [B*K, T, T]
 
         P_eff = P.detach() if self.detach_plan else P
         plan_costs = (P_eff * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
@@ -372,6 +441,166 @@ class SoftDTWCriterion(BestOfKCriterion):
             "transport_plans": W.view(B, K, T, T),
         }
         return Lk, info
+
+
+def ordered_coverage(
+    C: torch.Tensor,
+    lam: float = 1.0,
+    normalize_p: bool = False,
+    return_log: bool = False,
+) -> torch.Tensor:
+    """ORCA-style ordered-coverage reward (Zhang et al., ICML 2025).
+
+    Reviewer Q9cS names ORCA as a missing baseline. Its reward is a coverage
+    dynamic program rather than an alignment path:
+
+        P_{t,j}  proportional to  exp(-lam * d(o_t, o~_j))
+        C_{t,j}  =  max( C_{t-1,j},  C_{t,j-1} * P_{t,j} )
+        R_t      =  C_{t,L-2} * P_{t,L-1}
+
+    C_{t,j} is the probability that by time t the agent has occupied
+    demonstration frame j *having already covered every earlier frame in
+    order*, so reward accrues only once the whole prefix is covered in
+    sequence. That is a strictly stronger ordering requirement than soft-DTW,
+    which only needs a monotone path, and much stronger than OT, which imposes
+    no ordering at all.
+
+    Fully differentiable in ``C``: the recursion is max-plus in log space and
+    both ``maximum`` and ``logsumexp`` pass subgradients, so the policy
+    receives gradient through the ground cost -- unlike the OT path, no part of
+    this is detached.
+
+    Evaluated with the same anti-diagonal wavefront as ``soft_dtw``: cell
+    (t, j) depends on (t-1, j) and (t, j-1), both of which lie on the previous
+    anti-diagonal, so cells sharing t+j are independent and the T*L sequential
+    steps collapse to T+L vectorised ones.
+
+    ⚠️ Deviations from the published method. State these whenever this is
+    reported -- a negative result for an adapted method is not a negative
+    result for ORCA:
+      * the original uses visual embeddings (ResNet50 + cosine on Meta-World, a
+        joint-position predictor on Humanoid); here ``d`` is our normalised
+        state-transition cost. The Humanoid setup is the closer analogue.
+      * the original appends a timestep-percentage feature to the policy input;
+        we do not, since that would change the observation space relative to
+        every other variant and confound the comparison.
+      * the original learns from one demonstration with DrQ-v2/SAC; here it
+        scores one candidate segment inside best-of-K on the FOCUS backbone.
+
+    Args:
+        C: ``[B, T, L]`` ground cost (agent time x demonstration frame).
+        lam: sharpness of the occupancy probability.
+        normalize_p: make P a distribution over demonstration frames per agent
+            step. Default False. Normalising reads "proportional to" as a
+            distribution, which makes the coverage a product of ~L terms of
+            size ~1/L; at L = 32 that underflows float32 to exactly zero for
+            any agent not already close to the demonstration, killing the
+            gradient. The unnormalised kernel exp(-lam*d) is bounded in (0, 1]
+            and does not collapse when the match is good.
+        return_log: return log-coverage instead of coverage. Strongly preferred
+            inside a differentiable pipeline -- see ORCACriterion.
+
+    Returns:
+        ``[B, T]`` per-step reward in [0, 1], or its log if ``return_log``.
+    """
+    B, T, L = C.shape
+    logP = -lam * C
+    if normalize_p:
+        logP = logP - torch.logsumexp(logP, dim=-1, keepdim=True)
+
+    NEG = -1e9
+    device = C.device
+    t_idx = torch.arange(T, device=device)
+
+    # Skewed coordinates s = t + j. Column s holds, for each agent row t, the
+    # cell (t, s - t). prev1 is column s-1.
+    prev1 = C.new_full((B, T + 1), NEG)   # row r corresponds to agent step r-1
+    log_rewards = [None] * T
+
+    for sdiag in range(0, T + L):
+        j_idx = sdiag - t_idx                              # [T]
+        valid = (j_idx >= 0) & (j_idx <= L - 1)
+        jg = j_idx.clamp(0, L - 1)
+        lp = logP[:, t_idx, jg]                            # [B, T]
+
+        up = prev1[:, 0:T]        # C_{t-1, j}   (row t-1 of column s-1)
+        left = prev1[:, 1:T + 1]  # C_{t, j-1}   (row t   of column s-1)
+        # j == 0 has an empty prefix, so C_{t,-1} = 1 -> log 0 contribution
+        left = torch.where((j_idx == 0).unsqueeze(0).expand(B, T), torch.zeros_like(left), left)
+        cur_body = torch.maximum(up, left + lp)
+        cur_body = torch.where(valid.unsqueeze(0).expand(B, T), cur_body,
+                               torch.full_like(cur_body, NEG))
+
+        head = C.new_full((B, 1), NEG)   # row 0 = agent step -1, nothing covered
+        cur = torch.cat((head, cur_body), dim=-1)
+
+        # R_t = C_{t, L-2} * P_{t, L-1}: available on the diagonal where
+        # j = L-2, i.e. s = t + L - 2.
+        t_done = sdiag - (L - 2)
+        if L >= 2 and 0 <= t_done < T:
+            log_rewards[t_done] = cur[:, t_done + 1] + logP[:, t_done, L - 1]
+
+        prev1 = cur
+
+    for t in range(T):
+        if log_rewards[t] is None:
+            log_rewards[t] = C.new_full((B,), NEG)
+    log_R = torch.stack(log_rewards, dim=1).clamp_min(NEG)
+    return log_R if return_log else log_R.exp()
+
+
+class ORCACriterion(BestOfKCriterion):
+    """Ordered-coverage criterion, a drop-in alongside OT and soft-DTW.
+
+    Shares the ground cost with every other criterion via
+    :func:`ground_cost_matrix`, so swapping it in changes only how agent steps
+    are scored against demonstration frames. Read the deviation list in
+    :func:`ordered_coverage` before reporting anything from it.
+    """
+
+    def __init__(
+        self,
+        lam: float = 0.25,
+        cost_type: Literal["huber", "l2", "cosine"] = "l2",
+        huber_delta: float = 1.0,
+        normalize_p: bool = False,
+        cost_mode: Literal["neg_log_r", "one_minus_r"] = "neg_log_r",
+    ):
+        super().__init__()
+        self.lam = lam
+        self.cost_type = cost_type
+        self.huber_delta = huber_delta
+        self.normalize_p = normalize_p
+        self.cost_mode = cost_mode
+
+    def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
+        B, K, T, d = exp_f.shape
+        sim_t = sim_f.unsqueeze(1).expand(B, K, T, d).contiguous().view(B * K, T, d)
+        exp_t = exp_f.contiguous().view(B * K, T, d)
+        C = ground_cost_matrix(sim_t, exp_t, cost_type=self.cost_type,
+                               huber_delta=self.huber_delta)[0]
+        # ORCA yields a reward in [0, 1]; this pipeline consumes a non-negative
+        # cost. Two conversions, both monotone:
+        #
+        #   one_minus_r : 1 - R, the literal reading. Unusable here as the sole
+        #       option: coverage is a product over the window, so for an agent
+        #       far from the demonstration R underflows to exactly 0 in float32
+        #       (measured at T = L = 32) and the gradient vanishes. ORCA's own
+        #       setting consumes R as a scalar RL reward for SAC/DrQ-v2, where
+        #       a near-zero reward merely means "no signal yet" and exploration
+        #       still drives progress; differentiating through it is harsher.
+        #   neg_log_r   : -log R, computed from the log-domain recursion, so it
+        #       never underflows and the gradient stays informative over the
+        #       whole range. Default here, and a documented deviation.
+        if self.cost_mode == "neg_log_r":
+            logR = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p,
+                                    return_log=True)
+            per_step = (-logR).view(B, K, T)
+        else:
+            R = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p)
+            per_step = (1.0 - R).view(B, K, T)
+        Lk = per_step.sum(dim=-1)
+        return Lk, {"per_step_costs": per_step}
 
 
 class SequenceRegressionCriterion(BestOfKCriterion):

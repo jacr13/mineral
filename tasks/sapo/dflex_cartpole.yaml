@@ -1,0 +1,41 @@
+# Expert for DFlex CartPole Swing-Up.
+#
+# Reviewers Q9cS and zDN4 both object that every task in the paper is periodic
+# locomotion ("the paper does not evaluate non-periodic or order-sensitive
+# tasks"; "may therefore fail on manipulation or non-periodic multi-stage
+# tasks"). Swing-up is the cheapest honest test: the trajectory has two
+# distinct phases -- swing the pole up, then balance it -- so a randomly
+# sampled expert segment is often from a different phase than the agent is in,
+# which is precisely the failure mode predicted for local best-of-K matching.
+#
+# obs = [x, xdot, sin(theta), cos(theta), theta_dot] (5), act = 1,
+# episode_length = 240, so this is far cheaper than the locomotion tasks.
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+agent:
+  name: SAPO/DFlexAnt
+  shac:
+    max_epochs: 2000
+    max_agent_steps: 4000000
+    horizon_len: 32
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexCartpole4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 130, 140]
+
+spawner:
+  skip: true

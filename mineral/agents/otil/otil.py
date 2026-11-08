@@ -13,6 +13,7 @@ from .best_of_k import (
     OTSinkhornCriterion,
     SequenceCosineCriterion,
     SequenceRegressionCriterion,
+    ORCACriterion,
     SoftDTWCriterion,
 )
 
@@ -48,9 +49,31 @@ class OTIL(SHAC):
         # False differentiates through the Sinkhorn iterations instead of using
         # the fixed-coupling surrogate; True is what every reported run used.
         self.loss_ot_detach_plan = bool(self.otil_config.get("loss_ot_detach_plan", True))
+        # null = balanced OT with uniform marginals (as published). A float
+        # relaxes the marginals (unbalanced OT), which is the fix reviewer Q9cS
+        # suggested for the fragmented plans in Figs. 3(c)/9(f)(h).
+        _rho = self.otil_config.get("loss_ot_marginal_rho", None)
+        self.loss_ot_marginal_rho = None if _rho in (None, "null", "none") else float(_rho)
+        # "pathwise"       : differentiate the return through the simulator -- FOCUS as published.
+        # "score_function" : identical objective, reward, critic, architecture and
+        #                    horizon, but the gradient is estimated with REINFORCE
+        #                    and the critic as baseline instead of the dynamics
+        #                    Jacobian. This isolates the simulator-derivative
+        #                    contribution, which the ZO-FOCUS comparison cannot do
+        #                    because it swaps the whole actor-critic for PPO/SAC.
+        #                    Simply detaching observations is NOT an option: the
+        #                    objective depends on the policy only through the
+        #                    dynamics, so the actor would receive no gradient.
+        self.actor_grad_estimator = self.otil_config.get("actor_grad_estimator", "pathwise")
+        if self.actor_grad_estimator not in ("pathwise", "score_function"):
+            raise ValueError(f"Invalid actor_grad_estimator: {self.actor_grad_estimator}")
         # Ordered-alignment (soft-DTW) alternative to the Sinkhorn coupling.
         self.loss_dtw_gamma = float(self.otil_config.get("loss_dtw_gamma", 0.1))
         self.loss_dtw_normalize = self.otil_config.get("loss_dtw_normalize", "rows")
+        # ORCA-style ordered coverage (reviewer Q9cS's named baseline).
+        self.loss_orca_lam = float(self.otil_config.get("loss_orca_lam", 0.25))
+        self.loss_orca_cost_mode = self.otil_config.get("loss_orca_cost_mode", "neg_log_r")
+        self.loss_orca_normalize_p = bool(self.otil_config.get("loss_orca_normalize_p", False))
         self.loss_ot_cost_type = self.otil_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
@@ -65,7 +88,7 @@ class OTIL(SHAC):
         if self.save_plan_heatmaps and (not self.multi_gpu or self.rank == 0):
             os.makedirs(self.plan_heatmap_dir, exist_ok=True)
 
-        if self.imitation_loss_type in ["ot", "l2", "cosine", "softdtw", "softdtw_subseq"]:
+        if self.imitation_loss_type in ["ot", "l2", "cosine", "softdtw", "softdtw_subseq", "orca"]:
             if self.imitation_loss_type == "ot":
                 ot_params = dict(
                     eps=self.loss_ot_eps,
@@ -74,6 +97,7 @@ class OTIL(SHAC):
                     huber_delta=self.loss_ot_huber_delta,
                     use_huber_speedup=self.loss_use_huber_speedup,
                     detach_plan=self.loss_ot_detach_plan,
+                    marginal_rho=self.loss_ot_marginal_rho,
                 )
                 criterion = OTSinkhornCriterion(**ot_params)
             elif self.imitation_loss_type in ("softdtw", "softdtw_subseq"):
@@ -87,6 +111,14 @@ class OTIL(SHAC):
                     subsequence=subseq,
                     open_end=subseq,
                     normalize=self.loss_dtw_normalize,
+                )
+            elif self.imitation_loss_type == "orca":
+                criterion = ORCACriterion(
+                    lam=self.loss_orca_lam,
+                    cost_type=self.loss_ot_cost_type,
+                    huber_delta=self.loss_ot_huber_delta,
+                    normalize_p=self.loss_orca_normalize_p,
+                    cost_mode=self.loss_orca_cost_mode,
                 )
             elif self.imitation_loss_type == "l2":
                 criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
@@ -366,10 +398,78 @@ class OTIL(SHAC):
 
         info["expert_return"] = self.demos["expert_return"]
 
-        actor_loss = -returns.mean()
+        if self.actor_grad_estimator == "pathwise":
+            actor_loss = -returns.mean()
+        else:
+            actor_loss = self._score_function_actor_loss(step_rewards, next_vs_live, info)
 
         self.agent_steps += self.horizon_len * self.num_envs
         return actor_loss, info
+
+    def _score_function_actor_loss(self, step_rewards, next_vs, info):
+        """REINFORCE estimate of the same objective, with the critic as baseline.
+
+        The pathwise estimator differentiates the return through the simulator.
+        Here the return is treated as a constant and the gradient comes from
+        the log-probabilities of the actions that were actually taken:
+
+            grad J  ~  E[ sum_t grad log pi(a_t|s_t) * (G_t - V(s_t)) ]
+
+        with G_t the discounted return-to-go built from the *same* per-step OT
+        rewards and bootstrapped by the *same* critic. Everything outside the
+        estimator -- reward, critic, network, horizon, best-of-K -- is shared
+        with the pathwise path, so a difference in outcome is attributable to
+        the estimator.
+
+        The critic baseline matters: plain REINFORCE would mostly demonstrate
+        that an unbaselined score-function estimator is high-variance, which is
+        not the question being asked.
+        """
+        rewards = step_rewards.detach()
+        next_vs = next_vs.detach()
+
+        # discounted return-to-go, stopping at episode boundaries exactly as
+        # _compute_returns_from_rewards does
+        H = self.horizon_len
+        G = torch.zeros_like(rewards)
+        running = next_vs[H - 1].clone()
+        for i in reversed(range(H)):
+            done = self.done_mask[i]
+            boot = (1.0 - done) * running + done * next_vs[i]
+            G[i] = rewards[i] + self.gamma * boot
+            running = G[i]
+
+        with torch.no_grad():
+            obs = {k: v.view(-1, *v.shape[2:]) for k, v in self.obs_buf.items()}
+            z = self.encoder_target(obs)
+            values = self.critic_target(z, return_type="min").squeeze(-1).view(H, self.num_envs)
+        advantage = G - values
+        advantage = (advantage - advantage.mean()) / (advantage.std(unbiased=False) + 1e-6)
+
+        # Recompute log pi(a_t|s_t) for the stored actions, with grad to theta.
+        #
+        # The stored actions come from a SquashedNormal, so log_prob inverts the
+        # tanh. mineral's TanhTransform._inverse calls atanh without clamping
+        # (it relies on cache_size=1, which only helps when log_prob is called
+        # on the very tensor rsample returned). Here the actions are clones fed
+        # to a freshly built distribution, so the cache misses and any action
+        # saturated to +-1 in float32 gives atanh = +-inf -> NaN gradients.
+        # Clamping into the open interval is the standard remedy.
+        eps = 1e-6
+        logp = []
+        for i in range(H):
+            obs_i = {k: v[i] for k, v in self.obs_buf.items()}
+            _, _, distr = self.actor(self.actor_encoder(obs_i))
+            a = self.action_buf[i].clamp(-1.0 + eps, 1.0 - eps)
+            logp.append(distr.log_prob(a).sum(-1))
+        logp = torch.stack(logp)
+        if not torch.isfinite(logp).all():
+            n_bad = int((~torch.isfinite(logp)).sum())
+            logp = torch.nan_to_num(logp, nan=0.0, posinf=0.0, neginf=0.0)
+            info["score_function_nonfinite_logp"] = torch.tensor(float(n_bad))
+
+        info["score_function_adv_std"] = advantage.std(unbiased=False).detach()
+        return -(logp * advantage).sum(dim=0).mean()
 
     def _maybe_save_plan_heatmaps(self, info):
         print("maybe_save_plan_heatmaps", info.keys())

@@ -20,6 +20,12 @@ otil:
   # false = differentiate through the Sinkhorn iterations (paper text);
   # true = fixed-coupling surrogate, which is what the reported runs did.
   loss_ot_detach_plan: true
+  # pathwise = FOCUS as published (gradient through the simulator);
+  # score_function = same objective/reward/critic, REINFORCE estimator.
+  actor_grad_estimator: pathwise
+  # null = balanced OT (uniform marginals). A float relaxes them
+  # (unbalanced OT), so unmatched agent states need not be coupled.
+  loss_ot_marginal_rho: null
   loss_ot_huber_delta: 1.0
   loss_use_huber_speedup: false
   loss_mlp_features_dim: null
@@ -40,4 +46,15 @@ otil:
   imitation_loss_type: ot
   loss_dtw_gamma: 0.1
   loss_dtw_normalize: rows # rows | total | none
+  # ORCA-style ordered coverage. neg_log_r is required in a
+  # differentiable pipeline: 1-R underflows to zero gradient.
+  # NOTE on temperature: ORCA's -log R scores are O(1e3) where OT's are
+  # O(10), so at the shared tau=0.5 ORCA's best-of-K collapses to a hard
+  # argmin (K_eff 1.01/8) while OT averages (5.42/8). Comparing them at
+  # the same tau measures temperature, not alignment. Use
+  # loss_best_of_k_tau=200 for ORCA to match OT's effective K, and report
+  # K_eff for both arms.
+  loss_orca_lam: 0.25
+  loss_orca_cost_mode: neg_log_r
+  loss_orca_normalize_p: false
   actor_value_return_type: min

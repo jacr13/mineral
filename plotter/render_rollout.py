@@ -223,6 +223,10 @@ JOINT_Q_FROM_OBS = {
     "humanoid": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (11, 32))],
     # snu_humanoid.py:360 observation_from_state: [7:] -> obs[11:33]
     "snu_humanoid": [((1, 2), (0, 1)), ((3, 7), (1, 5)), ((7, None), (11, 33))],
+    # cartpole_swing_up.py:177  obs = [x, xdot, sin(th), cos(th), th_dot];
+    # joint_q = [x, theta]. theta is recovered as atan2(obs[2], obs[3]) and is
+    # handled specially in set_joint_q_from_obs.
+    "cartpoleswingup": [((0, 1), (0, 1))],
 }
 
 
@@ -239,6 +243,12 @@ def set_joint_q_from_obs(env, obs, env_name):
     jqd = env.state.joint_qd.view(env.num_envs, -1)
     jq.zero_()
     jqd.zero_()
+    if env_name == "cartpoleswingup":
+        # obs stores the pole angle as (sin, cos), so invert it rather than
+        # copying a slice.
+        jq[:, 0] = obs[:, 0]
+        jq[:, 1] = torch.atan2(obs[:, 2], obs[:, 3])
+        return
     for (d0, d1), (s0, s1) in JOINT_Q_FROM_OBS[env_name]:
         tgt_w = jq[:, slice(d0, d1)].shape[1]
         val = obs[:, slice(s0, s1)]
