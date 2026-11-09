@@ -45,6 +45,14 @@ from wandb_api import API
 CURVE_METRIC = "train_scores/episode_rewards"
 TAIL = 5  # average the last few logged points so one noisy eval does not decide a seed
 
+# A run that exits on the JobClock's 30-minute safety buffer (SHAC.train breaks
+# on "Not enough time left for another step") exits cleanly, so W&B marks it
+# "finished" even though it never reached max_agent_steps. Scoring its tail
+# would put an ~11M-step policy in the same cell as a 15M-step one. Require the
+# history to actually reach the budget before a seed counts.
+MIN_COVERAGE = 0.98
+SHORT_RUNS = []  # (project, run name, env, last logged step, cap)
+
 PLOTTER_DIR = Path(__file__).resolve().parent
 OUT_DIR = PLOTTER_DIR / "rebuttal"
 ENTITY = "jacr"
@@ -111,6 +119,10 @@ def final_at_budget(run, env):
     h = h.dropna(subset=[CURVE_METRIC])
     sub = h[h["_step"] <= cap]
     if sub.empty:
+        return None
+    reached = float(sub["_step"].max())
+    if reached < MIN_COVERAGE * cap:
+        SHORT_RUNS.append((run.project, run.name, env, reached, cap))
         return None
     return float(sub[CURVE_METRIC].tail(TAIL).mean())
 
@@ -297,16 +309,24 @@ def collect_cached(force=False):
         print(f"(using cached W&B data from {CACHE}; --refresh to refetch)")
         to_d = lambda d: {e: {m: {int(k): v for k, v in sd.items()} for m, sd in md.items()}
                           for e, md in d.items()}
+        SHORT_RUNS[:] = [tuple(x) for x in raw.get("short_runs", [])]
         return to_d(raw["data"]), to_d(raw["grad"])
     data, grad = collect()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE.write_text(json.dumps({"data": data, "grad": grad}, default=str))
+    CACHE.write_text(json.dumps(
+        {"data": data, "grad": grad, "short_runs": SHORT_RUNS}, default=str))
     return data, grad
 
 
 if __name__ == "__main__":
     import sys
     data, grad = collect_cached(force="--refresh" in sys.argv)
+    if SHORT_RUNS:
+        print(f"\n=== dropped {len(SHORT_RUNS)} run(s): stopped short of the budget ===")
+        for proj, name, env, reached, cap in sorted(SHORT_RUNS, key=lambda r: (r[2], r[0], r[3])):
+            print(f"  {env:14s} {reached/1e6:5.2f}M / {cap/1e6:.0f}M  {proj:44s} {name}")
+    else:
+        print("\nevery contributing run reached its interaction budget")
     print()
     a_rows = plot_alignment(data)
     g_rows = plot_gradpath(grad)

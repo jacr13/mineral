@@ -162,7 +162,7 @@ for env in $ENVS; do
       --set "agent.otil.loss_use_detached_prev_obs=false"
       --set "agent.otil.critic_disabled=false"
       --set "agent.otil.critic_reward_shapping=true"
-      --env_files "${env}.yaml"
+      --env_files "${env}${ENV_SUFFIX:-}.yaml"
       --deploy_now
     )
 
