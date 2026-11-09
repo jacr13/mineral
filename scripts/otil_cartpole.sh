@@ -49,6 +49,7 @@ if [[ "$STAGE" == "expert" ]]; then
     --deployment slurm --runtime "$RUNTIME" --gpu_constraint "$GPU_CONSTRAINT" \
     --no-cleanup --sweep --sweep_max 150 \
     --set "wandb.project=cartpole${TAG:+-$TAG}_SAPO-expert-slurm" \
+    --set "wandb.mode=${WANDB_MODE:-online}" \
     --set "agent.ckpt_every=${CKPT_EVERY}" \
     --env_files dflex_cartpole.yaml --deploy_now
   echo
@@ -84,6 +85,7 @@ for i in $ROWS_SEL; do
     --deployment slurm --runtime "$RUNTIME" --gpu_constraint "$GPU_CONSTRAINT" \
     --no-cleanup --sweep --sweep_max 150 --base_algo SAPO \
     --set "wandb.project=cartpole${TAG:+-$TAG}_OTIL_SAPO-slurm" \
+    --set "wandb.mode=${WANDB_MODE:-online}" \
     --set "agent.ckpt_every=${CKPT_EVERY}" \
     --set "agent.otil.imitation_loss_type=${loss}" \
     --set "agent.otil.loss_ot_cost_type=${cost}" \

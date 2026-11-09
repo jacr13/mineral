@@ -23,6 +23,15 @@
 # a 26M run would answer a question the paper does not ask.
 set -euo pipefail
 
+# WANDB_MODE=offline is the fallback when the compute nodes cannot reach
+# api.wandb.ai. On 9 Nov 2026 all 36 batch-U jobs died this way: wandb logged
+# "Network error (ProxyError), entering retry loop", spun for ~54 minutes and
+# exited 1 before a single run initialised. The task YAMLs set wandb.mode
+# explicitly, and wandb.init() kwargs take precedence over the WANDB_MODE
+# environment variable, so the override has to go through the config -- which
+# is what the --set below does. Offline runs land in <logdir>/wandb/offline-run-*
+# and are uploaded afterwards with:  wandb sync workdir/<...>/wandb/offline-run-*
+export WANDB_MODE="${WANDB_MODE:-online}"
 export RUNTIME="${RUNTIME:-12h}"          # shared-gpu partition ceiling
 export CKPT_EVERY="${CKPT_EVERY:-2000}"   # ckpt_every=100 unpruned is what filled the disk
 export MAX_JOBS="${MAX_JOBS:-100}"
@@ -88,6 +97,7 @@ if [[ " $BATCHES " == *" B "* ]]; then
     --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
     --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
     --set "wandb.project=seedstability_OTIL_SAPO-dflex_snu_humanoid-slurm"
+--set "wandb.mode=${WANDB_MODE:-online}"
     --set "agent.shac.max_agent_steps=15000000"
     --set "agent.ckpt_every=${CKPT_EVERY}"
     --set "agent.otil.imitation_loss_type=ot"
@@ -140,6 +150,7 @@ if [[ " $BATCHES " == *" D "* ]]; then
       --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
       --no-cleanup --sweep --sweep_max 150
       --set "wandb.project=rerun_OTIL_PPO-${env}-slurm"
+--set "wandb.mode=${WANDB_MODE:-online}"
       --set "agent.ppo.max_agent_steps=${steps}"
       --set "agent.ckpt_every=${CKPT_EVERY}"
       --set "agent.otil.imitation_loss_type=${loss}"
@@ -187,6 +198,7 @@ if [[ " $BATCHES " == *" F "* ]]; then
         --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
         --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
         --set "wandb.project=gradestimator_OTIL_SAPO-${env}-slurm"
+--set "wandb.mode=${WANDB_MODE:-online}"
         --set "agent.shac.max_agent_steps=${steps}"
         --set "agent.ckpt_every=${CKPT_EVERY}"
         --set "agent.otil.actor_grad_estimator=${est}"
@@ -264,6 +276,7 @@ if [[ " $BATCHES " == *" U "* ]]; then
         --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
         --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
         --set "wandb.project=unbalancedot${U_TAG:+-$U_TAG}_OTIL_SAPO-${env}-slurm"
+--set "wandb.mode=${WANDB_MODE:-online}"
         --set "agent.shac.max_agent_steps=${steps}"
         --set "agent.ckpt_every=${CKPT_EVERY}"
         --set "agent.otil.loss_ot_marginal_rho=${rho}"

@@ -97,6 +97,7 @@ for env in $ENVS; do
       --gpu_constraint "${GPU_CONSTRAINT}"
       --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
       --set "wandb.project=gradpath_OTIL_SAPO-${env}-slurm"
+      --set "wandb.mode=${WANDB_MODE:-online}"
       --set "agent.shac.max_agent_steps=${steps}"
       --set "agent.ckpt_every=${CKPT_EVERY}"
       --set "agent.otil.loss_ot_detach_plan=${detach}"

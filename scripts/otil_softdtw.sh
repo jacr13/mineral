@@ -143,6 +143,7 @@ for env in $ENVS; do
       # "sweep-critic-reward" (it comes from the task yaml's sweep.logdir);
       # the runs are identified by wandb.project and the timestamp instead.
       --set "wandb.project=softdtw_OTIL_SAPO-${env}-slurm"
+      --set "wandb.mode=${WANDB_MODE:-online}"
       --set "agent.shac.max_agent_steps=${STEPS_OVERRIDE:-${steps}}"
       # Checkpoint volume: ckpt_every defaults to 100 epochs and nothing prunes
       # old files, so a run leaves 50-185 .pth files (20-78 MB). Across this
