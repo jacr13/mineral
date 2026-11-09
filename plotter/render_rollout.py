@@ -200,7 +200,7 @@ def _prepare_dflex_path():
         sys.path.insert(0, root)
 
 
-def make_env(env_name, num_envs, device, episode_length):
+def make_env(env_name, num_envs, device, episode_length, stochastic_init=True):
     _prepare_dflex_path()
     import dflex.envs as E
 
@@ -214,9 +214,16 @@ def make_env(env_name, num_envs, device, episode_length):
     }[env_name]
     caching = {"hopper": 16, "ant": 16, "humanoid": 48, "snu_humanoid": 8,
                "cartpoleswingup": 4, "cheetah": 16}[env_name]
+    # stochastic_init MUST match training: mineral/cfgs/task/DFlex.yaml sets
+    # stochastic_init: True for every DFlex task, so the expert demonstrations
+    # were all collected from randomized initial states. Rolling a learner out
+    # from a single fixed state instead makes its motion far less varied than
+    # the demonstrations, which inflates the coverage side of the fidelity
+    # metric and deflates precision. This defaulted to False and silently
+    # biased every rollout and every fidelity number taken before 9 Nov 2026.
     return getattr(E, cls)(
         render=False, device=device, num_envs=num_envs, episode_length=episode_length,
-        no_grad=True, stochastic_init=False, MM_caching_frequency=caching,
+        no_grad=True, stochastic_init=stochastic_init, MM_caching_frequency=caching,
     )
 
 

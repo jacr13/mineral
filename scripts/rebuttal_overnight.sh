@@ -232,11 +232,30 @@ fi
 # results, the published balanced choice is suboptimal in an obvious way; that
 # is worth knowing before a reviewer suggests it, but report it plainly rather
 # than burying it.
+# 🔴 THE FIRST ATTEMPT (projects unbalancedot_OTIL_SAPO-*, 9 Nov 2026) IS
+# INVALID -- do not use those runs. log_sinkhorn_unbalanced exponentiated the
+# plan and only then normalised it; because scale = rho/(rho+eps) < 1 damps the
+# Sinkhorn updates, log_u + log_v stopped offsetting log_K (-934 at eps=0.1)
+# and exp() underflowed to a total mass of 3.5e-13 on part of each batch. The
+# clamp_min(1e-12) then returned P * 1e12, leaving those elements at mass
+# 0.34-0.36 instead of 1 and silently rescaling their per-step costs. All 24
+# runs collapsed and the result was non-monotonic in rho, which is what gave it
+# away. Normalising in the log domain fixes it (verified: mass exactly 1 for
+# every rho >= 0.01, and rho -> inf recovers the balanced plan to 9.1e-7).
+# The old "balanced path is bit-identical" test could never have caught this:
+# it only exercises marginal_rho=None.
+#
+# The rho ladder is also wider now. The diagnostic showed rho=1.0 is already a
+# STRONG relaxation at eps=0.1 (transport cost 9.14 vs 17.11 balanced), so the
+# original {1.0, 0.1} bracketed only the aggressive end and never tested the
+# reviewer's conjecture near the balanced limit. {100, 10, 1} spans
+# near-balanced (max|P-P_bal| 6e-3) to moderate (0.33).
+# U_TAG keeps the rerun in its own W&B projects.
 if [[ " $BATCHES " == *" U "* ]]; then
-  banner "U. unbalanced OT  (2 envs x 2 rho x 6 seeds = 24 jobs)"
+  banner "U. unbalanced OT  (2 envs x ${n_rhos:-3} rho x 6 seeds)"
   for env in ${U_ENVS:-dflex_snu_humanoid dflex_humanoid}; do
     steps="${MAX_STEPS[$env]}"
-    for rho in ${U_RHOS:-1.0 0.1}; do
+    for rho in ${U_RHOS:-100 10 1}; do
       echo "  ${env} / rho=${rho}"
       cmd=(python spawner.py
         --task_name otil --docker
@@ -244,7 +263,7 @@ if [[ " $BATCHES " == *" U "* ]]; then
         --deployment slurm --runtime "$RUNTIME"
         --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
         --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
-        --set "wandb.project=unbalancedot_OTIL_SAPO-${env}-slurm"
+        --set "wandb.project=unbalancedot${U_TAG:+-$U_TAG}_OTIL_SAPO-${env}-slurm"
         --set "agent.shac.max_agent_steps=${steps}"
         --set "agent.ckpt_every=${CKPT_EVERY}"
         --set "agent.otil.loss_ot_marginal_rho=${rho}"

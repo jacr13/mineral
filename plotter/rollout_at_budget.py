@@ -45,6 +45,28 @@ def checkpoint_nearest(ckpt_dir, target_steps):
     return best[2], best[1]
 
 
+def _make_training_env(cfg, num_envs, device):
+    """The run's own env, with only the parallel-env count changed."""
+    from omegaconf import OmegaConf, open_dict
+
+    from mineral.envs.dflex import make_envs
+
+    # plotter/utils.py shadows dflex's own top-level `utils` module, which
+    # dflex/envs/ant.py imports as `from utils import load_utils`.
+    _rr._prepare_dflex_path()
+
+    cfg = OmegaConf.create(OmegaConf.to_container(cfg, resolve=True))
+    with open_dict(cfg):
+        cfg.task.env.numEnvs = num_envs
+        cfg.sim_device = device
+    return make_envs(cfg)
+
+
+def _obs_of(x):
+    """dflex returns (obs, extras) from reset and 4-tuples from step."""
+    return x[0] if isinstance(x, tuple) else x
+
+
 def rollout(env_name, logdir, target_steps, episodes, device="cuda:0", max_len=1000, sample=False):
     from omegaconf import OmegaConf
 
@@ -59,7 +81,16 @@ def rollout(env_name, logdir, target_steps, episodes, device="cuda:0", max_len=1
     if net.get("encoder") is not None:
         raise NotImplementedError("only state-input runs are supported")
 
-    env = _rr.make_env(env_name, episodes, device, max_len)
+    # Build the env through mineral's OWN builder from the run's resolved
+    # config, not a hand-written constructor call. The hand-written one in
+    # render_rollout.make_env does not reproduce the training env: it missed
+    # task.env.stochastic_init (mineral/cfgs/task/DFlex.yaml sets it True for
+    # every DFlex task) and no_env_offset, and rollouts taken that way had an
+    # initial-state spread of 0.463 against the demonstrations' 0.056, with
+    # Ant's return falling from 9427 to 3755. Using the run's own config keeps
+    # the initial-state distribution identical to the one the expert
+    # demonstrations were drawn from, which the fidelity metric requires.
+    env = _make_training_env(cfg, episodes, device)
     actor = Actor(env.num_obs, env.num_actions, **(net.get("actor_kwargs") or {})).to(device)
     actor.load_state_dict(sd["actor"])
     actor.eval()
@@ -69,7 +100,7 @@ def rollout(env_name, logdir, target_steps, episodes, device="cuda:0", max_len=1
         obs_rms = RunningMeanStd((env.num_obs,)).to(device)
         obs_rms.load_state_dict({k.split(".", 1)[1]: v for k, v in sd["obs_rms"].items()})
 
-    obs = env.reset()
+    obs = _obs_of(env.reset())
     traj = [[] for _ in range(episodes)]
     alive = torch.ones(episodes, dtype=torch.bool, device=device)
     with torch.no_grad():
@@ -77,7 +108,8 @@ def rollout(env_name, logdir, target_steps, episodes, device="cuda:0", max_len=1
             o = obs_rms.normalize(obs) if obs_rms is not None else obs
             mu, _, distr = actor(o)
             act = distr.rsample() if sample else mu
-            nxt, rew, done, _ = env.step(act)
+            step_out = env.step(act)
+            nxt, rew, done = step_out[0], step_out[1], step_out[2]
             for i in range(episodes):
                 if alive[i]:
                     traj[i].append((obs[i].cpu(), act[i].cpu(), rew[i].cpu()))

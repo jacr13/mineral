@@ -67,7 +67,7 @@ def log_sinkhorn_unbalanced(
         log_u = scale * (log_a - lse(log_K + log_v.unsqueeze(1), dim=-1))
         log_v = scale * (log_b - lse(log_K.transpose(-2, -1) + log_u.unsqueeze(1), dim=-1))
 
-    P = (log_u.unsqueeze(-1) + log_K + log_v.unsqueeze(-2)).exp()
+    log_P = log_u.unsqueeze(-1) + log_K + log_v.unsqueeze(-2)
 
     # Relaxing the marginals also frees the plan's total mass: it rises from
     # 1.0 (balanced) to ~15 at rho=0.01 on random costs. Downstream the per-step
@@ -78,8 +78,17 @@ def log_sinkhorn_unbalanced(
     # while leaving the relative row masses free, which is the whole point:
     # an agent state with no good expert match can still carry less mass than
     # its neighbours.
-    P = P / P.sum(dim=(-2, -1), keepdim=True).clamp_min(1e-12)
-    return P
+    # Normalise in the LOG domain, before exponentiating. Doing it afterwards
+    # is not equivalent: scale = rho/(rho+eps) < 1 damps the Sinkhorn updates,
+    # so log_u + log_v no longer offsets log_K (which reaches -934 at eps=0.1
+    # on these costs) and exp() underflows -- the raw plan mass came out at
+    # 3.5e-13 for some batch elements, below the clamp that was used here, so
+    # dividing by the clamped sum returned P * 1e12 and left those elements
+    # with a total mass of 0.34-0.36 instead of 1. That silently rescaled the
+    # per-step costs for part of the batch and invalidated the first
+    # unbalanced-OT runs (9 Nov 2026).
+    log_P = log_P - torch.logsumexp(log_P.flatten(-2), dim=-1)[..., None, None]
+    return log_P.exp()
 
 
 def log_sinkhorn(C: torch.Tensor, eps: float = 0.1, iters: int = 60) -> torch.Tensor:

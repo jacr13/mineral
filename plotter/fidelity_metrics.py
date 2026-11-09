@@ -271,7 +271,7 @@ def _one_split(obs, lengths, ref, ref_len, hold, hold_len, mu, sd, args, rng):
     return out
 
 
-def self_test(env="hopper", window=32, n_windows=24):
+def self_test(env="hopper", window=32, n_windows=24, with_ot=False, device="cpu"):
     """Calibrate the metric on constructions with known answers.
 
     Run this before trusting any number: it reports what the metric says for
@@ -295,12 +295,14 @@ def self_test(env="hopper", window=32, n_windows=24):
 
     def score(wX):
         out = {}
-        kinds = ("dtw", "ot") if getattr(args, "with_ot", False) else ("dtw",)
+        kinds = ("dtw", "ot") if with_ot else ("dtw",)
         for kind in kinds:
-            out[f"{kind}_precision"] = (alignment_distance(wX, wH, mu, sd, kind=kind)
-                                        / alignment_distance(wB, wH, mu, sd, kind=kind))
-            out[f"{kind}_coverage"] = (alignment_distance(wH, wX, mu, sd, kind=kind)
-                                       / alignment_distance(wH, wB, mu, sd, kind=kind))
+            out[f"{kind}_precision"] = (
+                alignment_distance(wX, wH, mu, sd, kind=kind, device=device)
+                / alignment_distance(wB, wH, mu, sd, kind=kind, device=device))
+            out[f"{kind}_coverage"] = (
+                alignment_distance(wH, wX, mu, sd, kind=kind, device=device)
+                / alignment_distance(wH, wB, mu, sd, kind=kind, device=device))
         return out
 
     cases = [
@@ -311,19 +313,41 @@ def self_test(env="hopper", window=32, n_windows=24):
         ("expert reversed in time", torch.flip(wA, dims=[1])),
     ]
     print(f"self-test on {env} (window={window}, n_windows={n_windows})\n")
-    print(f"  {'case':36s} {'dtw prec':>9s} {'dtw cov':>8s} {'ot prec':>8s} {'ot cov':>7s}")
+    hdr = f"  {'case':36s} {'dtw prec':>9s} {'dtw cov':>8s}"
+    print(hdr + (f" {'ot prec':>8s} {'ot cov':>7s}" if with_ot else ""))
     rows = []
     for tag, w in cases:
         r = score(w)
         rows.append(dict(case=tag, **r))
-        print(f"  {tag:36s} {r['dtw_precision']:9.2f} {r['dtw_coverage']:8.2f} "
-              f"{r['ot_precision']:8.2f} {r['ot_coverage']:7.2f}")
+        line = f"  {tag:36s} {r['dtw_precision']:9.2f} {r['dtw_coverage']:8.2f}"
+        if with_ot:
+            line += f" {r['ot_precision']:8.2f} {r['ot_coverage']:7.2f}"
+        print(line)
     print("\n  Expected: row 1 near 1.0; mode collapse good on precision but bad on")
     print("  coverage; noise degrades both; time reversal caught by dtw, NOT by ot.")
     return rows
 
 
 # -------------------------------------------------------------------- main ---
+
+def discover_extra(specs, subdir="demos_at_budget"):
+    """{env: {label: [paths]}} from explicit `env:label:logdir` triples.
+
+    The reported Ant/Humanoid/SNU checkpoints did not survive the storage
+    purge, so those runs are not in grouped_exp_logdirs.yaml with usable
+    checkpoints. This lets a surviving run be scored without editing the
+    registry that the paper's figures read.
+    """
+    found = defaultdict(lambda: defaultdict(list))
+    for spec in specs or []:
+        env, label, logdir = spec.split(":", 2)
+        pat = os.path.join(logdir, subdir, "*.pt")
+        hits = glob.glob(str(REPO / pat))
+        if not hits:
+            raise FileNotFoundError(f"no rollouts under {pat}")
+        found[env][label].extend(hits)
+    return found
+
 
 def discover(env_filter=None, subdir="demos_at_budget"):
     """{env: {method: [rollout paths]}} from grouped_exp_logdirs.yaml.
@@ -363,6 +387,10 @@ def main():
     ap.add_argument("--expert-episodes", type=int, default=128)
     ap.add_argument("--burn-in", type=int, default=50)
     ap.add_argument("--out", default=str(OUT_DIR / "fidelity_metrics"))
+    ap.add_argument("--extra", action="append", default=None,
+                    metavar="ENV:LABEL:LOGDIR",
+                    help="score an explicit run not in grouped_exp_logdirs.yaml; "
+                         "repeatable. LOGDIR is relative to the repo root.")
     ap.add_argument("--subdir", default="demos_at_budget",
                     help="demos_at_budget (budget-matched) | demos (end of training)")
     ap.add_argument("--self-test", action="store_true",
@@ -370,7 +398,8 @@ def main():
     args = ap.parse_args()
 
     if args.self_test:
-        rows = self_test(args.env or "hopper", args.window, args.n_windows)
+        rows = self_test(args.env or "hopper", args.window, args.n_windows,
+                         with_ot=args.with_ot, device=args.device)
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         with open(OUT_DIR / "fidelity_self_test.csv", "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0]))
@@ -379,7 +408,10 @@ def main():
         return
 
     rng = np.random.default_rng(0)
-    found = discover(args.env, args.subdir)
+    if args.extra:
+        found = discover_extra(args.extra, args.subdir)
+    else:
+        found = discover(args.env, args.subdir)
     if not found:
         print("No eval rollouts found locally. They live at <logdir>/demos/*.pt;")
         print("sync those directories from the cluster for the other environments.")

@@ -107,6 +107,28 @@ COLORS = {
 }
 
 
+def run_config(run):
+    """A run's config as a plain nested dict.
+
+    The W&B client sometimes hands back `config` as a JSON string rather than a
+    dict, and entries can be wrapped as {"value": ..., "desc": ...}. Accessing
+    it directly raises `AttributeError: 'str' object has no attribute 'get'`
+    partway through a refresh, which loses the whole fetch.
+    """
+    cfg = run.config
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except Exception:
+            return {}
+    out = {}
+    for k, v in (cfg or {}).items():
+        if isinstance(v, dict) and set(v) <= {"value", "desc"}:
+            v = v.get("value")
+        out[k] = v
+    return out
+
+
 def final_at_budget(run, env):
     """Final return at the env's interaction budget, matching plotter.py."""
     cap = MAX_STEPS_PER_ENV[env]
@@ -141,8 +163,10 @@ def _scores(project, env):
         v = final_at_budget(r, env)
         if v is None:
             continue
-        ot = r.config.get("agent", {}).get("otil", {})
-        seed = r.config.get("seed")
+        cfg = run_config(r)
+        agent = cfg.get("agent") or {}
+        ot = (agent.get("otil") or {}) if isinstance(agent, dict) else {}
+        seed = cfg.get("seed")
         label = row_label(ot)
         ts = r.summary.get("_timestamp", 0)
         prev = out[label].get(seed)
@@ -171,7 +195,7 @@ def fetch_reported_baselines():
                     continue
                 v = final_at_budget(r, env)
                 if v is not None:
-                    vals[r.config.get("seed")] = v
+                    vals[run_config(r).get("seed")] = v
             if vals:
                 data[env][want[key]] = vals
     return data

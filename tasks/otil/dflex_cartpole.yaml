@@ -12,23 +12,22 @@
 # balance -- so a randomly sampled expert segment is frequently from a
 # different phase than the agent currently occupies. That is exactly the
 # predicted failure mode, which makes this a real test rather than a
-# confirmatory one. This only holds with stochastic_init: True; see below.
+# confirmatory one.
 #
 # obs = [x, xdot, sin(theta), cos(theta), theta_dot], act = 1, episode = 240.
 #
 #
-# MEASURED 2026-11-09, before fixing stochastic_init:
-#   with stochastic_init=False (the dflex default, which this file previously
-#   inherited) every episode starts at x=0, theta=0, zero velocities -- i.e.
-#   exactly at the upright unstable equilibrium. A zero-action policy then
-#   scores EXACTLY 0.00 and never moves (mean|theta| = 0.000 over 240 steps),
-#   so the optimal policy is to do nothing and there is no swing-up phase at
-#   all. The SAPO expert scored -316.6, far WORSE than doing nothing, because
-#   the entropy bonus forces it to act. The task was therefore degenerate and
-#   could not test non-periodic multi-phase behaviour.
-#   With stochastic_init=True (what DiffRL's own cfg/env/cartpole.yaml uses):
-#   zero-action = -1670.7, uniform-random = -1733.4, so active recovery is
-#   required and the task has real phase structure.
+# NOTE on stochastic_init (corrected 9 Nov 2026): the line below is explicit
+# documentation, not a fix. mineral/cfgs/task/DFlex.yaml already sets
+# stochastic_init: True for every DFlex task, so the original cartpole runs
+# always had randomized starts and are VALID. An earlier note here claimed the
+# task was degenerate; that was wrong. The probe behind it built the env by
+# hand via plotter/render_rollout.make_env, which hardcoded
+# stochastic_init=False, so it measured a configuration training never used.
+# Note also that stochastic_init_func is overridden per environment:
+# CartPoleSwingUpEnv's adds pi*(U-0.5) to every joint position, while AntEnv's
+# is mild (xyz +-0.05, orientation +-pi/24, joints +-0.1). Reading cartpole's
+# and assuming it was generic is what produced the bogus diagnosis.
 #
 # NOTE: cartpole returns are NEGATIVE, so the expert-normalised return used for
 # the locomotion tasks is meaningless here (dividing by a negative flips the
@@ -37,8 +36,8 @@ task:
   name: DFlex
   env:
     env_name: cartpoleswingup
-    # REQUIRED: without this the start state is the upright equilibrium and the
-    # optimal policy is the null action (see the measurement note above).
+    # Redundant with mineral/cfgs/task/DFlex.yaml, kept explicit so the
+    # initial-state distribution of this task is readable here.
     stochastic_init: True
 agent:
   name: OTIL/DFlexAntSAPO
