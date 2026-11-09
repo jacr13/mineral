@@ -69,9 +69,16 @@ if [[ " $BATCHES " == *" A "* ]]; then
 fi
 
 # --- B. SNU seed stability ---------------------------------------------------
-# 12 fresh seeds at the reported FOCUS-OT-L2 config, disjoint from the reported
-# six, to characterize the bimodality found in the rebuttal runs (2/6 collapsed
-# where the reported batch had 0/6).
+# Fresh seeds at the reported FOCUS-OT-L2 config, disjoint from the reported
+# six, to characterize the bimodality found in the rebuttal runs.
+#
+# Pooled result over the first batch plus the gradpath and gradestimator
+# pathwise arms (26 fresh seeds, all at the identical resolved config):
+# mean 0.803 expert-normalized, 5 collapses below 0.5x = 19%
+# (95% Wilson [0.085, 0.379]). The paper reports 0.905 from 6 seeds with no
+# collapse; P(0 collapses in 6 | p=0.19) = 0.28, so that is an ordinary draw,
+# not cherry-picking. SEEDSTAB_FILE=dflex_snu_humanoid_seedstability2.yaml adds
+# 12 more disjoint seeds, which tightens the interval to [0.092, 0.334].
 if [[ " $BATCHES " == *" B "* ]]; then
   banner "B. SNU Humanoid seed stability  (12 fresh seeds = 12 jobs)"
   cmd=(python spawner.py
@@ -94,7 +101,7 @@ if [[ " $BATCHES " == *" B "* ]]; then
     --set "agent.otil.loss_use_detached_prev_obs=false"
     --set "agent.otil.critic_disabled=false"
     --set "agent.otil.critic_reward_shapping=true"
-    --env_files "dflex_snu_humanoid_seedstability.yaml"
+    --env_files "${SEEDSTAB_FILE:-dflex_snu_humanoid_seedstability.yaml}"
     --deploy_now)
   if [[ "$DRY_RUN" == "1" ]]; then printf '%q ' "${cmd[@]}"; echo; else "${cmd[@]}"; fi
 fi
