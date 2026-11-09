@@ -181,6 +181,16 @@ def _prepare_dflex_path():
     """
     import sys
 
+    # dflex predates NumPy 2.0, which removed these aliases outright; its
+    # dflex_env.py still calls np.Inf at import time. Restore them before the
+    # import rather than patching the third-party tree.
+    import numpy as _np
+
+    for _old, _new in (("Inf", "inf"), ("NAN", "nan"), ("float_", "float64"),
+                       ("bool8", "bool_")):
+        if not hasattr(_np, _old) and hasattr(_np, _new):
+            setattr(_np, _old, getattr(_np, _new))
+
     import dflex
 
     root = os.path.dirname(dflex.__file__)

@@ -5,24 +5,36 @@
 # zDN4: "local best-of-K matching ... may therefore fail on manipulation or
 #        non-periodic multi-stage tasks."
 #
-# CartPole Swing-Up has two phases (pump energy in, then balance), so randomly
-# sampled expert segments frequently come from a different phase than the agent
-# occupies -- the predicted failure mode. This is a genuine test: FOCUS may
-# lose here, and that is worth knowing before a reviewer asks.
+# CartPole Swing-Up has two phases (recover from a perturbed state, then
+# balance), so randomly sampled expert segments frequently come from a
+# different phase than the agent occupies -- the predicted failure mode. This
+# is a genuine test: FOCUS may lose here, and that is worth knowing before a
+# reviewer asks.
+#
+# REQUIRES stochastic_init: True in tasks/{sapo,otil}/dflex_cartpole.yaml.
+# The first launch (projects cartpole_SAPO-expert-slurm and
+# cartpole_OTIL_SAPO-slurm, 9 Nov 2026) inherited dflex's stochastic_init=False
+# default, which starts every episode at the upright equilibrium: a zero-action
+# policy scored exactly 0.00 there, the SAPO "expert" scored -316.6, and all
+# five arms landed within seed noise of each other. Those runs are degenerate
+# and must not be used; see section G of FOCUS_rebuttal_findings.md. TAG keeps
+# the relaunch in separate W&B projects so the two cannot be pooled.
 #
 # Two stages. Stage 1 trains the expert; stage 2 cannot run until its
 # demonstrations exist.
 #
 #   STAGE=expert bash scripts/otil_cartpole.sh     # 5 seeds, ~1h each
-#   # then convert the best run's rollouts:
-#   #   cp <logdir>/demos/DFlex_cartpoleswingup_*.pt \
-#   #      experts/demos/DFlex_cartpoleswingup_demos128.pt
+#   # then convert the best run's rollouts -- a plain cp does NOT work, the
+#   # saved rollouts are per-episode dicts and the loader wants stacked arrays:
+#   #   python experts/convert_rollouts.py <logdir>/demos/<file>.pt \
+#   #     experts/demos/DFlex_cartpoleswingup_demos128.pt
 #   STAGE=focus  bash scripts/otil_cartpole.sh     # 30 jobs
 set -euo pipefail
 
 STAGE="${STAGE:-focus}"
 RUNTIME="${RUNTIME:-4h}"           # 240-step episodes; far cheaper than locomotion
 CKPT_EVERY="${CKPT_EVERY:-2000}"
+TAG="${TAG:-sto}"                  # W&B project suffix; "sto" = stochastic_init fix
 DRY_RUN="${DRY_RUN:-0}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
 GPU_CONSTRAINT="${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
@@ -36,12 +48,14 @@ if [[ "$STAGE" == "expert" ]]; then
   run python spawner.py --task_name sapo --docker --docker_image "$DOCKER_IMAGE" \
     --deployment slurm --runtime "$RUNTIME" --gpu_constraint "$GPU_CONSTRAINT" \
     --no-cleanup --sweep --sweep_max 150 \
-    --set "wandb.project=cartpole_SAPO-expert-slurm" \
+    --set "wandb.project=cartpole${TAG:+-$TAG}_SAPO-expert-slurm" \
     --set "agent.ckpt_every=${CKPT_EVERY}" \
     --env_files dflex_cartpole.yaml --deploy_now
   echo
-  echo "When finished, install the best run's rollouts as the demonstrations:"
-  echo "  cp <logdir>/demos/DFlex_cartpoleswingup_*.pt experts/demos/DFlex_cartpoleswingup_demos128.pt"
+  echo "When finished, convert the best run's rollouts into demonstrations"
+  echo "(a plain cp fails: the rollouts are per-episode dicts, not stacked):"
+  echo "  python experts/convert_rollouts.py <logdir>/demos/<file>.pt \\"
+  echo "    experts/demos/DFlex_cartpoleswingup_demos128.pt"
   exit 0
 fi
 
@@ -69,7 +83,7 @@ for i in $ROWS_SEL; do
   run python spawner.py --task_name otil --docker --docker_image "$DOCKER_IMAGE" \
     --deployment slurm --runtime "$RUNTIME" --gpu_constraint "$GPU_CONSTRAINT" \
     --no-cleanup --sweep --sweep_max 150 --base_algo SAPO \
-    --set "wandb.project=cartpole_OTIL_SAPO-slurm" \
+    --set "wandb.project=cartpole${TAG:+-$TAG}_OTIL_SAPO-slurm" \
     --set "agent.ckpt_every=${CKPT_EVERY}" \
     --set "agent.otil.imitation_loss_type=${loss}" \
     --set "agent.otil.loss_ot_cost_type=${cost}" \
@@ -84,5 +98,5 @@ for i in $ROWS_SEL; do
     --env_files dflex_cartpole.yaml --deploy_now
 done
 echo
-echo "Watch: cartpole_OTIL_SAPO-slurm"
+echo "Watch: cartpole${TAG:+-$TAG}_OTIL_SAPO-slurm"
 echo "NOTE: cartpole returns are negative; do not expert-normalise."
