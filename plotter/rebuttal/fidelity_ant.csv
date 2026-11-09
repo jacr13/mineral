@@ -1,0 +1,2 @@
+dtw_coverage,dtw_coverage_std,dtw_precision,dtw_precision_std,environment,method,n_episodes,period_expert,period_learner,period_minima,period_ratio,run,w1_per_dim,w1_per_dim_std
+0.963681835617268,0.07437531767060249,0.7579137660449234,0.06082424488138777,ant,"FOCUS-ot-l2 (surviving ckpt, 9.83M)",32,23,22,22:0.099;44:0.214;65:0.306;87:0.349,0.9565217391304348,sweep_18,0.13108795384565988,0.0010849896025213325
