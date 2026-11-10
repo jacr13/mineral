@@ -113,3 +113,47 @@ def _tb_file(logdir):
     if not files:
         raise FileNotFoundError(f"no event file under {logdir}/tb")
     return max(files, key=lambda p: p.stat().st_size)
+
+
+# ------------------------------------------------------------ scores.json ---
+# Run directories are NOT uniform. Older OTIL runs carry the per-epoch curve as
+# my_ep_steps_hist.npy / my_ep_rewards_hist.npy; the Nov-2026 batches carry only
+# per-EPISODE arrays (ep_rewards_hist.npy) with no step axis, so they cannot be
+# scored at a step budget from the .npy files at all. What every run does have
+# is scores.json: the epoch and agent_steps it finished at, plus the 128-episode
+# evaluation at that point. That is one consistent measure available for every
+# run, which is why the comparisons below use it.
+#
+# It is NOT the same measure as the train-curve tail-mean the paper's figures
+# use, so eval and train numbers must never be mixed within one comparison.
+
+def read_scores(logdir):
+    """-> dict(steps, epoch, eval_mean, eval_len, n_episodes, config) or None."""
+    import json
+
+    d = Path(logdir)
+    f = d / "scores.json"
+    if not f.exists():
+        return None
+    sj = json.loads(f.read_text())
+    ev = sj.get("eval_scores/episode_rewards")
+    if not ev:
+        return None
+    cfg = {}
+    p = d / "resolved_config.yaml"
+    if p.exists():
+        cfg = yaml.safe_load(p.read_text()) or {}
+    return {
+        "logdir": str(d),
+        "steps": int(sj.get("agent_steps", 0)),
+        "epoch": int(sj.get("epoch", -1)),
+        "eval_mean": float(np.mean(ev)),
+        "eval_len": float(np.mean(sj.get("eval_scores/episode_lengths") or [np.nan])),
+        "n_episodes": len(ev),
+        "config": cfg,
+    }
+
+
+def discover_scores(root):
+    """Every run directory under ``root`` that has a scores.json."""
+    return sorted(p.parent for p in Path(root).glob("**/scores.json"))
