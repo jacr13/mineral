@@ -7,7 +7,6 @@ eval/
 demos/
 spawn/
 otil2.py
-plotter/plots/
 plotter/shac_vs_sapo/figures/
 plotter/plots*/
 OOPS_Supplementary/
@@ -15,6 +14,7 @@ crit_no_*/
 bestofk_ablation/
 mujoco_playground/
 ICLR Reviews/
+plotter/cluster_runs*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -154,9 +154,3 @@ dmypy.json
 
 # Swap files
 *.sw*
-
-# Run metrics mirrored from the cluster (plotter/local_runs.py reads these).
-# ~9k files; the cluster lost its route to api.wandb.ai, so the curves are
-# pulled straight off disk instead of through the W&B API.
-plotter/cluster_runs/
-plotter/cluster_runs_tb/
