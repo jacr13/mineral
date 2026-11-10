@@ -1,0 +1,5 @@
+# The image installs dependencies; source code is bind-mounted at /workspace.
+**
+!Dockerfile
+!pyproject.toml
+!uv.lock

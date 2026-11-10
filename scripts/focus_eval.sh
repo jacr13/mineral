@@ -1,9 +1,12 @@
-poetry update
+#!/usr/bin/env bash
+set -euo pipefail
+
+uv sync --locked
 
 run_dir="$(realpath plotter/workdir/DFlexHopper10M-FOCUS_SHAC_20260121_011014/sweep_15)"
 ckpt="$run_dir/ckpt/epochs100_steps204k_rewards869.14.pth"
 
-python - <<PY
+uv run --locked python - <<PY
 from omegaconf import OmegaConf
 
 from mineral.scripts.run import main
@@ -38,7 +41,7 @@ PY
 run_dir="$(realpath plotter/workdir/DFlexHopper10M-FOCUS_SHAC_20260121_011014_01/sweep_19)"
 ckpt="$run_dir/ckpt/epochs100_steps204k_rewards606.52.pth"
 
-python - <<PY
+uv run --locked python - <<PY
 from omegaconf import OmegaConf
 
 from mineral.scripts.run import main

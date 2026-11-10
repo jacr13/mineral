@@ -1,54 +1,62 @@
-[tool.poetry]
-package-mode = true
+[project]
 name = "mineral"
 version = "0.1.0"
-authors = ["etaoxing <etaoxing@users.noreply.github.com>"]
+authors = [{ name = "etaoxing", email = "etaoxing@users.noreply.github.com" }]
 description = "A minimal(ish) reinforcement learning library that aggregates reliable implementations"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "atalaya>=0.3.3,<0.4.0",
+    "chex>=0.1.92,<0.2.0",
+    "dflex",
+    "gym==0.23.1",
+    "hydra-colorlog>=1.2.0,<2.0.0",
+    "hydra-core>=1.3.2,<2.0.0",
+    "jax[cuda12]>=0.11,<0.12; sys_platform == 'linux'",
+    "jax>=0.11,<0.12; sys_platform == 'darwin'",
+    "matplotlib>=3.10.8,<4.0.0",
+    "mujoco-mjx>=3.14,<4.0.0",
+    "pandas>=2.3.3,<3.0.0",
+    "playground>=0.2.0,<0.3.0",
+    "python-dotenv>=1.2.1,<2.0.0",
+    "scipy==1.15.3",
+    "tabulate>=0.9.0,<0.10.0",
+    "tensorboard>=2.20.0,<3.0.0",
+    "termcolor>=3.1.0,<4.0.0",
+    "torch>=2.8.0,<2.9.0; sys_platform == 'darwin' or sys_platform == 'linux'",
+    "torch-jax-interop>=0.0.8,<0.0.9",
+    "urchin>=0.0.29,<0.0.30",
+    "usd-core>=26.8,<27.0",
+    "wandb>=0.22.2,<0.23.0",
+]
 
+[dependency-groups]
+dev = [
+    "poethepoet>=0.25.1,<0.26.0",
+    "ruff>=0.3.7,<0.4.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mineral*"]
+
+[tool.setuptools.package-data]
+mineral = ["cfgs/**/*.yaml"]
+
+[tool.uv]
+# Run source from the checkout, as with the previous --no-root installs.
+package = false
+
+[tool.uv.sources]
 dflex = { git = "https://github.com/jacr13/DiffRL.git", branch = "main" }
-gym = "0.23.1"
-hydra-colorlog = "^1.2.0"
-hydra-core = "^1.3.2"
-pandas = "^2.3.3"
-scipy = "1.15.3"
-tabulate = "^0.9.0"
-tensorboard = "^2.20.0"
-termcolor = "^3.1.0"
-torch = [
-  { version = "~2.8.0", markers = "sys_platform == 'darwin'" },
-  { version = "~2.8.0", source = "pytorch-cu126", markers = "sys_platform == 'linux'" }
-]
-urchin = "^0.0.29"
-wandb = "^0.22.2"
-python-dotenv = "^1.2.1"
-atalaya = "^0.3.3"
-matplotlib = "^3.10.8"
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 
-# mujoco_playground (MJX) support: JAX-native envs bridged into torch via torch-jax-interop
-jax = [
-  { version = "^0.11", extras = ["cuda12"], markers = "sys_platform == 'linux'" },
-  { version = "^0.11", markers = "sys_platform == 'darwin'" }
-]
-mujoco-mjx = "^3.14"
-playground = "^0.2.0"
-torch-jax-interop = "^0.0.8"
-# Required at runtime by torch-jax-interop and DFlex, respectively.
-chex = "^0.1.92"
-usd-core = "^26.8"
-
-[[tool.poetry.source]]
-name     = "pytorch-cu126"  # CUDA-specific wheels
-url      = "https://download.pytorch.org/whl/cu126"
-priority = "explicit"
-
-
-[tool.poetry.group.dev.dependencies]
-poethepoet = "^0.25.1"
-poetry-plugin-shell = "^1.0.0"
-ruff = "^0.3.7"
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 
 [tool.ruff]
@@ -101,29 +109,28 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 docstring-code-format = true
 
-# keep relevant parts in sync with pre-commit
+[tool.poe.executor]
+type = "simple"
+
 [tool.poe.tasks]  # https://github.com/nat-n/poethepoet
 
 # install
-install = "poetry install --no-root"
-install_nodev = "poetry install --no-root --no-dev"
-
-# sort
-_poetry_sort = "poetry sort"
+install = "uv sync"
+install_nodev = "uv sync --no-dev"
 
 # format
-ruff_check = "poetry run ruff check --fix ."
-ruff_fmt = "poetry run ruff format ."
-ruff_fix_unsafe = "poetry run ruff check --fix --unsafe-fixes ."
-format = ["ruff_check", "ruff_fmt", "_poetry_sort"]
+ruff_check = "uv run --locked ruff check --fix ."
+ruff_fmt = "uv run --locked ruff format ."
+ruff_fix_unsafe = "uv run --locked ruff check --fix --unsafe-fixes ."
+format = ["ruff_check", "ruff_fmt"]
 
 # delete venv and lock
-_delete_venv = "poetry env remove python"
-_delete_lock = "rm -f poetry.lock"
+_delete_venv = { shell = 'rm -rf -- "${UV_PROJECT_ENVIRONMENT:-.venv}"' }
+_delete_lock = "rm -f uv.lock"
 delete = ["_delete_lock", "_delete_venv"]
 
-# reinstall of venv
-reinstall = ["delete", "install"]
+# Reinstall the locked dependencies without changing their versions.
+reinstall = "uv sync --locked --reinstall"
 
 # cleaning
 clean = """
@@ -140,14 +147,10 @@ rm -rf .coverage
 
 # docker
 # --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)
-docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 --no-cache -t candidj0/mineral:no_kernels ."
-docker_build_k_1 = "docker run --gpus=all -u 1000:1000 -v .:/workspace --name mineral_build candidj0/mineral:no_kernels python -c 'import dflex'"
-docker_build_k_2 = "docker commit mineral_build candidj0/mineral:new"
-docker_build_k_3 = "docker rm mineral_build"
-docker_build_dflex_kernels = ["docker_build_k_1", "docker_build_k_2", "docker_build_k_3"]
+docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 -t candidj0/mineral:new ."
 
 docker_push = "docker push candidj0/mineral:new"
-dbp = ["docker_build", "docker_build_dflex_kernels", "docker_push"]
+dbp = ["docker_build", "docker_push"]
 
 docker = """
 docker run \

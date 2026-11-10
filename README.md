@@ -45,27 +45,51 @@ scripts/                local and cluster launch helpers
 The main experiments use Python 3.12, PyTorch, Hydra, DFlex.
 
 ```bash
-conda create -n focus python=3.12
-conda activate focus
-pip install poetry
-poetry install
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+uv sync --locked
 ```
 
-For direct `pip` use:
+Run commands through `uv run`, or activate `.venv` with `source .venv/bin/activate`.
+The source is run from the checkout; uv installs the dependencies without packaging
+the project. The training entry point loads `.env` using `python-dotenv`.
+
+Common dependency and task commands:
 
 ```bash
-pip install -e .
-pip install "torch>=2" torchvision
-pip install gym==0.23.1
+uv add <package>              # Add a dependency and update uv.lock
+uv lock --upgrade            # Resolve newer versions within the declared ranges
+uv sync --locked             # Install the versions recorded in uv.lock
+uv sync --locked --no-dev     # Install runtime dependencies only
+uv run poe format            # Run the Ruff tasks
 ```
 
-DFlex kernels need to be built once after installing DFlex:
+For a local installation, DFlex builds its kernels on first import. The Docker
+image already includes compiled kernels. To try the local DFlex example:
 
 ```bash
-python -m dflex.examples.test_env --env AntEnv --num-envs 4 --render
+uv run --locked python -m dflex.examples.test_env --env AntEnv --num-envs 4 --render
 ```
 
 IsaacGymEnvs tasks require the Isaac Gym Preview 4 package and Python 3.8-compatible Isaac Gym dependencies. The DFlex tasks used by the main FOCUS experiments run with Python 3.12.
+
+### Docker
+
+The CUDA development image uses uv to install Python and the locked dependencies,
+including development tools. Its environment lives at `/opt/venv`, outside the
+repository mounted at `/workspace`; `python` and `poe` work directly in the container.
+DFlex's CPU and CUDA kernels compile during the image build, which does not require
+a GPU. Running CUDA simulations still requires an NVIDIA GPU; CUDA initialization
+and the driver's PTX compilation happen at runtime.
+
+```bash
+uv run poe docker_build  # Build candidj0/mineral:new with DFlex kernels included
+uv run poe docker       # Start the container with GPU access
+```
+
+`uv run poe dbp` also pushes the image to Docker Hub. Rebuild existing Docker or
+Apptainer images for the uv workflow. The spawner's `--uv_update` flag explicitly
+upgrades dependencies before a job; otherwise generated commands use `uv.lock`.
 
 ## Demonstrations
 
@@ -83,7 +107,7 @@ experts/demos/DFlex_snu_demos128_return6246_len929.pt
 Single DFlex Hopper run:
 
 ```bash
-python -m mineral.scripts.run \
+uv run --locked python -m mineral.scripts.run \
   task=DFlex \
   task.env.env_name=hopper \
   agent=FOCUS/DFlexAntSHAC \
@@ -98,7 +122,7 @@ python -m mineral.scripts.run \
 Single DFlex Ant run with the OT settings used by the task config:
 
 ```bash
-python -m mineral.scripts.run \
+uv run --locked python -m mineral.scripts.run \
   task=DFlex \
   task.env.env_name=ant \
   agent=FOCUS/DFlexAntSHAC \
@@ -117,7 +141,7 @@ python -m mineral.scripts.run \
 To launch from the task files through the spawner:
 
 ```bash
-python spawner.py \
+uv run --locked python spawner.py \
   --task_name focus \
   --env_files dflex_hopper.yaml \
   --deployment local \
@@ -140,9 +164,9 @@ tasks/focus/dflex_snu_humanoid.yaml
 Baseline task files use the same demonstration layout:
 
 ```bash
-python spawner.py --task_name ild  --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
-python spawner.py --task_name dac  --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
-python spawner.py --task_name gail --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
+uv run --locked python spawner.py --task_name ild  --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
+uv run --locked python spawner.py --task_name dac  --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
+uv run --locked python spawner.py --task_name gail --env_files dflex_hopper.yaml --deployment local --no-docker --set wandb.mode=disabled --deploy_now
 ```
 
 Use `--sweep --sweep_max N` to generate bounded sweeps from a task file's `sweep:` section.

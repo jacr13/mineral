@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 import re
+import shlex
 import subprocess
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -49,7 +50,7 @@ SBATCH_CONSTRAINT = "#SBATCH --constraint={gpu_constraint}"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
-APPTAINER_CMD = """-n {num_workers} apptainer run {cuda} --containall -B $HOME/tmp_asset_dir:/home/noroot/conda/lib/python3.10/site-packages/rewarped/assets/warp_mpm_sga -B {path2code}:/workspace -B $HOME/scratch:/scratch {apptainer_image} \\
+APPTAINER_CMD = """-n {num_workers} apptainer run {cuda} --containall -B $HOME/tmp_asset_dir:/opt/venv/lib/python3.12/site-packages/rewarped/assets/warp_mpm_sga -B {path2code}:/workspace -B $HOME/scratch:/scratch {apptainer_image} \\
     bash -c "cd /workspace; \\
     {command}"
 """
@@ -83,7 +84,7 @@ srun {command}
 
 DOCKER_CMD = """docker run \\
     -v $(pwd):/workspace \\
-    {docker_image} {command}
+    {docker_image} bash -c {command}
 """
 
 LOCAL_SCRIPT_CONTENT = """#!/usr/bin/env bash
@@ -324,8 +325,8 @@ def _generate_sweep_configs(base_config, sweep_spec, mode, max_variants):
 
 def _command_from_overrides(overrides):
     if not overrides:
-        return "python -m mineral.scripts.run"
-    lines = ["python -m mineral.scripts.run \\"]
+        return "uv run --locked python -m mineral.scripts.run"
+    lines = ["uv run --locked python -m mineral.scripts.run \\"]
     for index, override in enumerate(overrides):
         suffix = " \\" if index < len(overrides) - 1 else ""
         lines.append(f"{override}{suffix}")
@@ -355,7 +356,7 @@ def _write_local_script(script_path, name, command, args):
             raise ValueError("Docker image must be specified when using Docker.")
         command = DOCKER_CMD.format(
             docker_image=args.docker_image,
-            command=command,
+            command=shlex.quote(command),
         )
 
     script_path.write_text(LOCAL_SCRIPT_CONTENT.format(name=name, command=command))
@@ -581,8 +582,8 @@ def run(args):
             overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
 
-            if effective_args.poetry_update:
-                command = f"poetry update && {command}"
+            if effective_args.uv_update:
+                command = f"uv sync --upgrade && {command}"
 
             print(f"[{id_config}/{len(configs)}-{sweep_index}/{len(variant_entries)}] Created task script: {script_path}")
             if effective_args.deployment == "slurm":
@@ -658,7 +659,7 @@ if __name__ == "__main__":
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")
-    boolean_flag(parser, "poetry_update", default=False, help="update poetry before deployment?")
+    boolean_flag(parser, "uv_update", default=False, help="update dependencies with uv before deployment?")
     boolean_flag(parser, "timestamp", default=True, help="append timestamp (YYYYMMDD_HHMMSS) to generated script filenames")
     boolean_flag(parser, "sweep_logdir", default=True, help="override logdir per sweep with timestamped subdirectories")
     parser.add_argument(
