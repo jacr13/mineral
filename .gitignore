@@ -153,4 +153,5 @@ dmypy.json
 .DS_Store
 
 # Swap files
-*.sw*
+*.sw*plotter/viewer/probe.*
+plotter/rebuttal/probe_*
