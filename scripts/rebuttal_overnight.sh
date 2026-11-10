@@ -232,6 +232,59 @@ if [[ " $BATCHES " == *" V "* ]]; then
   done
 fi
 
+# --- O. ORCA on the locomotion tasks ----------------------------------------
+# Q9cS names ORCA as a closely related method missing from the evaluation. It
+# is implemented and run on CartPole, but that task does not discriminate
+# between alignment objectives (spread 13.2 against a within-arm seed sd of
+# ~27), so it cannot answer whether ordered coverage beats OT where it matters.
+# These are the tasks the paper is actually judged on.
+#
+# tau=200, not 0.5: ORCA's score is on a different scale from the OT and DTW
+# costs, and at tau=0.5 the softmin would be a hard argmin over candidates.
+# 200 matches OT's effective candidate count (K_eff 1.2-2.0); see the K_eff
+# measurement in the LMQH reply.
+#
+# NOTE this is a port of ORCA's objective to states. The published method
+# scores video frames as subgoals, so these runs test the ordered-coverage
+# criterion in our pipeline, not their system.
+if [[ " $BATCHES " == *" O "* ]]; then
+  banner "O. ORCA on locomotion  (${O_ENVS:-4 envs} x 6 seeds)"
+  for env in ${O_ENVS:-dflex_hopper dflex_ant dflex_humanoid dflex_snu_humanoid}; do
+    steps="${MAX_STEPS[$env]}"
+    echo "  ${env} / orca"
+    cmd=(python spawner.py
+      --task_name otil --docker
+      --docker_image "${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+      --deployment slurm --runtime "$RUNTIME"
+      --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
+      --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
+      --set "wandb.project=orca${O_TAG:+-$O_TAG}_OTIL_SAPO-${env}-slurm"
+      --set "wandb.mode=${WANDB_MODE:-online}"
+      --set "agent.shac.max_agent_steps=${steps}"
+      --set "agent.ckpt_every=${CKPT_EVERY}"
+      --set "agent.otil.imitation_loss_type=orca"
+      --set "agent.otil.loss_ot_cost_type=l2"
+      --set "agent.otil.loss_mlp_features_dim=64"
+      --set "agent.otil.loss_best_of_k_tau=200"
+      --set "agent.otil.loss_best_of_k_k=8"
+      --set "agent.otil.loss_orca_lam=0.25"
+      --set "agent.otil.loss_orca_cost_mode=neg_log_r"
+      --set "agent.otil.loss_orca_normalize_p=false"
+      --set "agent.otil.loss_ot_detach_plan=true"
+      --set "agent.otil.critic_reward_mapping=exp"
+      --set "agent.otil.loss_use_huber_speedup=false"
+      --set "agent.otil.loss_use_detached_prev_obs=false"
+      --set "agent.otil.critic_disabled=false"
+      --set "agent.otil.critic_reward_shapping=true"
+      --env_files "${env}.yaml"
+      --deploy_now)
+    if [[ "$DRY_RUN" == "1" ]]; then printf '%q ' "${cmd[@]}"; echo; continue; fi
+    wait_for_room "$BATCH_JOBS"
+    before="$(job_count)"; "${cmd[@]}"; sleep "$SETTLE_SECONDS"; after="$(job_count)"
+    delta=$(( after - before )); [[ "$delta" -gt 0 ]] && BATCH_JOBS="$delta"
+  done
+fi
+
 # --- F. isolating the simulator derivative (zDN4's Z3) -----------------------
 # Table 13 compares FOCUS against ZO-FOCUS, which swaps the entire actor-critic
 # for PPO/SAC -- and the audit showed it is not even reward-matched (C5), so it
