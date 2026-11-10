@@ -171,6 +171,61 @@ if [[ " $BATCHES " == *" D "* ]]; then
   done
 fi
 
+# --- V. the two variants that exist nowhere for Humanoid / SNU ---------------
+# The reported Jan-2026 checkpoints are gone from BOTH the live workdir and the
+# beegfs archive (verified: 0 of 68 reported logdirs retain a .pth), so no
+# expert-vs-learner video of FOCUS-OT-Cos or plain FOCUS-L2 is possible on
+# Humanoid or SNU Humanoid from anything that exists. Hopper has all three
+# variants locally and Ant has all three in the archive (OT-L2 1.005x, OT-Cos
+# 0.916x, L2 0.706x, each with 51 step-tagged checkpoints), which leaves
+# exactly these four cells empty.
+#
+# Worth more than video: there is no fresh OT-Cos at the reported tau=0.5 on
+# any task, so several claims currently rest on the reported runs alone. Six
+# seeds gives a real arm, not just a clip, and insures against drawing a
+# collapsed seed (~16% on SNU) for the render.
+if [[ " $BATCHES " == *" V "* ]]; then
+  banner "V. OT-Cos and L2 on Humanoid + SNU  (2 envs x 2 variants x 6 seeds = 24 jobs)"
+  for env in ${V_ENVS:-dflex_humanoid dflex_snu_humanoid}; do
+    steps="${MAX_STEPS[$env]}"
+    for variant in ot_cos l2; do
+      if [[ "$variant" == "ot_cos" ]]; then
+        loss=ot; cost=cosine; mlp=null
+      else
+        loss=l2; cost=l2; mlp=64
+      fi
+      echo "  ${env} / ${variant}  (loss=${loss} cost=${cost} mlp=${mlp})"
+      cmd=(python spawner.py
+        --task_name otil --docker
+        --docker_image "${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+        --deployment slurm --runtime "$RUNTIME"
+        --gpu_constraint "${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
+        --no-cleanup --sweep --sweep_max 150 --base_algo SAPO
+        --set "wandb.project=variants${V_TAG:+-$V_TAG}_OTIL_SAPO-${env}-slurm"
+        --set "wandb.mode=${WANDB_MODE:-online}"
+        --set "agent.shac.max_agent_steps=${steps}"
+        --set "agent.ckpt_every=${CKPT_EVERY}"
+        --set "agent.otil.imitation_loss_type=${loss}"
+        --set "agent.otil.loss_ot_cost_type=${cost}"
+        --set "agent.otil.loss_mlp_features_dim=${mlp}"
+        --set "agent.otil.loss_best_of_k_tau=0.5"
+        --set "agent.otil.loss_best_of_k_k=8"
+        --set "agent.otil.loss_ot_detach_plan=true"
+        --set "agent.otil.critic_reward_mapping=exp"
+        --set "agent.otil.loss_use_huber_speedup=false"
+        --set "agent.otil.loss_use_detached_prev_obs=false"
+        --set "agent.otil.critic_disabled=false"
+        --set "agent.otil.critic_reward_shapping=true"
+        --env_files "${env}.yaml"
+        --deploy_now)
+      if [[ "$DRY_RUN" == "1" ]]; then printf '%q ' "${cmd[@]}"; echo; continue; fi
+      wait_for_room "$BATCH_JOBS"
+      before="$(job_count)"; "${cmd[@]}"; sleep "$SETTLE_SECONDS"; after="$(job_count)"
+      delta=$(( after - before )); [[ "$delta" -gt 0 ]] && BATCH_JOBS="$delta"
+    done
+  done
+fi
+
 # --- F. isolating the simulator derivative (zDN4's Z3) -----------------------
 # Table 13 compares FOCUS against ZO-FOCUS, which swaps the entire actor-critic
 # for PPO/SAC -- and the audit showed it is not even reward-matched (C5), so it
