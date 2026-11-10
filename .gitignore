@@ -2,6 +2,7 @@
 data/
 workdir*
 outputs/
+out/
 experts/dflex/*.pt
 eval/
 demos/

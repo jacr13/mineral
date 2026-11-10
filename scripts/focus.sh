@@ -35,8 +35,8 @@ SETTLE_SECONDS=5       # give slurm time to show new jobs
 # fall a bit short -- accepted tradeoff, confirmed with the user.
 #
 # These values are also set directly in each tasks/focus/dflex_*.yaml's
-# `spawner.runtime`, which takes precedence over this script's --runtime flag
-# (spawner.py: a config's own spawner.runtime always overrides the CLI value)
+# `spawner.runtime`, used when no explicit --runtime flag is supplied
+# (an explicit CLI runtime takes precedence over the task's default)
 # -- kept in sync here so the two don't silently disagree.
 # MAX_STEPS=(
 #   10000000  # dflex_hopper

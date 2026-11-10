@@ -400,6 +400,8 @@ def _write_slurm_script(script_path, name, command, args):
         modules=modules,
         command=command,
     )
+    # SLURM opens stdout/stderr before executing the script.
+    Path("out").mkdir(parents=True, exist_ok=True)
     script_path.write_text(script_content)
     script_path.chmod(0o755)
 
@@ -505,7 +507,12 @@ def run(args):
                 raise ValueError(
                     f"'spawner' override '{key}' in '{config_path}' does not match any CLI argument.",
                 )
+            # An explicit CLI runtime takes precedence over the task's default.
+            if key == "runtime" and args.runtime is not None:
+                continue
             setattr(effective_args, key, value)
+        if effective_args.runtime is None:
+            effective_args.runtime = "12h"
 
         cli_overrides = _parse_cli_overrides(effective_args.overrides)
 
@@ -637,8 +644,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--runtime",
         type=str,
-        default="12h",
-        help="job runtime use format d-hh:mm:ss, or number of minutes, hours, days e.g., 30m, 2h, 1d",
+        default=None,
+        help="override task runtime (otherwise spawner.runtime or 12h); use d-hh:mm:ss or e.g. 30m, 2h, 1d",
     )
     parser.add_argument(
         "--partition",

@@ -170,6 +170,8 @@ uv run --locked python spawner.py --task_name gail --env_files dflex_hopper.yaml
 ```
 
 Use `--sweep --sweep_max N` to generate bounded sweeps from a task file's `sweep:` section.
+An explicit `--runtime` overrides the task's `spawner.runtime`; without either,
+the spawner defaults to 12 hours.
 
 ## License
 
