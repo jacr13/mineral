@@ -135,7 +135,13 @@ def read_scores(logdir):
     f = d / "scores.json"
     if not f.exists():
         return None
-    sj = json.loads(f.read_text())
+    try:
+        sj = json.loads(f.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # Empty or truncated: written at exit, so a run still training (or a
+        # partial copy) leaves a zero-byte file. Treat as "no result yet"
+        # rather than letting one bad file abort a whole sweep.
+        return None
     ev = sj.get("eval_scores/episode_rewards")
     if not ev:
         return None
