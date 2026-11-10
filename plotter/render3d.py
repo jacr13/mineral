@@ -368,3 +368,173 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ------------------------------------------------------------------ bones ---
+# SNU Humanoid only: real bone meshes placed rigidly per link. See
+# plotter/snu_bones.py for why the rest pose has to be divided out first.
+
+def _page_bones(meshes, frames, cell, cols, rows, cam):
+    import base64 as _b64
+
+    geo = {}
+    for name, b in meshes.items():
+        geo[name] = {
+            "v": _b64.b64encode(b["verts"].astype(np.float32).tobytes()).decode(),
+            "f": _b64.b64encode(b["faces"].astype(np.uint32).tobytes()).decode(),
+        }
+    payload = _b64.b64encode(json.dumps({"geo": geo, "frames": frames}).encode()).decode()
+    return f"""<!doctype html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#fff">
+<canvas id="c" width="{cols * cell}" height="{rows * cell}"></canvas>
+<script id="payload" type="application/octet-stream">{payload}</script>
+<script type="module">
+import * as THREE from './three.module.js';
+const D = JSON.parse(atob(document.getElementById('payload').textContent));
+const CELL = {cell}, COLS = {cols}, ROWS = {rows}, CAM = {json.dumps(cam)};
+
+function b64f32(s) {{
+  const bin = atob(s), buf = new ArrayBuffer(bin.length), u8 = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Float32Array(buf);
+}}
+function b64u32(s) {{
+  const bin = atob(s), buf = new ArrayBuffer(bin.length), u8 = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Uint32Array(buf);
+}}
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({{canvas, antialias: true}});
+renderer.setSize(COLS * CELL, ROWS * CELL, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setScissorTest(true);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf2f5f8);
+const tex = (() => {{
+  const s = 256, cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#e9edf2'; g.fillRect(0, 0, s, s);
+  g.fillStyle = '#dde3ea';
+  g.fillRect(0, 0, s/2, s/2); g.fillRect(s/2, s/2, s/2, s/2);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(60, 60); t.anisotropy = 4;
+  return t;
+}})();
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240),
+  new THREE.MeshStandardMaterial({{map: tex, roughness: 0.98}}));
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(4, 8, 5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.near = 0.5; key.shadow.camera.far = 40;
+const S = 2.4;
+key.shadow.camera.left = -S; key.shadow.camera.right = S;
+key.shadow.camera.top = S; key.shadow.camera.bottom = -S;
+key.shadow.bias = -0.0012;
+scene.add(key, new THREE.AmbientLight(0xffffff, 0.5),
+          new THREE.HemisphereLight(0xcfe0ff, 0x586070, 0.5));
+
+// Bone-like material: warm off-white, matte, slight subsurface feel from the
+// hemisphere light. This is what reads as a skeleton rather than a toy.
+const boneMat = new THREE.MeshStandardMaterial({{
+  color: 0xeae3d2, roughness: 0.68, metalness: 0.0, flatShading: false}});
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 120);
+const objs = {{}};
+for (const [name, g] of Object.entries(D.geo)) {{
+  const bg = new THREE.BufferGeometry();
+  bg.setAttribute('position', new THREE.BufferAttribute(b64f32(g.v), 3));
+  bg.setIndex(new THREE.BufferAttribute(b64u32(g.f), 1));
+  bg.computeVertexNormals();
+  const m = new THREE.Mesh(bg, boneMat);
+  m.castShadow = true; m.receiveShadow = false;
+  scene.add(m); objs[name] = m;
+}}
+
+for (let i = 0; i < D.frames.length; i++) {{
+  const fr = D.frames[i];
+  let cx = 0, n = 0;
+  for (const [name, p, q] of fr) {{
+    const o = objs[name];
+    if (!o) continue;
+    o.position.set(p[0], p[1], p[2]);
+    o.quaternion.set(q[0], q[1], q[2], q[3]);
+    cx += p[0]; n++;
+  }}
+  cx = n ? cx / n : 0;
+  camera.position.set(cx + CAM.dist * Math.sin(CAM.yaw), CAM.height, CAM.dist * Math.cos(CAM.yaw));
+  camera.lookAt(cx, CAM.look, 0);
+  key.position.set(cx + 4, 8, 5);
+  key.target.position.set(cx, 0, 0); key.target.updateMatrixWorld();
+  const col = i % COLS, row = Math.floor(i / COLS);
+  const x = col * CELL, y = (ROWS - 1 - row) * CELL;
+  renderer.setViewport(x, y, CELL, CELL);
+  renderer.setScissor(x, y, CELL, CELL);
+  renderer.render(scene, camera);
+}}
+document.title = "done";
+</script></body></html>
+"""
+
+
+def render_bones_video(meshes, frame_sets, labels, out_path, cell=420, fps=30,
+                       cam=None, per_sheet=40):
+    """Side-by-side bone-mesh video. ``frame_sets`` hold per-frame placements."""
+    from PIL import Image, ImageDraw
+
+    import imageio.v2 as imageio
+
+    cam = cam or CAMERAS["snu_humanoid"]
+    n = min(len(f) for f in frame_sets)
+    work = tempfile.mkdtemp(prefix="r3db_", dir=os.path.dirname(os.path.abspath(out_path)))
+    chrome = _chromium()
+    try:
+        panels = []
+        for k, fs in enumerate(frame_sets):
+            out_dir = os.path.join(work, f"p{k}")
+            os.makedirs(out_dir, exist_ok=True)
+            shutil.copy(THREE, os.path.join(out_dir, "three.module.js"))
+            sheets = []
+            for start in range(0, n, per_sheet):
+                chunk = fs[start:start + per_sheet]
+                cols = int(math.ceil(math.sqrt(len(chunk))))
+                rows = int(math.ceil(len(chunk) / cols))
+                page = os.path.join(out_dir, f"s{start:05d}.html")
+                png = os.path.join(out_dir, f"s{start:05d}.png")
+                with open(page, "w") as f:
+                    f.write(_page_bones(meshes, chunk, cell, cols, rows, cam))
+                subprocess.run(
+                    [chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
+                     "--enable-unsafe-swiftshader", "--allow-file-access-from-files",
+                     "--hide-scrollbars", "--virtual-time-budget=120000",
+                     f"--screenshot={png}",
+                     f"--window-size={cols * cell},{rows * cell}", f"file://{page}"],
+                    check=False, capture_output=True, timeout=600)
+                if not os.path.exists(png):
+                    raise RuntimeError(f"chromium produced no screenshot for {page}")
+                sheets.append((png, cols, rows, len(chunk)))
+            panels.append(frames_from_sheets(sheets, cell))
+        writer = imageio.get_writer(out_path, fps=fps, macro_block_size=1)
+        try:
+            for t in range(n):
+                row = [p[t] for p in panels]
+                w = sum(im.width for im in row)
+                canvas = Image.new("RGB", (w, row[0].height + 26), "white")
+                x = 0
+                for im in row:
+                    canvas.paste(im, (x, 26)); x += im.width
+                d = ImageDraw.Draw(canvas)
+                x = 0
+                for im, lab in zip(row, labels):
+                    d.text((x + 10, 7), lab, fill=(40, 44, 52)); x += im.width
+                writer.append_data(np.asarray(canvas))
+        finally:
+            writer.close()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return out_path
