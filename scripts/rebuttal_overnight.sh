@@ -188,11 +188,17 @@ if [[ " $BATCHES " == *" V "* ]]; then
   banner "V. OT-Cos and L2 on Humanoid + SNU  (2 envs x 2 variants x 6 seeds = 24 jobs)"
   for env in ${V_ENVS:-dflex_humanoid dflex_snu_humanoid}; do
     steps="${MAX_STEPS[$env]}"
-    for variant in ot_cos l2; do
+    for variant in ${V_VARIANTS:-ot_cos l2}; do
+      # The three reported variants are NOT reward-matched -- verified against
+      # the reported runs' own configs on both envs: FOCUS-L2 and FOCUS-OT-L2
+      # use critic_reward_mapping=exp with a 64-dim feature map, while
+      # FOCUS-OT-Cos uses log_exp with no feature map. Forcing exp on the
+      # cosine arm (as the first launch of this batch did) is a different
+      # method: every seed collapsed, 0.296 against the reported 0.897 on SNU.
       if [[ "$variant" == "ot_cos" ]]; then
-        loss=ot; cost=cosine; mlp=null
+        loss=ot; cost=cosine; mlp=null; mapping=log_exp
       else
-        loss=l2; cost=l2; mlp=64
+        loss=l2; cost=l2; mlp=64; mapping=exp
       fi
       echo "  ${env} / ${variant}  (loss=${loss} cost=${cost} mlp=${mlp})"
       cmd=(python spawner.py
@@ -211,7 +217,7 @@ if [[ " $BATCHES " == *" V "* ]]; then
         --set "agent.otil.loss_best_of_k_tau=0.5"
         --set "agent.otil.loss_best_of_k_k=8"
         --set "agent.otil.loss_ot_detach_plan=true"
-        --set "agent.otil.critic_reward_mapping=exp"
+        --set "agent.otil.critic_reward_mapping=${mapping}"
         --set "agent.otil.loss_use_huber_speedup=false"
         --set "agent.otil.loss_use_detached_prev_obs=false"
         --set "agent.otil.critic_disabled=false"
