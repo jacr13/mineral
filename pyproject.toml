@@ -24,7 +24,7 @@ torch = [
 urchin = "^0.0.29"
 wandb = "^0.22.2"
 python-dotenv = "^1.2.1"
-atalaya = {extras = ["wandb"], version = "^0.2.8"}
+atalaya = "^0.3.3"
 matplotlib = "^3.10.8"
 
 # mujoco_playground (MJX) support: JAX-native envs bridged into torch via torch-jax-interop

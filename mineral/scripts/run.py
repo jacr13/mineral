@@ -5,7 +5,6 @@ import sys
 
 import hydra
 import numpy as np
-import wandb
 import yaml
 from dotenv import load_dotenv
 from hydra.utils import to_absolute_path
@@ -13,7 +12,7 @@ from omegaconf import DictConfig, OmegaConf
 from termcolor import cprint
 
 from ..common.job_clock import JobClock
-from .utils import create_uuid
+from .utils import make_run_names
 
 load_dotenv()
 
@@ -37,11 +36,13 @@ def make_datasets(config, env):
     return TaskSuite.make_datasets(config, env)
 
 
-def save_run_metadata(logdir, run_name, run_id, resolved_config):
+def save_run_metadata(logdir, resolved_config, run_name, run_id, project=None, run_group=None):
     run_metadata = {
         'logdir': logdir,
         'run_name': run_name,
         'run_id': run_id,
+        'project': project,
+        'run_group': run_group,
     }
     yaml.dump(run_metadata, open(os.path.join(logdir, 'run_metadata.yaml'), 'w'), default_flow_style=False)
     yaml.dump(resolved_config, open(os.path.join(logdir, 'resolved_config.yaml'), 'w'), default_flow_style=False)
@@ -106,48 +107,13 @@ def main(config: DictConfig):
     print(pprint.pformat(resolved_config, compact=True, indent=1), '\n')
 
     if rank == 0:
-        os.environ['WANDB_START_METHOD'] = 'thread'
-        # connect to wandb
-        wandb_config = OmegaConf.to_container(config.wandb, resolve=True)
-
-        if wandb_config.get('project', None) is None:
-            wandb_config['project'] = logdir.split('/')[-2]
-
-        name = wandb_config.get('name', None)
-        uuid_no_salt_no_seed = None
-        if name is None:
-            uuid, uuid_no_salt_no_seed = create_uuid(
-                method='human_hash',
-                add_salt=True,
-                config=resolved_config,
-                task=f"{config.task.name}_{config.task.env.env_name}_{config.task.env.numEnvs}",
-            )
-            print(f'Generated run name (uuid): {uuid}')
-            wandb_config['name'] = uuid
-            wandb_config['id'] = uuid
-            wandb_config['group'] = uuid_no_salt_no_seed
-
-        if wandb_config.get('group', None) is not None:
-            run_group = wandb_config['group']
-        elif uuid_no_salt_no_seed is not None:
-            run_group = uuid_no_salt_no_seed
-        else:
-            run_group = logdir.split('/')[-2]
-
-        wandb_config['group'] = run_group
-
         job_id = os.environ.get("SLURM_JOB_ID")
         print(f'SLURM_JOB_ID: {job_id}')
         resolved_config['slurm_job_id'] = job_id
 
-        wandb_run = wandb.init(
-            **wandb_config,
-            dir=logdir,
-            config=resolved_config,
-        )
-        run_name, run_id = wandb_run.name, wandb_run.id
-        print(f'run_group: {run_group}, run_name: {run_name}, run_id: {run_id}')
-        save_run_metadata(logdir, run_name, run_id, resolved_config)
+        names = make_run_names(config, resolved_config, logdir)
+        print(f"run_group: {names['run_group']}, run_name: {names['run_name']}, run_id: {names['run_id']}")
+        save_run_metadata(logdir, resolved_config, **names)
 
     # generate random seeds (deterministically given config.seed)
     # should be same across workers since each worker should add its global rank
@@ -209,14 +175,13 @@ def main(config: DictConfig):
 
         traceback.print_exc()
         print(f'Exception: {e}')
+        agent.writer.record_exception(e)  # info.json: status failed/interrupted + traceback
 
     # --- Cleanup ---
     if hasattr(env, 'renderer') and config.task.env.render:
         env.renderer.save()
 
-    if rank == 0:
-        # close wandb
-        wandb.finish()
+    agent.writer.close()  # flushes every logger and finishes their runs
     # env.close()
 
 

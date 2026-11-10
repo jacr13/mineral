@@ -84,27 +84,26 @@ test = ["astroid (>=2,<5)", "pytest (<9.0)", "pytest-cov", "pytest-xdist"]
 
 [[package]]
 name = "atalaya"
-version = "0.2.8"
-description = "Flexible experiment logging helpers for PyTorch projects."
+version = "0.3.3"
+description = "PyTorch experiment logging that keeps runs reproducible and by default never relies on the network."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "atalaya-0.2.8-py3-none-any.whl", hash = "sha256:7b52d77e47b51f8d2b6e5c4d6123fe99062df3a52c3e87dbf40ac522784e9d2f"},
-    {file = "atalaya-0.2.8.tar.gz", hash = "sha256:6fa8e35f31a712e341b9894d484f5de1a00573727d7973bc74740c39d48105b1"},
+    {file = "atalaya-0.3.3-py3-none-any.whl", hash = "sha256:2137800ce94daa22911ab988d52dda50d4560e5fa5fe97c7201103d7f1abef76"},
+    {file = "atalaya-0.3.3.tar.gz", hash = "sha256:03da7fb2cc125a594a43d8dead618b28250be2d5e3a093a6b80c566421f9fc66"},
 ]
 
 [package.dependencies]
 numpy = ">=2.2,<3.0"
 psutil = ">=7.1,<8.0"
 tensorboardX = ">=2.6,<3.0"
-wandb = {version = ">=0.22,<0.23", optional = true, markers = "extra == \"wandb\" or extra == \"all\""}
 
 [package.extras]
-all = ["clearml (>=2.0,<3.0)", "comet-ml (>=3.54,<4.0)", "matplotlib (>=3.10,<4.0)", "neptune[tensorboard] (>=1.14,<2.0)", "seaborn (>=0.13,<0.14)", "wandb (>=0.22,<0.23)"]
+all = ["clearml (>=2.0,<3.0)", "comet-ml (>=3.54,<4.0)", "matplotlib (>=3.10,<4.0)", "pluto-ml (>=0.0.29,<0.1)", "seaborn (>=0.13,<0.14)", "wandb (>=0.22,<0.23)"]
 clearml = ["clearml (>=2.0,<3.0)"]
 comet = ["comet-ml (>=3.54,<4.0)"]
-neptune = ["neptune[tensorboard] (>=1.14,<2.0)"]
+pluto = ["pluto-ml (>=0.0.29,<0.1)"]
 visualization = ["matplotlib (>=3.10,<4.0)", "seaborn (>=0.13,<0.14)"]
 wandb = ["wandb (>=0.22,<0.23)"]
 
@@ -6414,4 +6413,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "0f7d8697fbb4b16a93a19f003431a6a7b2e3abb8ae371b345584fe388f34d712"
+content-hash = "8a3232fa606e9ebfa170c4dc6b18f213ac1bf12b1c9d8dffa6c0056e776aefb0"

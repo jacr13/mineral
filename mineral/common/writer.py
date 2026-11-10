@@ -20,6 +20,20 @@ class Writer:
             output(tuple(self._metrics))
         self._metrics.clear()
 
+    def record_exception(self, exc):
+        """Mark the run failed (interrupted for Ctrl-C) in outputs that track it: atalaya's info.json."""
+        for output in self.outputs:
+            writer = getattr(output, 'writer', None)
+            if hasattr(writer, 'record_exception'):  # atalaya >= 0.3.3
+                writer.record_exception(exc)
+
+    def close(self):
+        """Write what is pending and close the outputs (last events are otherwise lost at exit)."""
+        self.write()
+        for output in self.outputs:
+            if hasattr(output, 'close'):
+                output.close()
+
 
 class AsyncOutput:
     def __init__(self, callback, parallel=True):
@@ -37,6 +51,12 @@ class AsyncOutput:
             self._future = self._executor.submit(self._callback, summaries)
         else:
             self._callback(summaries)
+
+    def close(self):
+        if self._parallel and self._future is not None:
+            self._future.result()
+        if hasattr(self, 'writer'):
+            self.writer.close()
 
 
 class TensorboardWriter(AsyncOutput):
@@ -94,7 +114,7 @@ class TensorboardWriter(AsyncOutput):
                 [
                     'ffmpeg -y -f rawvideo -vcodec rawvideo',
                     f'-r {fps:.02f} -s {w}x{h} -pix_fmt {pxfmt} -i - -filter_complex',
-                    '[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse',
+                    '[0:v]split[x][z];[z]palettegen[y];[x][y]paletteuse',
                     f'-r {fps:.02f} -f gif -',
                 ]
             )
@@ -121,11 +141,47 @@ class TensorboardWriter(AsyncOutput):
         self.writer._get_file_writer().add_summary(video(tag, vid_tensor, fps), global_step, walltime)
 
 
+class AtalayaWriter(TensorboardWriter):
+    """atalaya's Writer: the same event file, plus data.csv, info.json and log.txt.
+
+    ``backends`` (e.g. ``["wandb"]``) are started through atalaya's ``with_<backend>``,
+    each with ``backend_options[<backend>]``.
+    """
+
+    BACKENDS = ('wandb', 'pluto', 'clearml', 'comet')
+
+    def __init__(self, tb_dir, config, parallel=True, backends=(), backend_options=None, **atalaya_options):
+        AsyncOutput.__init__(self, self._write, parallel)
+        from atalaya import Writer as _Writer
+
+        atalaya_options.setdefault('save_code', False)  # git info + git.diff pin the code
+        self.writer = _Writer(logdir=tb_dir, config=config, **atalaya_options)
+        backend_options = backend_options or {}
+        for backend in backends:  # before anything is logged: they re-create the event file
+            getattr(self.writer, f'with_{backend}')(**backend_options.get(backend, {}))
+
+    def add_video(self, tag, vid_tensor, global_step=None, walltime=None, fps=8):
+        # mineral videos are (B, T, H, W, C); atalaya encodes the GIF with ffmpeg
+        self.writer.add_video(tag, vid_tensor, global_step, fps=fps, walltime=walltime, dataformats='NTHWC')
+
+
 class WandbWriter:
-    def __init__(self):
+    """W&B logger: starts and finishes its own run, so wandb is only imported when used."""
+
+    def __init__(self, logdir, config, wandb_options=None, name=None, run_id=None, group=None, project=None):
+        import os
+
         import wandb
 
+        os.environ.setdefault('WANDB_START_METHOD', 'thread')
+        options = dict(wandb_options or {})
+        options.update({k: v for k, v in (('name', name), ('id', run_id), ('group', group), ('project', project)) if v})
+        config = dict(config, slurm_job_id=os.environ.get('SLURM_JOB_ID'))
         self.wandb = wandb
+        self.run = wandb.init(**options, dir=logdir, config=config)
+
+    def close(self):
+        self.wandb.finish()
 
     def __call__(self, summaries):
         wandb = self.wandb

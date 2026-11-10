@@ -255,3 +255,33 @@ def uuid_syllables(*args, **kwargs):
         for i1, i2 in zip(indices1, indices2, strict=False):
             result += part1[i1] + part2[i2]
     return result
+
+
+def make_run_names(config, resolved_config, logdir):
+    """Run name, id, group and project, as wandb.init used to get them.
+
+    Read from the ``wandb`` config block (where tasks set project/name/group),
+    so runs keep the same names whichever loggers are enabled. Without a name,
+    the name is a hash of the resolved config plus a salt and the seed, and the
+    group the same hash without salt and seed, so the seeds of one config share
+    a group.
+    """
+    names = OmegaConf.to_container(config.get('wandb', {}), resolve=True) or {}
+    project = names.get('project') or logdir.split('/')[-2]
+    run_name, run_id, group = names.get('name'), names.get('id'), names.get('group')
+    if run_name is None:
+        run_name, uuid_no_salt_no_seed = create_uuid(
+            method='human_hash',
+            add_salt=True,
+            config=resolved_config,
+            task=f"{config.task.name}_{config.task.env.env_name}_{config.task.env.numEnvs}",
+        )
+        print(f'Generated run name (uuid): {run_name}')
+        run_id = run_name
+        group = uuid_no_salt_no_seed  # as before: a generated name always sets the group
+    return {
+        'run_name': run_name,
+        'run_id': run_id or run_name,
+        'run_group': group or logdir.split('/')[-2],
+        'project': project,
+    }

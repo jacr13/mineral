@@ -7,7 +7,7 @@ import torch
 from omegaconf import OmegaConf
 
 from ..common.metrics import Metrics
-from ..common.writer import TensorboardWriter, WandbWriter, Writer
+from ..common.writer import AtalayaWriter, TensorboardWriter, WandbWriter, Writer
 
 
 class Agent:
@@ -64,11 +64,36 @@ class Agent:
         os.makedirs(self.tb_dir, exist_ok=True)
 
         resolved_config = OmegaConf.to_container(full_cfg, resolve=True)
-        writers = [
-            WandbWriter(),
-            TensorboardWriter(self.tb_dir, resolved_config),
-        ]
-        self.tb_summary_writer = writers[1].writer
+        loggers = list(full_cfg.get('loggers', ['atalaya']))
+        backends = self._atalaya_backends(loggers)
+        main_process = self.rank <= 0  # one W&B run, data.csv and info.json per run
+        meta = self._run_metadata()
+        writers = []
+        if 'wandb' in loggers and main_process:
+            writers.append(
+                WandbWriter(
+                    self.logdir,
+                    resolved_config,
+                    wandb_options=OmegaConf.to_container(full_cfg.get('wandb', {}), resolve=True),
+                    name=meta.get('run_name'),
+                    run_id=meta.get('run_id'),
+                    group=meta.get('run_group'),
+                    project=meta.get('project'),
+                )
+            )
+        if 'tensorboard' in loggers:
+            writers.append(TensorboardWriter(self.tb_dir, resolved_config))
+        if ('atalaya' in loggers or backends) and main_process:
+            writers.append(
+                AtalayaWriter(
+                    self.tb_dir,
+                    resolved_config,
+                    backends=backends,
+                    backend_options=self._atalaya_backend_options(full_cfg, backends, meta),
+                    **{k: meta[m] for k, m in (('name', 'run_name'), ('project', 'project')) if meta.get(m)},
+                )
+            )
+        self.tb_summary_writer = next((w.writer for w in writers if hasattr(w, 'writer')), None)
         self.writer = Writer(writers)
 
         self.print_every = full_cfg.agent.get('print_every', -1)
@@ -104,6 +129,52 @@ class Agent:
 
     def load(self, f):
         raise NotImplementedError
+
+    def _run_metadata(self):
+        """Run name, project and group that run.py generated (run_metadata.yaml)."""
+        path = os.path.join(self.logdir, 'run_metadata.yaml')
+        if not os.path.exists(path):
+            return {}
+        import yaml
+
+        return yaml.safe_load(open(path)) or {}
+
+    @staticmethod
+    def _atalaya_backends(loggers):
+        """['atalaya.wandb', 'atalaya.pluto'] -> ['wandb', 'pluto'], rejecting unknown names."""
+        backends = [name.split('.', 1)[1] for name in loggers if name.startswith('atalaya.')]
+        unknown = [n for n in loggers if n not in ('atalaya', 'tensorboard', 'wandb') and not n.startswith('atalaya.')]
+        unknown += [f'atalaya.{b}' for b in backends if b not in AtalayaWriter.BACKENDS]
+        if unknown:
+            allowed = ['atalaya', 'tensorboard', 'wandb'] + [f'atalaya.{b}' for b in AtalayaWriter.BACKENDS]
+            raise ValueError(f'loggers: unknown {unknown}; use any of {allowed}')
+        if 'wandb' in loggers and 'wandb' in backends:
+            raise ValueError(
+                "loggers: use 'wandb' or 'atalaya.wandb', not both: they would start two W&B runs. "
+                "'atalaya.wandb' adds the offline fallback and records the upload command in info.json"
+            )
+        if 'tensorboard' in loggers and ('atalaya' in loggers or backends):
+            raise ValueError(
+                "loggers: 'atalaya' already writes the TensorBoard event file to tb/; "
+                "with 'tensorboard' too every curve would appear twice. Keep one of them"
+            )
+        return backends
+
+    @staticmethod
+    def _atalaya_backend_options(full_cfg, backends, meta):
+        options = {}
+        extra = OmegaConf.to_container(full_cfg.get('atalaya_backends', {}), resolve=True) or {}
+        for backend in backends:
+            opts = dict(extra.get(backend) or {})
+            if backend == 'wandb':
+                # the same wandb block as the plain wandb logger; atalaya names the run itself
+                opts = {**OmegaConf.to_container(full_cfg.get('wandb', {}), resolve=True), **opts}
+                for key in ('name', 'id', 'project'):
+                    opts.pop(key, None)
+                if not opts.get('group') and meta.get('run_group'):
+                    opts['group'] = meta['run_group']
+            options[backend] = opts
+        return options
 
     def _create_metrics(self, tracker_len, metrics_kwargs):
         current_rewards = torch.zeros(self.num_actors, dtype=torch.float32, device=self.device)

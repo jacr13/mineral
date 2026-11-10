@@ -29,6 +29,14 @@ experiment: ''
 ## Logging
 # logdir: 'debug'
 logdir: 'workdir/${task.name}'
+# any of: atalaya (event file + data.csv + info.json + log.txt), tensorboard, wandb,
+# and atalaya.<backend> to have atalaya also send to wandb | pluto | clearml | comet,
+# with its offline / local fallback and the upload command in info.json, e.g. [atalaya.wandb]
+loggers: [atalaya]
+# options for atalaya backends, e.g. +atalaya_backends.pluto.host=pluto.my-lab.org
+# (atalaya.wandb reads the wandb block below instead)
+atalaya_backends: {}
+# read when loggers include wandb or atalaya.wandb
 wandb:
   mode: offline  # online | offline | disabled
   project: null
