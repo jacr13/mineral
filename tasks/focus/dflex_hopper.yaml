@@ -1,0 +1,44 @@
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: FOCUS/DFlexAntSHAC
+  shac:
+    max_epochs: 50000
+    max_agent_steps: 10000000
+  focus:
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexHopper10M-FOCUS-sweep-critic-reward/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  logdir: "workdir/DFlexHopper10M-FOCUS-sweep-critic-reward/$(date +%Y%m%d-%H%M%S.%2N)"
+  seed: [100, 110, 120, 1000, 1100, 1200]
+  # agent.focus.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.focus.demos.n_trajs: 8
+  agent.focus.critic_disabled: false
+  agent.focus.critic_reward_shapping: true
+  agent.focus.critic_reward_mapping: exp # [log_exp, exp]
+  agent.focus.imitation_loss_type: ot
+  agent.focus.loss_ot_cost_type: l2 # [l2, cosine]
+  agent.focus.loss_use_huber_speedup: false
+  agent.focus.loss_mlp_features_dim: null
+  agent.focus.loss_use_detached_prev_obs: false
+
+spawner:
+  runtime: "8h"

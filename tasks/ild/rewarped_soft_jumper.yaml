@@ -18,7 +18,7 @@ agent:
     critic_optim_kwargs:
       lr: 5e-4
     target_critic_alpha: 0.995
-  otil:
+  focus:
     demos:
       path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
       n_trajs: 8

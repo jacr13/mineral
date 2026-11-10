@@ -1,0 +1,71 @@
+# FOCUS on DFlex CartPole Swing-Up -- the non-periodic, order-sensitive task
+# both reviewers asked for.
+#
+# Q9cS: "All four tasks involve periodic locomotion, where the main differences
+# are phase shifts and speed variations, but the paper does not evaluate
+# non-periodic or order-sensitive tasks."
+# zDN4: "Local best-of-K matching does not guarantee global ordering or
+# coverage and may therefore fail on manipulation or non-periodic multi-stage
+# tasks."
+#
+# Swing-up has two distinct phases -- recover from a perturbed state, then
+# balance -- so a randomly sampled expert segment is frequently from a
+# different phase than the agent currently occupies. That is exactly the
+# predicted failure mode, which makes this a real test rather than a
+# confirmatory one.
+#
+# obs = [x, xdot, sin(theta), cos(theta), theta_dot], act = 1, episode = 240.
+#
+#
+# NOTE on stochastic_init (corrected 9 Nov 2026): the line below is explicit
+# documentation, not a fix. mineral/cfgs/task/DFlex.yaml already sets
+# stochastic_init: True for every DFlex task, so the original cartpole runs
+# always had randomized starts and are VALID. An earlier note here claimed the
+# task was degenerate; that was wrong. The probe behind it built the env by
+# hand via plotter/render_rollout.make_env, which hardcoded
+# stochastic_init=False, so it measured a configuration training never used.
+# Note also that stochastic_init_func is overridden per environment:
+# CartPoleSwingUpEnv's adds pi*(U-0.5) to every joint position, while AntEnv's
+# is mild (xyz +-0.05, orientation +-pi/24, joints +-0.1). Reading cartpole's
+# and assuming it was generic is what produced the bogus diagnosis.
+#
+# NOTE: cartpole returns are NEGATIVE, so the expert-normalised return used for
+# the locomotion tasks is meaningless here (dividing by a negative flips the
+# ordering). Report raw return, or normalise against a random-policy floor.
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+    # Redundant with mineral/cfgs/task/DFlex.yaml, kept explicit so the
+    # initial-state distribution of this task is readable here.
+    stochastic_init: True
+agent:
+  name: FOCUS/DFlexAntSAPO
+  shac:
+    max_epochs: 2000
+    max_agent_steps: 4000000
+    horizon_len: 32
+  focus:
+    demos:
+      path: "experts/demos/DFlex_cartpoleswingup_demos128.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexCartpole4M-FOCUS_SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "4h"

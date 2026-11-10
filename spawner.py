@@ -682,7 +682,7 @@ if __name__ == "__main__":
         metavar="key=value",
         help=(
             "Override config values (can be repeated). "
-            "Use dot paths, e.g. --set wandb.mode=offline --set agent.otil.max_epochs=6000."
+            "Use dot paths, e.g. --set wandb.mode=offline --set agent.focus.max_epochs=6000."
         ),
     )
     boolean_flag(parser, "docker", default=False, help="use docker?")

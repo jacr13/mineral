@@ -1,0 +1,42 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Ant
+    env_suite: dflex
+agent:
+  name: FOCUS/DFlexAntSAPO
+  shac:
+    max_epochs: 2000
+    max_agent_steps: 4100000
+  focus:
+    demos:
+      path: "experts/demos/Rewarped_Ant_demos128_return4893_len1000.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/RewarpedAnt4M-FOCUS/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 1000
+
+sweep:
+  seed: [100, 110, 120]
+  agent.focus.loss_best_of_k_k: [1, 2, 4, 8, 16]
+  agent.focus.demos.n_trajs: 8
+  agent.focus.critic_reward_mapping: exp #[log_exp, exp]
+  agent.focus.imitation_loss_type: ot
+  agent.focus.loss_ot_cost_type: l2 #[l2, cosine]
+  agent.focus.loss_use_huber_speedup: false
+  agent.focus.loss_mlp_features_dim: null
+  agent.focus.loss_use_detached_prev_obs: false
+
+spawner:
+  runtime: "12h"

@@ -20,7 +20,7 @@ agent:
     target_critic_alpha: 0.995
     max_agent_steps: 4100000
     max_epochs: 4000
-  otil:
+  focus:
     demos:
       path: ""
       n_trajs: 8

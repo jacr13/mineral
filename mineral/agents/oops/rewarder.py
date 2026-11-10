@@ -1,6 +1,6 @@
 import torch
 
-from ..otil.best_of_k import log_sinkhorn
+from ..diffil.best_of_k import log_sinkhorn
 from ..pwil.rewarder import PWILRewarder
 
 
@@ -13,17 +13,17 @@ class OOPSRewarder:
     matching, ``TD3.py``'s ``reward_sigma``).
 
     Unlike PWIL (which greedily consumes expert mass step by step within an
-    episode) or OTIL (which matches a *sliding window* against a best-of-K
+    episode) or FOCUS (which matches a *sliding window* against a best-of-K
     crop of demo trajectories), OOPS computes one *entropic* (Sinkhorn)
     optimal-transport plan between an agent's just-COMPLETED full episode and
     one full expert demonstration trajectory (of the same length), redrawn at
     random for every episode. The reward for each agent timestep is the
     negative transport cost that step accumulates under that plan, so reward
     is only available once a whole episode has been observed -- there is no
-    incremental, step-by-step reward the way PWIL/OTIL have.
+    incremental, step-by-step reward the way PWIL/FOCUS have.
 
     Sinkhorn's entropic OT solver is reused unchanged from this repo's own
-    OTIL implementation (`mineral.agents.otil.best_of_k.log_sinkhorn`), which
+    FOCUS implementation (`mineral.agents.diffil.best_of_k.log_sinkhorn`), which
     already assumes uniform marginals over equal-length sequences -- exactly
     OOPS's setting, since both the agent episode and the expert trajectory it
     is matched against always have the same fixed length. This avoids adding

@@ -7,11 +7,11 @@ from .gail.gail import GAIL
 from .lwail.lwail import LWAIL
 from .oops.oops import OOPS
 from .opolo.opolo import OPOLO
-from .otil.diffmimic import DiffMimic
-from .otil.ild import ILD
-from .otil.otil import OTIL
-from .otil.otil_ppo import OTILPPO
-from .otil.otil_sac import OTILSAC
+from .diffil.diffmimic import DiffMimic
+from .diffil.ild import ILD
+from .diffil.focus import FOCUS
+from .diffil.focus_ppo import FOCUSPPO
+from .diffil.focus_sac import FOCUSSAC
 from .ppo.ppo import PPO
 from .pwil.pwil import PWIL
 from .sac.sac import SAC
@@ -22,7 +22,7 @@ __all__ = [
     'DDPG',
     'BPTT',
     'SHAC',
-    'OTIL',
+    'FOCUS',
     'ILD',
     'DiffMimic',
     'PPO',

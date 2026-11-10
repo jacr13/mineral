@@ -6,8 +6,9 @@ experts/dflex/*.pt
 eval/
 demos/
 spawn/
-otil2.py
+focus2.py
 plotter/shac_vs_sapo/figures/
+log*
 plotter/plots*/
 OOPS_Supplementary/
 crit_no_*/

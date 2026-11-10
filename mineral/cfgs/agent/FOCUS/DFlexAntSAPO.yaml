@@ -1,0 +1,60 @@
+defaults:
+  - /agent/SAPO/DFlexAnt@_here_
+  - _self_
+
+algo: FOCUS
+
+focus:
+  demos:
+    path: ""
+    n_trajs: 10
+    subsample_factor: 1 # 1 means no subsampling, >1 means subsample by this factor
+
+  input_type: state # state | state_state
+  loss_ot_cost_type: l2 # l2 | huber | cosine
+  # Sinkhorn/softmin settings of the reported runs. huber_speedup computes the
+  # plan on a Huber cost while scoring with the configured cost, so it is off:
+  # every reported run set it false.
+  loss_ot_eps: 0.1
+  loss_ot_iters: 60
+  # false = differentiate through the Sinkhorn iterations (paper text);
+  # true = fixed-coupling surrogate, which is what the reported runs did.
+  loss_ot_detach_plan: true
+  # pathwise = FOCUS as published (gradient through the simulator);
+  # score_function = same objective/reward/critic, REINFORCE estimator.
+  actor_grad_estimator: pathwise
+  # null = balanced OT (uniform marginals). A float relaxes them
+  # (unbalanced OT), so unmatched agent states need not be coupled.
+  loss_ot_marginal_rho: null
+  loss_ot_huber_delta: 1.0
+  loss_use_huber_speedup: false
+  loss_mlp_features_dim: null
+  loss_use_detached_prev_obs: true
+  loss_best_of_k_k: 8
+  loss_best_of_k_tau: 0.5
+
+  critic_reward_shapping: true
+  critic_disabled: False
+  critic_reward_mapping: log_exp # neg | exp | log_exp
+  critic_reward_scale: 1.0
+  critic_reward_normalize: ${..shac.normalize_ret}
+  # ot | l2 | cosine | softdtw | softdtw_subseq
+  # softdtw/softdtw_subseq swap the Sinkhorn coupling for an ordered (soft-DTW)
+  # alignment, keeping the ground cost, per-step cost scale, best-of-K softmin,
+  # reward transformation and critic identical -- the controlled
+  # "does the alignment objective matter" comparison.
+  imitation_loss_type: ot
+  loss_dtw_gamma: 0.1
+  loss_dtw_normalize: rows # rows | total | none
+  # ORCA-style ordered coverage. neg_log_r is required in a
+  # differentiable pipeline: 1-R underflows to zero gradient.
+  # NOTE on temperature: ORCA's -log R scores are O(1e3) where OT's are
+  # O(10), so at the shared tau=0.5 ORCA's best-of-K collapses to a hard
+  # argmin (K_eff 1.01/8) while OT averages (5.42/8). Comparing them at
+  # the same tau measures temperature, not alignment. Use
+  # loss_best_of_k_tau=200 for ORCA to match OT's effective K, and report
+  # K_eff for both arms.
+  loss_orca_lam: 0.25
+  loss_orca_cost_mode: neg_log_r
+  loss_orca_normalize_p: false
+  actor_value_return_type: min
