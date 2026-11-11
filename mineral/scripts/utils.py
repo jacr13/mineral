@@ -204,7 +204,9 @@ def get_min_config(*args, **kwargs):
 
     # keys to remove from config when building min_config
     config = dict(sorted(config.items()))
-    config["agent"].pop("seed", None)  # remove seed from agent config
+    # remove seed from a copy of the agent config: the shallow copy above shares config["agent"]
+    # with the caller's resolved config, which run.py then saves as resolved_config.yaml
+    config["agent"] = {k: v for k, v in config["agent"].items() if k != "seed"}
     config.pop("seed", None)  # remove seed from config
     config.pop("logdir", None)  # remove logdir from config
 

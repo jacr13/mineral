@@ -60,8 +60,7 @@ class Agent:
         # --- Logging ---
         self.ckpt_dir = os.path.join(self.logdir, 'ckpt')
         os.makedirs(self.ckpt_dir, exist_ok=True)
-        self.tb_dir = os.path.join(self.logdir, 'tb')
-        os.makedirs(self.tb_dir, exist_ok=True)
+        self.tb_dir = os.path.join(self.logdir, 'tb')  # only the plain tensorboard logger writes here
 
         resolved_config = OmegaConf.to_container(full_cfg, resolve=True)
         loggers = list(full_cfg.get('loggers', ['atalaya']))
@@ -82,11 +81,12 @@ class Agent:
                 )
             )
         if 'tensorboard' in loggers:
+            os.makedirs(self.tb_dir, exist_ok=True)
             writers.append(TensorboardWriter(self.tb_dir, resolved_config))
         if ('atalaya' in loggers or backends) and main_process:
             writers.append(
                 AtalayaWriter(
-                    self.tb_dir,
+                    self.logdir,  # data.csv, info.json, log.txt, event file next to ckpt/ and scores.json
                     resolved_config,
                     backends=backends,
                     backend_options=self._atalaya_backend_options(full_cfg, backends, meta),
