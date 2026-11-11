@@ -161,5 +161,23 @@ def read_scores(logdir):
 
 
 def discover_scores(root):
-    """Every run directory under ``root`` that has a scores.json."""
-    return sorted(p.parent for p in Path(root).glob("**/scores.json"))
+    """Every run directory under ``root`` that has a scores.json, deduplicated.
+
+    rsync invocations with different source roots place the same run at both
+    ``<root>/<exp>/sweep_N`` and ``<root>/workdir/<exp>/sweep_N``, which silently
+    double-counts it. Runs are keyed by their path below the last ``workdir``
+    component, so a duplicate is dropped rather than inflating an n.
+    """
+    seen, out = {}, []
+    for p in sorted(Path(root).glob("**/scores.json")):
+        parts = p.parent.parts
+        if "workdir" in parts:
+            key = parts[len(parts) - 1 - parts[::-1].index("workdir") + 1:]
+        else:
+            key = parts[len(Path(root).parts):]
+        key = tuple(key)
+        if key in seen:
+            continue
+        seen[key] = True
+        out.append(p.parent)
+    return out

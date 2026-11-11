@@ -75,6 +75,8 @@ class OTIL(SHAC):
         self.loss_orca_lam = float(self.otil_config.get("loss_orca_lam", 0.25))
         self.loss_orca_cost_mode = self.otil_config.get("loss_orca_cost_mode", "neg_log_r")
         self.loss_orca_normalize_p = bool(self.otil_config.get("loss_orca_normalize_p", False))
+        self.loss_orca_normalize_cost = bool(
+            self.otil_config.get("loss_orca_normalize_cost", True))
         self.loss_ot_cost_type = self.otil_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.otil_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.otil_config.get("loss_mlp_features_dim", None)
@@ -120,6 +122,7 @@ class OTIL(SHAC):
                     huber_delta=self.loss_ot_huber_delta,
                     normalize_p=self.loss_orca_normalize_p,
                     cost_mode=self.loss_orca_cost_mode,
+                    normalize_cost=self.loss_orca_normalize_cost,
                 )
             elif self.imitation_loss_type == "l2":
                 criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")

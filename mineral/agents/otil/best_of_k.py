@@ -574,6 +574,7 @@ class ORCACriterion(BestOfKCriterion):
         huber_delta: float = 1.0,
         normalize_p: bool = False,
         cost_mode: Literal["neg_log_r", "one_minus_r"] = "neg_log_r",
+        normalize_cost: bool = True,
     ):
         super().__init__()
         self.lam = lam
@@ -581,6 +582,7 @@ class ORCACriterion(BestOfKCriterion):
         self.huber_delta = huber_delta
         self.normalize_p = normalize_p
         self.cost_mode = cost_mode
+        self.normalize_cost = normalize_cost
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
@@ -601,10 +603,27 @@ class ORCACriterion(BestOfKCriterion):
         #   neg_log_r   : -log R, computed from the log-domain recursion, so it
         #       never underflows and the gradient stays informative over the
         #       whole range. Default here, and a documented deviation.
+        if self.normalize_cost:
+            # ORCA's lam is defined against distances of order 1 (its own costs
+            # are cosine distances on normalised embeddings). Our ground cost is
+            # an L2 over 64 feature dims and runs ~80, so P = exp(-lam*d) is
+            # astronomically small and -log R, a product over the L-frame
+            # prefix, reaches ~660 per step. The pipeline's reward mapping is
+            # exp(-cost), which underflows to EXACTLY zero past ~88: every ORCA
+            # locomotion run trained with an identically zero imitation reward
+            # and collapsed on all 21 seeds (10 Nov 2026). CartPole survived
+            # only because its shorter episodes keep the cost small.
+            #
+            # Scale the cost to unit mean so lam carries its intended meaning,
+            # and average -log R over the prefix instead of summing, so the
+            # result does not grow with the window length.
+            C = C / C.detach().mean().clamp_min(1e-8)
         if self.cost_mode == "neg_log_r":
             logR = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p,
                                     return_log=True)
             per_step = (-logR).view(B, K, T)
+            if self.normalize_cost:
+                per_step = per_step / float(exp_f.shape[2])
         else:
             R = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p)
             per_step = (1.0 - R).view(B, K, T)

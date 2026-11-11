@@ -233,6 +233,19 @@ if [[ " $BATCHES " == *" V "* ]]; then
 fi
 
 # --- O. ORCA on the locomotion tasks ----------------------------------------
+#
+# ⚠️ The first ORCA launch (10 Nov) is INVALID. Its ground cost is an L2 over 64
+# feature dims running ~80, while ORCA's lam assumes distances of order 1, so
+# -log R reached ~660 per step and the pipeline's exp(-cost) reward mapping
+# underflowed to EXACTLY zero (the float32 limit is ~exp(-88)). Every one of
+# the 21 completed runs trained with an identically zero imitation reward and
+# collapsed. CartPole was unaffected only because its shorter episodes keep the
+# cost small -- which is why ORCA looked fine there and dead everywhere else.
+#
+# Fixed by normalising the ground cost to unit mean and averaging -log R over
+# the prefix (loss_orca_normalize_cost). lam is then calibrated so ORCA's
+# segment cost matches OT-L2's: measured 106 vs 98, per-step 3.33 vs 3.07, so
+# neither objective is handicapped by the reward mapping.
 # Q9cS names ORCA as a closely related method missing from the evaluation. It
 # is implemented and run on CartPole, but that task does not discriminate
 # between alignment objectives (spread 13.2 against a within-arm seed sd of
@@ -267,9 +280,10 @@ if [[ " $BATCHES " == *" O "* ]]; then
       --set "agent.otil.loss_mlp_features_dim=64"
       --set "agent.otil.loss_best_of_k_tau=200"
       --set "agent.otil.loss_best_of_k_k=8"
-      --set "agent.otil.loss_orca_lam=0.25"
+      --set "agent.otil.loss_orca_lam=${O_LAM:-4.0}"
       --set "agent.otil.loss_orca_cost_mode=neg_log_r"
       --set "agent.otil.loss_orca_normalize_p=false"
+      --set "agent.otil.loss_orca_normalize_cost=true"
       --set "agent.otil.loss_ot_detach_plan=true"
       --set "agent.otil.critic_reward_mapping=exp"
       --set "agent.otil.loss_use_huber_speedup=false"
