@@ -117,7 +117,7 @@ for batch in "${BATCHES[@]}"; do
   python spawner.py \
       --task_name "$task_dir" \
       --docker \
-      --docker_image /home/users/c/candidor/docker/mineral.sif \
+      --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
       --deployment slurm \
       "${SPAWN_FLAGS[@]}" \
       --env_files "$task_file"

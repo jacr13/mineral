@@ -1,7 +1,7 @@
 python spawner.py \
     --task_name sapo \
     --no-docker \
-    --docker_image /home/users/c/candidor/docker/mineral.sif \
+    --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
     --deployment local \
     --runtime 6h \
     --no-cleanup \

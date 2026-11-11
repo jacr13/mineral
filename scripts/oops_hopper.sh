@@ -12,7 +12,7 @@ fi
 python spawner.py \
     --task_name oops_refnet \
     --docker \
-    --docker_image /home/users/c/candidor/docker/mineral.sif \
+    --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
     --deployment slurm \
     --no-cleanup \
     --sweep \

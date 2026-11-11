@@ -38,7 +38,7 @@ BATCH_JOBS="${BATCH_JOBS:-6}"
 DRY_RUN="${DRY_RUN:-0}"
 CKPT_EVERY="${CKPT_EVERY:-2000}"
 
-DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral_uv.sif}"
 GPU_CONSTRAINT="${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
 
 # SNU Humanoid by default: it carries the headline result, and its L2 gradient

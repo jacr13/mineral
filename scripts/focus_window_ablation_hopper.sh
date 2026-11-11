@@ -103,7 +103,7 @@ for cost in "${COSTS[@]}"; do
         --task_name focus \
         --base_algo SAPO \
         --docker \
-        --docker_image /home/users/c/candidor/docker/mineral.sif \
+        --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
         --deployment slurm \
         --runtime "${RUNTIME}" \
         --no-cleanup \

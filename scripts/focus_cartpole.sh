@@ -36,7 +36,7 @@ RUNTIME="${RUNTIME:-4h}"           # 240-step episodes; far cheaper than locomot
 CKPT_EVERY="${CKPT_EVERY:-2000}"
 TAG="${TAG:-sto}"                  # W&B project suffix; "sto" = stochastic_init fix
 DRY_RUN="${DRY_RUN:-0}"
-DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral_uv.sif}"
 GPU_CONSTRAINT="${GPU_CONSTRAINT:-COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE}"
 
 run() {

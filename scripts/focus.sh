@@ -232,7 +232,7 @@ for env_idx in "${!ENVS[@]}"; do
       python spawner.py \
         --task_name focus \
         --docker \
-        --docker_image /home/users/c/candidor/docker/mineral.sif \
+        --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
         --deployment slurm \
         --runtime "${runtime}" \
         --gpu_constraint "${GPU_CONSTRAINT}" \

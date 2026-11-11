@@ -115,7 +115,7 @@ for env in "${ENVS[@]}"; do
           --task_name focus \
           --base_algo SAPO \
           --docker \
-          --docker_image /home/users/c/candidor/docker/mineral.sif \
+          --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
           --deployment slurm \
           --runtime "${runtime}" \
           --no-cleanup \

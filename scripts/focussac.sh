@@ -78,7 +78,7 @@ for env in "${ENVS[@]}"; do
       python spawner.py \
         --task_name focussac \
         --docker \
-        --docker_image /home/users/c/candidor/docker/mineral.sif \
+        --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
         --deployment slurm \
         --no-cleanup \
         --set "seed=${seed}" \

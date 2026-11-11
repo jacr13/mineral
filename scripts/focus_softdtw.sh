@@ -37,7 +37,7 @@ CKPT_EVERY="${CKPT_EVERY:-2000}"
 # run that matches how far the reported baselines actually got).
 STEPS_OVERRIDE="${STEPS:-}"
 
-DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral.sif}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-/home/users/c/candidor/docker/mineral_uv.sif}"
 # Keep off Pascal nodes (P100 / Titan X): scripts/focus.sh documents that a
 # Humanoid rerun there got wall-clock-capped while Turing/Ampere seeds finished
 # in half the time.

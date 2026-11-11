@@ -87,7 +87,7 @@ for ((b=0; b<N_BASELINES; b++)); do
     python spawner.py \
         --task_name "${task_name}" \
         --docker \
-        --docker_image /home/users/c/candidor/docker/mineral.sif \
+        --docker_image /home/users/c/candidor/docker/mineral_uv.sif \
         --deployment slurm \
         --runtime 6h \
         --no-cleanup \
