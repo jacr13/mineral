@@ -37,6 +37,8 @@ mentor:
     lr: 0.2
     action_reg: 0.05
     phase_offsets: [-2, -1, 0, 1, 2, 3, 4, 5, 6]
+    support_barrier: 0.0  # > 0: penalise planned states outside the demos' per-coordinate range
+    support_margin: 0.5  # widen that range by this many demo standard deviations
     batch: 340
     batches_per_round: 6
 
@@ -51,6 +53,11 @@ mentor:
     noise: 0.05
     reset_every: 0  # >0: reset the first reset_fraction of the envs every this many steps
     reset_fraction: 1.0
+
+  # extra teacher labels per round on demo states plus noise (DART-style coverage near the demos)
+  augment:
+    perturb_batches: 0  # number of teacher batches of perturbed demo states per round
+    perturb_scale: 0.1  # noise, in demo standard deviations per coordinate
 
   # Stage III: regression on the aggregated labels
   fit:

@@ -146,6 +146,11 @@ class RejoinTeacher:
         valid = torch.arange(T, device=device)[None] < lengths[:, None]
         self.w = 1.0 / S[valid].std(0).clamp_min(1e-6)
         self.S_flat = (S * self.w).reshape(-1, D)
+        # Support barrier (optional): penalise planned states outside the per-coordinate range
+        # the demos visit (widened by support_margin standard deviations), e.g. a torso too low.
+        self.barrier = float(cfg.get('support_barrier', 0.0))
+        spread = float(cfg.get('support_margin', 0.5)) / self.w
+        self.lo, self.hi = S[valid].min(0).values - spread, S[valid].max(0).values + spread
         # admissible window starts: a full K-step window plus margin for the phase offsets
         t = torch.arange(T, device=device)[None]
         margin = int(self.offsets.max().clamp_min(0).item()) + 2
@@ -167,17 +172,21 @@ class RejoinTeacher:
         return torch.stack([self.A_hat[traj, j + k] for k in range(self.K)], 1)
 
     def rollout(self, sim, x, a, grad):
-        y = x
+        """Final state and the support-barrier penalty accumulated along the plan."""
+        y, outside = x, 0.0
         for k in range(self.K):
             y = sim(y, a[:, k], grad=grad)
-        return y
+            if self.barrier > 0:
+                outside = outside + (((self.lo - y).clamp_min(0) + (y - self.hi).clamp_min(0)) * self.w).pow(2).sum(-1)
+        return y, outside
 
-    def cost(self, y, a, traj, j, a_ref):
+    def cost(self, rolled, a, traj, j, a_ref):
+        y, outside = rolled
         idx = j[:, None] + self.K - 1 + self.offsets[None]
         idx = torch.minimum(idx.clamp_min(0), (self.lengths[traj] - 1)[:, None])
         target = self.S1[traj[:, None], idx]
         err = (((y[:, None] - target) * self.w) ** 2).sum(-1).min(-1).values
-        return err + self.lam * ((a - a_ref) ** 2).sum((-1, -2))
+        return err + self.lam * ((a - a_ref) ** 2).sum((-1, -2)) + self.barrier * outside
 
     def optimise(self, sim, x, traj, j, a_ref):
         a = a_ref.clone().requires_grad_(True)
@@ -406,9 +415,18 @@ class MENTOR(Agent):
             self.agent_steps += self.num_actors
         return torch.cat(visited)
 
-    def label(self, visited):
+    def perturbed_demo_states(self, count):
+        """Demo states plus Gaussian noise of augment.perturb_scale demo standard deviations per coordinate."""
+        scale = float(self.mentor_config.get('augment', {}).get('perturb_scale', 0.1))
+        demo = self.S[self.valid]
+        idx = torch.randint(0, demo.shape[0], (count,), device=self.device, generator=self.generator)
+        noise = torch.randn(count, demo.shape[1], device=self.device, generator=self.generator)
+        return demo[idx] + scale * demo.std(0) * noise
+
+    def label(self, visited, n_batches=None):
         cfg = self.mentor_config.teacher
-        batch, n_batches = int(cfg.batch), int(cfg.batches_per_round)
+        batch = int(cfg.batch)
+        n_batches = int(cfg.batches_per_round) if n_batches is None else n_batches
         need = batch * n_batches
         if visited.shape[0] < need:
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
@@ -458,6 +476,10 @@ class MENTOR(Agent):
             visited = self.collect()
             t_roll = time.time() - t0
             x, a0, cost = self.label(visited)
+            n_perturb = int(cfg.get('augment', {}).get('perturb_batches', 0))
+            if n_perturb > 0:  # teacher labels on noisy copies of demo states (DART-style coverage)
+                xp, ap, cp = self.label(self.perturbed_demo_states(n_perturb * int(cfg.teacher.batch)), n_perturb)
+                x, a0, cost = torch.cat([x, xp]), torch.cat([a0, ap]), torch.cat([cost, cp])
             threshold = max(gate_tau, cost.quantile(gate_q).item()) if gate_q > 0 else gate_tau
             keep = cost <= threshold
             self.data_s = torch.cat([self.data_s, x[keep]])
