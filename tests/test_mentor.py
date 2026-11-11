@@ -106,3 +106,34 @@ class MentorSimTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+@unittest.skipUnless(torch.cuda.is_available(), 'needs a CUDA device for DFlex')
+class MentorSNUTests(unittest.TestCase):
+    """SNU: 152 muscle actions, activation = (clip(a) * 0.5 + 0.5) * strength, no hidden state."""
+
+    def test_map_reproduces_env_steps_and_tanh_inversion_converges(self):
+        from mineral.agents.diffil.mentor import lm_invert
+        from mineral.agents.diffil.mentor_sim import OneStep, SimCounter, get_spec
+
+        spec, n = get_spec('snu_humanoid'), 32
+        env = spec.make_env(n, DEV, seed=3, stochastic_init=True)
+        env.reset()
+        torch.manual_seed(0)
+        with torch.no_grad():
+            for _ in range(20):
+                env.step(torch.rand(n, 152, device=DEV) * 2 - 1)
+            obs = env.obs_buf.clone()
+            a = torch.rand(n, 152, device=DEV) * 2 - 1
+            env.step(a)
+            nxt = env.obs_buf.clone()
+        alive = nxt[:, 0] > 0.5
+        step = OneStep(spec, n, DEV, SimCounter())
+        pred = step(obs, a, grad=False)
+        rel = ((pred - nxt).norm(dim=-1) / (nxt - obs).norm(dim=-1).clamp_min(1e-9))[alive]
+        self.assertLess(rel.median().item(), 1e-4)  # exact up to float32: the next state needs no hidden state
+        w = 1.0 / (nxt - obs).std(0).clamp_min(1e-8)
+        before = (((step(obs, torch.zeros_like(a), grad=False) - nxt) * w) ** 2).sum(-1)
+        a_hat, cost = lm_invert(step, obs, nxt, w, iters=3, param='tanh', reg=1e-4)
+        self.assertTrue(((a_hat >= -1) & (a_hat <= 1)).all())  # float32 tanh can round to +-1
+        self.assertLess(cost[alive].median().item(), 0.1 * before[alive].median().item())

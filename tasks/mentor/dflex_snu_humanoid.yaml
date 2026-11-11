@@ -1,0 +1,35 @@
+task:
+  name: DFlex
+  env:
+    env_name: snu_humanoid
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    demos:
+      path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+      n_trajs: 8
+    # 152 muscles for 18 dofs: unbounded tanh parametrisation and a small minimum-norm
+    # regulariser give a median Stage I residual of ~1e-2 (demo actions themselves ~6e-3)
+    invert:
+      param: tanh
+      reg: 1e-4
+      iters: 20
+      batch: 1000
+    teacher:
+      batches_per_round: 9
+    gate:
+      tau: 10.0
+      quantile: 0.8
+    rollout:
+      length: 120
+      reset_every: 60
+logdir: "workdir/DFlexSNUHumanoid-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"

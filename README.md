@@ -173,9 +173,10 @@ imitates state-only demonstrations produced by the same differentiable simulator
    rollouts, teacher labels, a cost gate and regression.
 
 It needs no reward, critic or discriminator, and never reads the demonstrations' stored actions.
-Observation-to-state maps exist for the DFlex Hopper, Ant and Humanoid
+Observation-to-state maps exist for the DFlex Hopper, Ant, Humanoid and SNU humanoid
 (`mineral/agents/diffil/mentor_sim.py`); Ant and Humanoid observations are used without their
-trailing action coordinates.
+trailing action coordinates. The SNU humanoid is over-actuated (152 muscles, 18 dofs): its task
+file inverts in a tanh parametrisation with a small minimum-norm regulariser.
 
 ```bash
 uv run --locked python -m mineral.scripts.run \

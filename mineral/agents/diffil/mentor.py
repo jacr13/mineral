@@ -49,49 +49,74 @@ class MentorPolicy(nn.Module):
 
 
 @torch.no_grad()
-def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, generator=None):
-    """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 with |a| <= 1.
+def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, param='box', generator=None):
+    """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 + reg ||a||^2 with |a| <= 1.
 
     Forward-difference Jacobian (act_dim + 1 forward steps per iteration). The first start
-    is a = 0, later ones are uniform in [-1, 1]; the best solution per sample is kept.
-    Returns actions (n, act_dim) and residual costs (n,).
+    is a = 0, later ones are uniform in (-1, 1); the best solution per sample is kept.
+    ``param='box'`` clips each step to [-1, 1]; ``param='tanh'`` optimises u with a = tanh(u),
+    which avoids the clipping distortion when many actions sit at a bound. ``reg > 0`` picks
+    one consistent (minimum-norm) solution when the actions outnumber what the next state
+    determines, as for muscle-driven bodies (SNU: 152 muscles, 18 dofs).
+    Returns actions (n, act_dim) and the residual part ||w * (step(s, a) - s1)||^2 (n,).
     """
+    if param not in ('box', 'tanh'):
+        raise ValueError(f'unknown inversion parametrisation {param!r}')
     n, act_dim = s.shape[0], step.spec.act_dim
-    best_a, best_c = None, None
+    tanh = param == 'tanh'
+    to_action = torch.tanh if tanh else (lambda x: x)
+
+    def residual(x):
+        return (step(s, to_action(x), grad=False) - s1) * w
+
+    best_a, best_c, best_total = None, None, None
     for k in range(starts):
         if k == 0:
-            a = torch.zeros(n, act_dim, device=s.device)
+            x = torch.zeros(n, act_dim, device=s.device)
         else:
-            a = torch.rand(n, act_dim, device=s.device, generator=generator) * 2 - 1
-        r = (step(s, a, grad=False) - s1) * w
+            x = torch.rand(n, act_dim, device=s.device, generator=generator) * 2 - 1
+            x = torch.atanh(0.9 * x) if tanh else x
+        r = residual(x)
+        a = to_action(x)
         cost = (r**2).sum(-1)
+        total = cost + reg * (a**2).sum(-1)
         lam = torch.full_like(cost, lam0)
         for _ in range(iters):
             cols = []
             for j in range(act_dim):
-                ap = a.clone()
-                sign = torch.where(a[:, j] + h > 1, -1.0, 1.0)
-                ap[:, j] = (a[:, j] + sign * h).clamp(-1, 1)
-                da = (ap[:, j] - a[:, j]).unsqueeze(-1)
-                cols.append(((step(s, ap, grad=False) - s1) * w - r) / da)
+                xp = x.clone()
+                if tanh:
+                    xp[:, j] = x[:, j] + h
+                else:
+                    sign = torch.where(x[:, j] + h > 1, -1.0, 1.0)
+                    xp[:, j] = (x[:, j] + sign * h).clamp(-1, 1)
+                dx = (xp[:, j] - x[:, j]).unsqueeze(-1)
+                cols.append((residual(xp) - r) / dx)
             J = torch.stack(cols, -1)
-            JtJ = J.transpose(1, 2) @ J
-            g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1)
-            A = JtJ + lam[:, None, None] * torch.diag_embed(torch.diagonal(JtJ, dim1=1, dim2=2).clamp_min(1e-12))
-            a_new = (a - torch.linalg.solve(A, g.unsqueeze(-1)).squeeze(-1)).clamp(-1, 1)
-            r_new = (step(s, a_new, grad=False) - s1) * w
+            a = to_action(x)
+            da = 1 - a**2 if tanh else torch.ones_like(a)  # d a / d x
+            H = J.transpose(1, 2) @ J + reg * torch.diag_embed(da**2)
+            g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + reg * a * da
+            A = H + lam[:, None, None] * torch.diag_embed(torch.diagonal(H, dim1=1, dim2=2).clamp_min(1e-6 if tanh else 1e-12))
+            x_new = x - torch.linalg.solve(A, g.unsqueeze(-1)).squeeze(-1)
+            x_new = x_new if tanh else x_new.clamp(-1, 1)
+            r_new = residual(x_new)
             c_new = (r_new**2).sum(-1)
-            ok = c_new < cost
-            a = torch.where(ok[:, None], a_new, a)
+            t_new = c_new + reg * (to_action(x_new) ** 2).sum(-1)
+            ok = t_new < total
+            x = torch.where(ok[:, None], x_new, x)
             r = torch.where(ok[:, None], r_new, r)
             cost = torch.where(ok, c_new, cost)
+            total = torch.where(ok, t_new, total)
             lam = torch.where(ok, (lam * 0.3).clamp_min(1e-9), (lam * 5.0).clamp_max(1e9))
+        a = to_action(x)
         if best_a is None:
-            best_a, best_c = a, cost
+            best_a, best_c, best_total = a, cost, total
         else:
-            ok = cost < best_c
+            ok = total < best_total
             best_a = torch.where(ok[:, None], a, best_a)
             best_c = torch.where(ok, cost, best_c)
+            best_total = torch.where(ok, total, best_total)
     return best_a, best_c
 
 
@@ -296,7 +321,17 @@ class MENTOR(Agent):
             if k < batch:  # OneStep has a fixed batch: pad with copies of the first row
                 x = torch.cat([x, x[:1].expand(batch - k, -1)])
                 y = torch.cat([y, y[:1].expand(batch - k, -1)])
-            a, c = lm_invert(step, x, y, self.w_step, iters=int(cfg.iters), starts=int(cfg.starts), generator=self.generator)
+            a, c = lm_invert(
+                step,
+                x,
+                y,
+                self.w_step,
+                iters=int(cfg.iters),
+                starts=int(cfg.starts),
+                reg=float(cfg.get('reg', 0.0)),
+                param=str(cfg.get('param', 'box')),
+                generator=self.generator,
+            )
             acts.append(a[:k])
             costs.append(c[:k])
         del step

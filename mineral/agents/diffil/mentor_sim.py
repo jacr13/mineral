@@ -4,7 +4,7 @@ MENTOR queries the simulator from arbitrary observed states: ``step(obs, a) -> n
 Each environment needs a map from its (action-stripped) observation to the simulator state
 (joint_q, joint_qd) and back. The maps below are exact for the DFlex Hopper and, up to the
 unobserved horizontal position (set to 0; the dynamics on flat ground do not depend on it),
-for the DFlex Ant and Humanoid with ``no_env_offset=True``.
+for the DFlex Ant, Humanoid and SNU humanoid with ``no_env_offset=True``.
 
 Ant and Humanoid observations end with the previous action. Those coordinates are stripped
 (``obs[:, :obs_dim]``) so that nothing about the demonstrator's actions is read.
@@ -67,6 +67,12 @@ class EnvSpec:
 
     def act_scale(self, env, n):
         raise NotImplementedError
+
+    def apply_action(self, env, state, a, n, num_qd):
+        """Torque actuation: joint torques act_scale * clip(a) on the actuated dofs."""
+        act = torch.zeros(n, num_qd, device=a.device, dtype=a.dtype)
+        act[:, self.act_offset :] = torch.clip(a, -1, 1) * self.act_scale(env, n)
+        state.joint_act = act.reshape(-1).contiguous()
 
     def to_state(self, env, obs):
         raise NotImplementedError
@@ -145,7 +151,60 @@ class HumanoidSpec(AntSpec):
         return env.motor_scale * env.motor_strengths[:n]
 
 
-SPECS = {'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec}
+class SNUHumanoidSpec(AntSpec):
+    """Muscle-driven lower-body humanoid: 152 muscle actions for 18 actuated dofs (over-actuated).
+
+    Like the env's step(): activation = (clip(a) * 0.5 + 0.5) * muscle_strengths, set directly at
+    every step, so there is no hidden activation state. The 53 observations hold no action.
+    joint_q has 22 coordinates after the root (ball joints), joint_qd 18.
+    """
+
+    env_name, obs_dim, act_dim, act_offset = 'snu_humanoid', 53, 152, 6
+
+    def apply_action(self, env, state, a, n, num_qd):
+        state.joint_act = torch.zeros(n * num_qd, device=a.device, dtype=a.dtype)
+        activation = torch.clip(a, -1, 1) * 0.5 + 0.5
+        env.model.muscle_activation = (activation.reshape(-1) * env.muscle_strengths[: n * self.act_dim]).contiguous()
+
+    def to_state(self, env, obs):
+        z = torch.zeros(obs.shape[0], device=obs.device, dtype=obs.dtype)
+        y = obs[:, 0]
+        q = torch.cat([z[:, None], y[:, None], z[:, None], obs[:, 1:5], obs[:, 11:33]], 1)
+        lin, ang = obs[:, 5:8], obs[:, 8:11]
+        cross = torch.stack([y * ang[:, 2], z, -y * ang[:, 0]], 1)
+        qd = torch.cat([ang, lin + cross, obs[:, 33:51] / env.joint_vel_obs_scaling], 1)
+        return q, qd
+
+    def from_state(self, env, q, qd):
+        from dflex.envs import snu_humanoid as snu_module
+
+        tu = snu_module.tu
+        n = q.shape[0]
+        pos, rot = q[:, 0:3], q[:, 3:7]
+        ang = qd[:, 0:3]
+        lin = qd[:, 3:6] - torch.cross(pos, ang, dim=-1)
+        to_target = env.targets[:n] + env.start_pos[:n] - pos
+        to_target = torch.cat([to_target[:, :1], torch.zeros_like(to_target[:, :1]), to_target[:, 2:]], 1)
+        target_dirs = tu.normalize(to_target)
+        torso_quat = tu.quat_mul(rot, env.inv_start_rot[:n])
+        up_vec = tu.quat_rotate(torso_quat, env.basis_vec1[:n])
+        heading_vec = tu.quat_rotate(torso_quat, env.basis_vec0[:n])
+        return torch.cat(
+            [
+                pos[:, 1:2],
+                rot,
+                lin,
+                ang,
+                q[:, 7:],
+                env.joint_vel_obs_scaling * qd[:, 6:],
+                up_vec[:, 1:2],
+                (heading_vec * target_dirs).sum(-1, keepdim=True),
+            ],
+            1,
+        )
+
+
+SPECS = {'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec, 'snu_humanoid': SNUHumanoidSpec}
 
 
 def get_spec(env_name):
@@ -180,9 +239,7 @@ class OneStep:
         q, qd = spec.to_state(env, obs)
         state.joint_q = q.reshape(-1).contiguous()
         state.joint_qd = qd.reshape(-1).contiguous()
-        act = torch.zeros(n, self.num_qd, device=self.device, dtype=obs.dtype)
-        act[:, spec.act_offset :] = torch.clip(a, -1, 1) * spec.act_scale(env, n)
-        state.joint_act = act.reshape(-1).contiguous()
+        spec.apply_action(env, state, a, n, self.num_qd)
         out = env.integrator.forward(env.model, state, env.sim_dt, env.sim_substeps, env.MM_caching_frequency)
         if grad:
             self.counter.fwdbwd += n
