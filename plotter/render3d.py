@@ -32,10 +32,15 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 THREE = os.path.join(HERE, "viewer", "three.module.js")
 
+# One colour per panel, and enough of them that a 4-panel comparison never
+# reuses the expert's blue for a learner -- which otherwise reads as "this
+# policy is the demonstration".
 PALETTE = {
     "expert": "0x3f7fbf",
     "learner": "0x4a9e6a",
     "third": "0xb4763c",
+    "fourth": "0x8a6fb0",
+    "fifth": "0x3f9fa8",
 }
 
 
@@ -304,8 +309,8 @@ def render_video(frame_sets, labels, out_path, style="capsule", cell=360,
 CAMERAS = {
     "hopper":          {"dist": 3.0, "height": 1.20, "yaw": 0.50, "look": 0.70},
     "ant":             {"dist": 4.2, "height": 1.35, "yaw": 0.70, "look": 0.45},
-    "humanoid":        {"dist": 3.6, "height": 1.35, "yaw": 0.55, "look": 0.85},
-    "snu_humanoid":    {"dist": 2.8, "height": 1.15, "yaw": 0.62, "look": 0.68},
+    "humanoid":        {"dist": 4.4, "height": 1.30, "yaw": 0.55, "look": 0.75},
+    "snu_humanoid":    {"dist": 3.8, "height": 1.05, "yaw": 0.62, "look": 0.55},
     "cartpoleswingup": {"dist": 3.2, "height": 1.00, "yaw": 0.35, "look": 0.55},
 }
 
