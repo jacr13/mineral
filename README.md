@@ -215,9 +215,15 @@ This repository is distributed under the license included in `LICENSE`.
 ## Cluster supervisor exports
 
 The spawner can export commit-pinned jobs into a cluster supervisor's data directory.
-The agent supplies the cluster repository and input paths for each experiment. The
-repository must already contain the requested commit; jobs never pull a moving branch
-or change the shared checkout. Each job exports that commit into its own `source/`
+By default the supervisor keeps one checkout per branch on the cluster,
+`$HOME/mcp_runs/<repo>_<branch>/`: it clones it on first use, fetches the branch when the
+pinned commit is missing (also ahead of time while runs wait) and passes its path to the
+job. The export records origin's URL (an SSH `git@host:` origin is recorded as HTTPS, so a
+public repository clones without credentials) and the current branch; override them with
+`--git_remote` and `--git_branch`. The commit must be pushed: `--enqueue` refuses a commit
+that is not on `origin/<branch>`. Alternatively, `--cluster_repo` names an existing
+checkout on the cluster that already contains the commit. Either way, jobs never pull a
+moving branch or change the checkout: each job exports its commit into its own `source/`
 directory and mounts that directory into the supplied Apptainer image. The image
 provides the dependencies and must be compatible with the commit's `uv.lock`.
 
@@ -226,7 +232,6 @@ uv run --locked python spawner.py \
   --task_name focus --env_files dflex_humanoid.yaml \
   --deployment slurm --docker \
   --docker_image /cluster/images/mineral.sif \
-  --cluster_repo /cluster/repos/mineral \
   --cluster_input experts/demos=/cluster/datasets/mineral/demos \
   --git_commit HEAD \
   --supervisor_dir /home/joao/docker/cluster-supervisor/data \

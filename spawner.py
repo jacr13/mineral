@@ -11,7 +11,16 @@ from pathlib import Path
 
 import yaml
 
-from mineral.common.cluster_jobs import bootstrap, cluster_inputs, run_identity, source_revision, write_export
+from mineral.common.cluster_jobs import (
+    bootstrap,
+    cluster_inputs,
+    managed_source,
+    mcp_inputs,
+    run_identity,
+    shell_path,
+    source_revision,
+    write_export,
+)
 
 ENV_BUNDLES = {
     "new_dflex": ["cheetah", "anymal"],
@@ -380,7 +389,7 @@ def _write_slurm_script(script_path, name, command, args):
             raise ValueError("Docker image must be specified when using Apptainer.")
         if run_info:
             binds = ['-B "$RUN_ROOT/source:/workspace"', '-B "$RUN_ROOT/results:/results"']
-            binds += ['-B ' + shlex.quote(f'{host}:/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
+            binds += ['-B ' + shell_path(host, f':/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
             command = (
                 '-n 1 apptainer exec ' + ('--nv ' if args.device == 'gpu' else '')
                 + '--containall ' + ' '.join(binds) + ' ' + shlex.quote(args.docker_image)
@@ -429,7 +438,9 @@ def run(args):
     if supervisor_dir:
         if args.deployment != 'slurm' or args.deploy_now:
             raise ValueError('Supervisor exports require --deployment slurm --no-deploy_now')
-        if not args.cluster_repo or not args.cluster_repo.startswith('/') or any(c in args.cluster_repo for c in '\n\r,:'):
+        if args.cluster_repo is not None and (
+            not args.cluster_repo.startswith('/') or any(c in args.cluster_repo for c in '\n\r,:')
+        ):
             raise ValueError('--cluster_repo must be an absolute cluster repository path (no commas or colons)')
         if not 0 <= args.priority <= 100:
             raise ValueError('--priority must be between 0 and 100')
@@ -437,6 +448,15 @@ def run(args):
             raise ValueError('Supervisor exports require locked dependencies; omit --uv_update')
         commit, dirty = source_revision(args.git_commit)
         inputs = cluster_inputs(args.cluster_input)
+        # Default: demos from <root>/inputs/experts/demos on the cluster (the root reaches jobs as MCP_RUNS_DIR)
+        managed = mcp_inputs(args.mcp_input or ([] if args.cluster_input else ['experts/demos']))
+        if set(managed) & set(inputs):
+            raise ValueError('An input path is given both with --cluster_input and --mcp_input')
+        inputs.update(managed)
+        # Without --cluster_repo the supervisor clones <repo>_<branch> under its cluster root.
+        git_source = None if args.cluster_repo else managed_source(
+            commit, args.git_remote, args.git_branch, require_pushed=args.enqueue
+        )
         if dirty:
             print(f'NOTE: source is pinned to {commit}; uncommitted code changes are NOT included. Task overrides are saved separately.')
     base_tasks_root = Path("tasks").resolve()
@@ -544,7 +564,7 @@ def run(args):
                 continue
             setattr(effective_args, key, value)
         if supervisor_dir:
-            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'cluster_input', 'priority', 'uv_update'):
+            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'priority', 'uv_update'):
                 if getattr(effective_args, key) != getattr(args, key):
                     raise ValueError(f'Supervisor option {key} must be supplied on the command line, not overridden by the task')
         if effective_args.runtime is None:
@@ -649,7 +669,7 @@ def run(args):
             if supervisor_dir:
                 metadata = dict(
                     project='mineral', git_commit=commit, source_worktree_dirty=dirty,
-                    cluster_repo=effective_args.cluster_repo, cluster_inputs=inputs,
+                    cluster_repo=effective_args.cluster_repo, git=git_source, cluster_inputs=inputs,
                     container_image=effective_args.docker_image if effective_args.docker else None,
                     priority=effective_args.priority, seed=effective_config.get('seed'),
                     task_file=str(config_path), training_outputs='results/', slurm_logs='out/',
@@ -719,9 +739,15 @@ if __name__ == "__main__":
         "GPUs (Tesla P100, Titan X)",
     )
     parser.add_argument('--supervisor_dir', help='Supervisor data directory; export inert previews unless --enqueue is set')
-    parser.add_argument('--cluster_repo', help='Absolute repository path on the cluster, supplied per experiment')
+    parser.add_argument('--cluster_repo', help='Absolute repository path on the cluster; omit to let the supervisor '
+                        'clone <repo>_<branch> under its cluster root (default $HOME/mcp_runs)')
+    parser.add_argument('--git_remote', help='Remote the supervisor clones (default: URL of origin)')
+    parser.add_argument('--git_branch', help='Branch of the per-branch cluster checkout (default: current branch)')
     parser.add_argument('--git_commit', default='HEAD', help='Local Git revision to pin for supervisor exports')
     parser.add_argument('--cluster_input', action='append', default=[], help='Read-only input mapping: relative/path=/absolute/cluster/path')
+    parser.add_argument('--mcp_input', action='append', default=[], help='Read-only input from the supervisor root on the '
+                        'cluster: relative/path -> $MCP_RUNS_DIR/inputs/relative/path. Default without any input '
+                        'option: experts/demos')
     parser.add_argument('--priority', type=int, default=40, help='Supervisor submission priority, 0–100')
     boolean_flag(parser, 'enqueue', default=False, help='Publish supervisor exports to incoming instead of inert previews')
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")

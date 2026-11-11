@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shlex
 import shutil
@@ -24,6 +25,46 @@ def source_revision(revision):
     return commit, dirty
 
 
+def _git(*args):
+    return subprocess.run(['git', *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def managed_source(commit, remote=None, branch=None, require_pushed=False):
+    """Git source for a checkout the supervisor clones per branch under its cluster root.
+
+    The remote defaults to origin's URL and the branch to the current one. Jobs archive the
+    pinned commit from that checkout, so the commit must be on the remote branch. An scp-style
+    SSH origin (``git@host:owner/repo``) is recorded as HTTPS, which clones a public repository
+    without credentials on the cluster; pass ``remote`` to keep SSH.
+    """
+    if remote is None:
+        remote = _git('remote', 'get-url', 'origin')
+        scp_style = re.fullmatch(r'git@([A-Za-z0-9.-]+):(.+)', remote)
+        if scp_style:
+            remote = f'https://{scp_style.group(1)}/{scp_style.group(2)}'
+    if branch is None:
+        branch = _git('rev-parse', '--abbrev-ref', 'HEAD')
+        if branch == 'HEAD':
+            raise ValueError('Detached HEAD: pass --git_branch, the branch the cluster checkout should track')
+    pushed = None
+    try:
+        origin = _git('remote', 'get-url', 'origin')
+        if remote in (origin, re.sub(r'^git@([A-Za-z0-9.-]+):', r'https://\1/', origin)):
+            pushed = subprocess.run(
+                ['git', 'merge-base', '--is-ancestor', commit, f'refs/remotes/origin/{branch}'], capture_output=True
+            ).returncode == 0
+    except subprocess.CalledProcessError:
+        pass
+    if pushed is False:
+        message = f'commit {commit[:12]} is not on origin/{branch} (as last fetched): push it before the job runs'
+        if require_pushed:
+            raise ValueError(message)
+        print('NOTE: ' + message)
+    elif pushed is None:
+        print(f'NOTE: cannot check locally that {commit[:12]} is on {remote} {branch}; the supervisor checks it')
+    return {'remote': remote, 'branch': branch, 'commit': commit}
+
+
 def cluster_inputs(values):
     inputs = {}
     for value in values or []:
@@ -37,13 +78,44 @@ def cluster_inputs(values):
     return inputs
 
 
+# Inputs under the supervisor's cluster root, <root>/inputs/<relative>; the root reaches
+# jobs as MCP_RUNS_DIR. Stored with this prefix and expanded by the job's shell.
+MCP_INPUTS = '${MCP_RUNS_DIR}/inputs/'
+
+
+def mcp_inputs(values):
+    inputs = {}
+    for relative in values or []:
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*', relative) or any(
+            part in ('.', '..') for part in relative.split('/')
+        ):
+            raise ValueError('--mcp_input must be a relative path such as experts/demos (no traversal)')
+        inputs[relative] = MCP_INPUTS + relative
+    return inputs
+
+
+def shell_path(value, suffix=''):
+    """Shell word for an input path: quoted, or expanded from MCP_RUNS_DIR for --mcp_input."""
+    if value.startswith(MCP_INPUTS):
+        # mcp_inputs() restricts the relative part to [A-Za-z0-9_./-], safe inside double quotes
+        return '"${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/inputs/' + value[len(MCP_INPUTS) :] + suffix + '"'
+    return shlex.quote(value + suffix)
+
+
 def run_identity():
     name = 'mineral-' + uuid.uuid4().hex
     return name, uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-supervisor:' + name).hex
 
 
 def bootstrap(repo, commit, run_id, inputs, docker):
-    """Prepare source without touching the shared checkout or fetching moving refs."""
+    """Prepare source without touching the shared checkout or fetching moving refs.
+
+    ``repo=None``: the supervisor prepares a per-branch checkout and passes its path
+    in ``MCP_CHECKOUT`` (it clones and fetches; the job only reads the commit).
+    """
+    checkout = 'CLUSTER_REPO="${MCP_CHECKOUT:?MCP_CHECKOUT is set by the cluster supervisor}"' if repo is None else (
+        f'CLUSTER_REPO={shlex.quote(repo)}'
+    )
     lines = [
         'set -euo pipefail',
         'RUN_ROOT="$PWD"',
@@ -51,7 +123,7 @@ def bootstrap(repo, commit, run_id, inputs, docker):
         f'export MINERAL_GIT_COMMIT={shlex.quote(commit)}',
         'export APPTAINERENV_CLUSTER_RUN_ID="$CLUSTER_RUN_ID"',
         'export APPTAINERENV_MINERAL_GIT_COMMIT="$MINERAL_GIT_COMMIT"',
-        f'CLUSTER_REPO={shlex.quote(repo)}',
+        checkout,
         'git -C "$CLUSTER_REPO" cat-file -e "$MINERAL_GIT_COMMIT^{commit}"',
         'mkdir "$RUN_ROOT/source"',
         'git -C "$CLUSTER_REPO" archive "$MINERAL_GIT_COMMIT" | tar -x -C "$RUN_ROOT/source"',
@@ -60,11 +132,11 @@ def bootstrap(repo, commit, run_id, inputs, docker):
     ]
     for relative, absolute in inputs.items():
         dest = '"$RUN_ROOT/source"/' + shlex.quote(relative)
-        lines.append(f'test -e {shlex.quote(absolute)}')
+        lines.append(f'test -e {shell_path(absolute)} || {{ echo "missing input: "{shell_path(absolute)} >&2; exit 1; }}')
         if not docker:
             lines.extend([
                 f'mkdir -p "$(dirname {dest})"',
-                f'ln -s {shlex.quote(absolute)} {dest}',
+                f'ln -s {shell_path(absolute)} {dest}',
             ])
     lines.append('cd "$RUN_ROOT/source"')
     return '\n'.join(lines)
