@@ -17,6 +17,8 @@ bestofk_ablation/
 mujoco_playground/
 ICLR Reviews/
 plotter/cluster_runs*/
+AGENTS.md
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
