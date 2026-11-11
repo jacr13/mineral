@@ -159,6 +159,41 @@ tasks/focus/dflex_humanoid.yaml
 tasks/focus/dflex_snu_humanoid.yaml
 ```
 
+## Running MENTOR
+
+MENTOR (*Mimicking Expert states by iNverting the simulaTOR*, `mineral/agents/diffil/mentor.py`)
+imitates state-only demonstrations produced by the same differentiable simulator:
+
+1. **Invert:** recover the action behind each demonstration transition by Levenberg-Marquardt
+   through one simulator step.
+2. **Rejoin teacher:** from any state the learner visits, plan `teacher.horizon` open-loop actions
+   in the simulator that bring the state back onto a demonstration, warm-started from the
+   recovered actions of the nearest demonstration windows. The first action is the label.
+3. **Distill:** DAgger. Behavioural cloning on the recovered actions, then per round learner
+   rollouts, teacher labels, a cost gate and regression.
+
+It needs no reward, critic or discriminator, and never reads the demonstrations' stored actions.
+Observation-to-state maps exist for the DFlex Hopper, Ant and Humanoid
+(`mineral/agents/diffil/mentor_sim.py`); Ant and Humanoid observations are used without their
+trailing action coordinates.
+
+```bash
+uv run --locked python -m mineral.scripts.run \
+  task=DFlex \
+  task.env.env_name=hopper \
+  agent=MENTOR/DFlex \
+  agent.mentor.demos.path=experts/demos/DFlex_hopper_demos128_return4812_len1000.pt \
+  logdir=workdir/DFlexHopper-MENTOR \
+  run=train_eval \
+  seed=100
+```
+
+Task files with the per-environment settings (gate, rollout resets, Stage I effort) are in
+`tasks/mentor/`. Evaluation follows SHAC/FOCUS (two episodes per env, `num_actors * 2` episodes,
+same `eval_scores/*` keys) with the deterministic policy. Besides `agent_steps` (learner env
+steps), runs log `sim_steps/{learner,stage1,teacher_fwd,teacher_fwdbwd,total}` so budgets can
+be compared in simulator transitions. GPU checks: `python -m pytest -q tests/test_mentor.py`.
+
 ## Baselines
 
 Baseline task files use the same demonstration layout:

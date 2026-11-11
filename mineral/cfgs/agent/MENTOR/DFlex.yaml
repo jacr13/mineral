@@ -1,0 +1,60 @@
+# MENTOR: Mimicking Expert states by iNverting the simulaTOR (state-only imitation, DFlex).
+# Defaults are the Hopper recipe; tasks/mentor/*.yaml set the Ant / Humanoid ones.
+seed: ${..seed}
+algo: MENTOR
+
+print_every: 1
+ckpt_every: 1  # in DAgger rounds
+
+network:
+  normalize_input: False  # the policy standardises inputs with the demo statistics
+  units: [256, 256]
+
+mentor:
+  num_actors: ${...task.env.numEnvs}
+  rounds: 10
+  eval_episodes_per_env: 2  # as SHAC/FOCUS eval: num_actors * 2 episodes
+
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+
+  # Stage I: Levenberg-Marquardt action inversion of every demo transition
+  invert:
+    batch: 2000
+    iters: 5
+    starts: 1
+
+  # Stage II: rejoin teacher
+  teacher:
+    horizon: 8
+    num_windows: 3
+    screen: True  # rank windows by warm-start cost, optimise only the best one
+    iters: 20
+    lr: 0.2
+    action_reg: 0.05
+    phase_offsets: [-2, -1, 0, 1, 2, 3, 4, 5, 6]
+    batch: 340
+    batches_per_round: 6
+
+  # keep a label if its rejoin cost <= max(tau, cost quantile); quantile 0 = fixed tau
+  gate:
+    tau: 1.0
+    quantile: 0.0
+
+  # learner rollouts per round (envs keep running across rounds; auto-reset on falls)
+  rollout:
+    length: 50
+    noise: 0.05
+    reset_every: 0  # >0: reset the first reset_fraction of the envs every this many steps
+    reset_fraction: 1.0
+
+  # Stage III: regression on the aggregated labels
+  fit:
+    init_steps: 6000
+    init_lr: 1e-3
+    steps: 3000
+    lr: 5e-4
+    lr_min: 1e-5
+    batch_size: 1024

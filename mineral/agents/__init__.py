@@ -9,6 +9,7 @@ from .oops.oops import OOPS
 from .opolo.opolo import OPOLO
 from .diffil.diffmimic import DiffMimic
 from .diffil.ild import ILD
+from .diffil.mentor import MENTOR
 from .diffil.focus import FOCUS
 from .diffil.focus_ppo import FOCUSPPO
 from .diffil.focus_sac import FOCUSSAC
@@ -25,6 +26,7 @@ __all__ = [
     'FOCUS',
     'ILD',
     'DiffMimic',
+    'MENTOR',
     'PPO',
     'SAC',
     'GAIL',
