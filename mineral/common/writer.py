@@ -176,7 +176,9 @@ class WandbWriter:
         os.environ.setdefault('WANDB_START_METHOD', 'thread')
         options = dict(wandb_options or {})
         options.update({k: v for k, v in (('name', name), ('id', run_id), ('group', group), ('project', project)) if v})
-        config = dict(config, slurm_job_id=os.environ.get('SLURM_JOB_ID'))
+        config = dict(config, slurm_job_id=os.environ.get('SLURM_JOB_ID'),
+                      cluster_run_id=os.environ.get('CLUSTER_RUN_ID'),
+                      git_commit=os.environ.get('MINERAL_GIT_COMMIT'))
         self.wandb = wandb
         self.run = wandb.init(**options, dir=logdir, config=config)
 

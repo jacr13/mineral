@@ -176,3 +176,65 @@ the spawner defaults to 12 hours.
 ## License
 
 This repository is distributed under the license included in `LICENSE`.
+
+## Cluster supervisor exports
+
+The spawner can export commit-pinned jobs into a cluster supervisor's data directory.
+The agent supplies the cluster repository and input paths for each experiment. The
+repository must already contain the requested commit; jobs never pull a moving branch
+or change the shared checkout. Each job exports that commit into its own `source/`
+directory and mounts that directory into the supplied Apptainer image. The image
+provides the dependencies and must be compatible with the commit's `uv.lock`.
+
+```bash
+uv run --locked python spawner.py \
+  --task_name focus --env_files dflex_humanoid.yaml \
+  --deployment slurm --docker \
+  --docker_image /cluster/images/mineral.sif \
+  --cluster_repo /cluster/repos/mineral \
+  --cluster_input experts/demos=/cluster/datasets/mineral/demos \
+  --git_commit HEAD \
+  --supervisor_dir /home/joao/docker/cluster-supervisor/data \
+  --sweep --sweep_max 6 --priority 40 --no-deploy_now
+```
+
+The paths above are examples; supply the actual cluster paths. `HEAD` is resolved
+locally to a full commit hash. Uncommitted source changes are **not included**;
+resolved task overrides and hyperparameters are included in `config.json` and in the
+script. Exporting while developing is allowed and prints a reminder about this.
+
+By default this creates inert `data/previews/<run-id>/` folders for review, plus
+intermediate scripts in `data/generated/`. Nothing is submitted or registered.
+Add `--enqueue` to generate and publish jobs to `data/incoming/`; the supervisor
+registers immutable copies in `data/runs/<run-id>/`. Repeating the spawner command
+creates new run IDs, including when switching from preview to enqueue. `--deploy_now`
+is rejected in supervisor mode. Enqueued jobs remain waiting while paused or in dry-run;
+turning submission on later makes them eligible, so use previews for review-only jobs.
+
+Each exported folder contains:
+
+```text
+job.sbatch       # Complete Slurm script, pinned commit and training command
+config.json      # Final spawner overrides, including seed and hyperparameters
+run.json         # Stable supervisor ID, source revision, input paths and priority
+out/             # Slurm stdout/stderr; present before Slurm opens these files
+```
+
+On the cluster, each job also creates `source/` and `results/` under its uploaded
+run directory. Training outputs, checkpoints and metadata go to `results/`, separately
+from Slurm logs in `out/`. The source snapshot is private to the run. `--cluster_input`
+can be repeated for demonstrations or other files; inputs are mounted read-only for
+Apptainer jobs. Untracked files such as `.env` are not copied automatically; if needed,
+provide an explicit mapping or use your cluster's credential setup. Native jobs link
+inputs and rely on host filesystem permissions instead of read-only container mounts.
+
+The stable `CLUSTER_RUN_ID` exists before submission. `SLURM_JOB_ID` identifies the
+cluster allocation afterward. Both, along with the pinned Git commit, are saved to
+training metadata and W&B configuration by versions of this code containing that
+support. Older pinned commits still have the supervisor-side `run.json` association.
+
+Focused checks, requiring Python, PyYAML and pytest but no GPU or Slurm:
+
+```bash
+python -m pytest -q tests/test_cluster_jobs.py
+```

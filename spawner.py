@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from mineral.common.cluster_jobs import bootstrap, cluster_inputs, run_identity, source_revision, write_export
+
 ENV_BUNDLES = {
     "new_dflex": ["cheetah", "anymal"],
     "dflex": ["ant", "hopper", "humanoid", "snu_humanoid"],
@@ -370,23 +372,36 @@ def _write_slurm_script(script_path, name, command, args):
     memory = args.memory
 
     modules = ""
+    run_info = getattr(args, '_supervisor_run', None)
+    if run_info:
+        modules = bootstrap(args.cluster_repo, run_info['git_commit'], run_info['run_id'], run_info['inputs'], args.docker)
     if args.docker:
         if args.docker_image is None:
             raise ValueError("Docker image must be specified when using Apptainer.")
-        command = APPTAINER_CMD.format(
-            num_workers=num_workers,
-            cuda="--nv" if args.device == "gpu" else "",
-            apptainer_image=args.docker_image,
-            path2code=os.getcwdb().decode(),
-            command=command,
-        )
-        modules = ""
+        if run_info:
+            binds = ['-B "$RUN_ROOT/source:/workspace"', '-B "$RUN_ROOT/results:/results"']
+            binds += ['-B ' + shlex.quote(f'{host}:/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
+            command = (
+                '-n 1 apptainer exec ' + ('--nv ' if args.device == 'gpu' else '')
+                + '--containall ' + ' '.join(binds) + ' ' + shlex.quote(args.docker_image)
+                + ' bash -c ' + shlex.quote('cd /workspace && ' + command)
+            )
+        else:
+            command = APPTAINER_CMD.format(
+                num_workers=num_workers,
+                cuda="--nv" if args.device == "gpu" else "",
+                apptainer_image=shlex.quote(args.docker_image),
+                path2code=shlex.quote(getattr(args, 'cluster_repo', None) or os.getcwd()),
+                command=command,
+            )
+    elif run_info:
+        command = 'bash -c ' + shlex.quote(command)
 
     extra_gpu_params = ""
     if args.gpu_memory is not None:
         extra_gpu_params += SBATCH_GPU_MEMORY.format(gpu_memory=args.gpu_memory)
 
-    extra_params = SBATCH_GPU.format(extra_gpu_params=extra_gpu_params)
+    extra_params = SBATCH_GPU.format(extra_gpu_params=extra_gpu_params) if args.device == "gpu" else ""
     if args.gpu_constraint:
         extra_params += "\n" + SBATCH_CONSTRAINT.format(gpu_constraint=args.gpu_constraint)
 
@@ -401,12 +416,29 @@ def _write_slurm_script(script_path, name, command, args):
         command=command,
     )
     # SLURM opens stdout/stderr before executing the script.
-    Path("out").mkdir(parents=True, exist_ok=True)
+    if not run_info:
+        Path("out").mkdir(parents=True, exist_ok=True)
     script_path.write_text(script_content)
     script_path.chmod(0o755)
 
 
 def run(args):
+    supervisor_dir = getattr(args, 'supervisor_dir', None)
+    if getattr(args, 'enqueue', False) and not supervisor_dir:
+        raise ValueError('--enqueue requires --supervisor_dir')
+    if supervisor_dir:
+        if args.deployment != 'slurm' or args.deploy_now:
+            raise ValueError('Supervisor exports require --deployment slurm --no-deploy_now')
+        if not args.cluster_repo or not args.cluster_repo.startswith('/') or any(c in args.cluster_repo for c in '\n\r,:'):
+            raise ValueError('--cluster_repo must be an absolute cluster repository path (no commas or colons)')
+        if not 0 <= args.priority <= 100:
+            raise ValueError('--priority must be between 0 and 100')
+        if args.uv_update:
+            raise ValueError('Supervisor exports require locked dependencies; omit --uv_update')
+        commit, dirty = source_revision(args.git_commit)
+        inputs = cluster_inputs(args.cluster_input)
+        if dirty:
+            print(f'NOTE: source is pinned to {commit}; uncommitted code changes are NOT included. Task overrides are saved separately.')
     base_tasks_root = Path("tasks").resolve()
 
     if args.task_name:
@@ -458,7 +490,7 @@ def run(args):
         if not configs:
             raise ValueError("No configs matched the provided --env_files filter.")
 
-    spawn_root = Path("spawn")
+    spawn_root = Path(supervisor_dir) / "generated" if supervisor_dir else Path("spawn")
     spawn_root.mkdir(parents=True, exist_ok=True)
 
     created_scripts = []
@@ -511,6 +543,10 @@ def run(args):
             if key == "runtime" and args.runtime is not None:
                 continue
             setattr(effective_args, key, value)
+        if supervisor_dir:
+            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'cluster_input', 'priority', 'uv_update'):
+                if getattr(effective_args, key) != getattr(args, key):
+                    raise ValueError(f'Supervisor option {key} must be supplied on the command line, not overridden by the task')
         if effective_args.runtime is None:
             effective_args.runtime = "12h"
 
@@ -586,7 +622,15 @@ def run(args):
                 effective_config["max_runtime"] = effective_args.runtime
             _apply_base_algo_override(effective_config, effective_args.base_algo)
 
-            overrides = _build_overrides(effective_config, args.deployment)
+            if supervisor_dir:
+                submission_name, run_id = run_identity()
+                effective_args._supervisor_run = dict(git_commit=commit, run_id=run_id, inputs=inputs)
+                # Training artifacts are separate from out/, which is only Slurm stdout/stderr.
+                effective_config['logdir'] = '/results' if effective_args.docker else '${oc.env:MINERAL_RUN_RESULTS}'
+            if supervisor_dir:
+                overrides = [shlex.quote(value) for value in _build_overrides(effective_config, 'local', indent='')]
+            else:
+                overrides = _build_overrides(effective_config, args.deployment)
             command = _command_from_overrides(overrides)
 
             if effective_args.uv_update:
@@ -602,6 +646,17 @@ def run(args):
                 if effective_args.deploy_now:
                     subprocess.run(["bash", str(script_path)], check=True)
 
+            if supervisor_dir:
+                metadata = dict(
+                    project='mineral', git_commit=commit, source_worktree_dirty=dirty,
+                    cluster_repo=effective_args.cluster_repo, cluster_inputs=inputs,
+                    container_image=effective_args.docker_image if effective_args.docker else None,
+                    priority=effective_args.priority, seed=effective_config.get('seed'),
+                    task_file=str(config_path), training_outputs='results/', slurm_logs='out/',
+                )
+                exported = write_export(supervisor_dir, submission_name, run_id, script_path.read_text(),
+                                        effective_config, metadata, enqueue=args.enqueue)
+                print(f'{"Enqueued" if args.enqueue else "Preview"} run {run_id}: {exported}')
             created_scripts.append(script_path)
             if effective_args.cleanup:
                 script_path.unlink()
@@ -663,6 +718,12 @@ if __name__ == "__main__":
         "e.g. 'COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE' to avoid older Pascal-class "
         "GPUs (Tesla P100, Titan X)",
     )
+    parser.add_argument('--supervisor_dir', help='Supervisor data directory; export inert previews unless --enqueue is set')
+    parser.add_argument('--cluster_repo', help='Absolute repository path on the cluster, supplied per experiment')
+    parser.add_argument('--git_commit', default='HEAD', help='Local Git revision to pin for supervisor exports')
+    parser.add_argument('--cluster_input', action='append', default=[], help='Read-only input mapping: relative/path=/absolute/cluster/path')
+    parser.add_argument('--priority', type=int, default=40, help='Supervisor submission priority, 0–100')
+    boolean_flag(parser, 'enqueue', default=False, help='Publish supervisor exports to incoming instead of inert previews')
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
     boolean_flag(parser, "cleanup", default=False, help="remove script files after deployment")

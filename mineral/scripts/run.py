@@ -43,6 +43,9 @@ def save_run_metadata(logdir, resolved_config, run_name, run_id, project=None, r
         'run_id': run_id,
         'project': project,
         'run_group': run_group,
+        'cluster_run_id': os.getenv('CLUSTER_RUN_ID'),
+        'slurm_job_id': os.getenv('SLURM_JOB_ID'),
+        'git_commit': os.getenv('MINERAL_GIT_COMMIT'),
     }
     yaml.dump(run_metadata, open(os.path.join(logdir, 'run_metadata.yaml'), 'w'), default_flow_style=False)
     yaml.dump(resolved_config, open(os.path.join(logdir, 'resolved_config.yaml'), 'w'), default_flow_style=False)
@@ -110,6 +113,8 @@ def main(config: DictConfig):
         job_id = os.environ.get("SLURM_JOB_ID")
         print(f'SLURM_JOB_ID: {job_id}')
         resolved_config['slurm_job_id'] = job_id
+        resolved_config['cluster_run_id'] = os.getenv('CLUSTER_RUN_ID')
+        resolved_config['git_commit'] = os.getenv('MINERAL_GIT_COMMIT')
 
         names = make_run_names(config, resolved_config, logdir)
         print(f"run_group: {names['run_group']}, run_name: {names['run_name']}, run_id: {names['run_id']}")
