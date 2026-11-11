@@ -57,4 +57,10 @@ otil:
   loss_orca_lam: 0.25
   loss_orca_cost_mode: neg_log_r
   loss_orca_normalize_p: false
+  # Scale ORCA's ground cost to unit mean and average -log R over the
+  # prefix. Without it the cost reaches ~660 per step on the locomotion
+  # tasks and exp(-cost) underflows to exactly zero, so the imitation
+  # reward is identically zero. Must be declared here: Hydra runs in
+  # struct mode, so --set on an undeclared key aborts the job.
+  loss_orca_normalize_cost: true
   actor_value_return_type: min
