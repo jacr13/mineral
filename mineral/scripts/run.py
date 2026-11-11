@@ -3,16 +3,20 @@ import os
 import pprint
 import sys
 
-import hydra
-import numpy as np
-import yaml
-from dotenv import load_dotenv
-from hydra.utils import to_absolute_path
-from omegaconf import DictConfig, OmegaConf
-from termcolor import cprint
+from ..common.quiet import quiet_third_party
 
-from ..common.job_clock import JobClock
-from .utils import make_run_names
+quiet_third_party()  # before Hydra and gym are imported
+
+import hydra  # noqa: E402
+import numpy as np  # noqa: E402
+import yaml  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+from hydra.utils import to_absolute_path  # noqa: E402
+from omegaconf import DictConfig, OmegaConf  # noqa: E402
+from termcolor import cprint  # noqa: E402
+
+from ..common.job_clock import JobClock  # noqa: E402
+from .utils import make_run_names  # noqa: E402
 
 load_dotenv()
 
@@ -195,7 +199,7 @@ if __name__ == '__main__':
     hydra.main(
         config_name='config',
         config_path=os.path.join(os.path.abspath(os.path.dirname(__file__)), '../cfgs'),
-        version_base='1.1',
+        version_base='1.3',
     )(lambda x: c.append(x))()
     config = c[0]
 
