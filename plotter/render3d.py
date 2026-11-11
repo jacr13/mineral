@@ -35,10 +35,14 @@ THREE = os.path.join(HERE, "viewer", "three.module.js")
 # One colour per panel, and enough of them that a 4-panel comparison never
 # reuses the expert's blue for a learner -- which otherwise reads as "this
 # policy is the demonstration".
+# The expert is warm, every learner is cool, so the reference reads as the
+# reference at a glance. Blue is deliberately NOT the expert: in the muscle
+# view blue means a relaxed muscle, and reusing it for the demonstration body
+# collides with that legend.
 PALETTE = {
-    "expert": "0x3f7fbf",
-    "learner": "0x4a9e6a",
-    "third": "0xb4763c",
+    "expert": "0xc98a3c",
+    "learner": "0x3f7fbf",
+    "third": "0x4a9e6a",
     "fourth": "0x8a6fb0",
     "fifth": "0x3f9fa8",
 }
@@ -190,17 +194,20 @@ function build(fr) {{
 // Camera follows the body along x only: a fixed height and distance make the
 // gait's vertical motion readable instead of cancelling it out.
 function place(fr) {{
-  let cx = 0, n = 0, hi = 0;
+  // Track the body in BOTH x and z. Tracking x alone and looking at z=0 means
+  // a policy that drifts sideways walks away from the camera, so panels in the
+  // same comparison end up at different apparent scales.
+  let cx = 0, cz = 0, n = 0, hi = 0;
   for (const c of fr.caps) {{
-    cx += c[0] + c[3]; n += 2;
+    cx += c[0] + c[3]; cz += c[2] + c[5]; n += 2;
     hi = Math.max(hi, c[1], c[4]);
   }}
-  cx = n ? cx / n : 0;
+  cx = n ? cx / n : 0; cz = n ? cz / n : 0;
   const d = CAM.dist, h = CAM.height;
-  camera.position.set(cx + d * Math.sin(CAM.yaw), h, d * Math.cos(CAM.yaw));
-  camera.lookAt(cx, CAM.look, 0);
-  key.position.set(cx + 4, 8, 5);
-  key.target.position.set(cx, 0, 0);
+  camera.position.set(cx + d * Math.sin(CAM.yaw), h, cz + d * Math.cos(CAM.yaw));
+  camera.lookAt(cx, CAM.look, cz);
+  key.position.set(cx + 4, 8, cz + 5);
+  key.target.position.set(cx, 0, cz);
   key.target.updateMatrixWorld();
 }}
 
@@ -379,7 +386,7 @@ if __name__ == "__main__":
 # SNU Humanoid only: real bone meshes placed rigidly per link. See
 # plotter/snu_bones.py for why the rest pose has to be divided out first.
 
-def _page_bones(meshes, frames, cell, cols, rows, cam):
+def _page_bones(meshes, frames, cell, cols, rows, cam, muscles=None):
     import base64 as _b64
 
     geo = {}
@@ -388,7 +395,8 @@ def _page_bones(meshes, frames, cell, cols, rows, cam):
             "v": _b64.b64encode(b["verts"].astype(np.float32).tobytes()).decode(),
             "f": _b64.b64encode(b["faces"].astype(np.uint32).tobytes()).decode(),
         }
-    payload = _b64.b64encode(json.dumps({"geo": geo, "frames": frames}).encode()).decode()
+    payload = _b64.b64encode(json.dumps(
+        {"geo": geo, "frames": frames, "muscles": muscles or []}).encode()).decode()
     return f"""<!doctype html><html><head><meta charset="utf-8"></head>
 <body style="margin:0;background:#fff">
 <canvas id="c" width="{cols * cell}" height="{rows * cell}"></canvas>
@@ -461,21 +469,61 @@ for (const [name, g] of Object.entries(D.geo)) {{
   scene.add(m); objs[name] = m;
 }}
 
+// Muscles are rebuilt per frame: unlike bones they are not rigid, each
+// waypoint rides a different link. Colour runs blue (relaxed) to red (fully
+// activated); activation is the policy's own action divided by the muscle's
+// strength, which is exactly what the simulator applies.
+const muscleGroup = new THREE.Group();
+scene.add(muscleGroup);
+// Two-stop blue -> red. An HSL sweep would pass through cyan, green and
+// yellow, which reads as a rainbow rather than "relaxed vs contracted".
+const REST = new THREE.Color(0x2f6fb8), FIRED = new THREE.Color(0xd4322f);
+function colourFor(a) {{
+  const t = Math.min(1, Math.max(0, a));
+  return REST.clone().lerp(FIRED, t);
+}}
+function buildMuscles(frameMuscles) {{
+  while (muscleGroup.children.length) {{
+    const c = muscleGroup.children.pop();
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) c.material.dispose();
+  }}
+  if (!frameMuscles) return;
+  for (const [pts, act] of frameMuscles) {{
+    if (pts.length < 2) continue;
+    const curve = new THREE.CatmullRomCurve3(
+      pts.map(q => new THREE.Vector3(q[0], q[1], q[2])));
+    const m = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, Math.max(6, pts.length * 3), 0.0055, 5, false),
+      new THREE.MeshStandardMaterial({{color: colourFor(act), roughness: 0.45,
+                                      emissive: colourFor(act),
+                                      emissiveIntensity: 0.10 + 0.25 * Math.min(1, Math.max(0, act))}}));
+    m.castShadow = false;
+    muscleGroup.add(m);
+  }}
+}}
+
 for (let i = 0; i < D.frames.length; i++) {{
   const fr = D.frames[i];
-  let cx = 0, n = 0;
+  buildMuscles(D.muscles[i]);
+  // Anchor on the pelvis, not the mean of all bone origins: the mean drifts
+  // toward whichever limb is extended, so the figure slides around the frame.
+  // Track z too, for the same reason as the capsule view.
+  let cx = 0, cz = 0, n = 0, px = null, pz = null;
   for (const [name, p, q] of fr) {{
     const o = objs[name];
     if (!o) continue;
     o.position.set(p[0], p[1], p[2]);
     o.quaternion.set(q[0], q[1], q[2], q[3]);
-    cx += p[0]; n++;
+    cx += p[0]; cz += p[2]; n++;
+    if (name === "Pelvis") {{ px = p[0]; pz = p[2]; }}
   }}
-  cx = n ? cx / n : 0;
-  camera.position.set(cx + CAM.dist * Math.sin(CAM.yaw), CAM.height, CAM.dist * Math.cos(CAM.yaw));
-  camera.lookAt(cx, CAM.look, 0);
-  key.position.set(cx + 4, 8, 5);
-  key.target.position.set(cx, 0, 0); key.target.updateMatrixWorld();
+  cx = px !== null ? px : (n ? cx / n : 0);
+  cz = pz !== null ? pz : (n ? cz / n : 0);
+  camera.position.set(cx + CAM.dist * Math.sin(CAM.yaw), CAM.height, cz + CAM.dist * Math.cos(CAM.yaw));
+  camera.lookAt(cx, CAM.look, cz);
+  key.position.set(cx + 4, 8, cz + 5);
+  key.target.position.set(cx, 0, cz); key.target.updateMatrixWorld();
   const col = i % COLS, row = Math.floor(i / COLS);
   const x = col * CELL, y = (ROWS - 1 - row) * CELL;
   renderer.setViewport(x, y, CELL, CELL);
@@ -488,7 +536,7 @@ document.title = "done";
 
 
 def render_bones_video(meshes, frame_sets, labels, out_path, cell=420, fps=30,
-                       cam=None, per_sheet=40):
+                       cam=None, per_sheet=40, muscle_sets=None):
     """Side-by-side bone-mesh video. ``frame_sets`` hold per-frame placements."""
     from PIL import Image, ImageDraw
 
@@ -511,8 +559,11 @@ def render_bones_video(meshes, frame_sets, labels, out_path, cell=420, fps=30,
                 rows = int(math.ceil(len(chunk) / cols))
                 page = os.path.join(out_dir, f"s{start:05d}.html")
                 png = os.path.join(out_dir, f"s{start:05d}.png")
+                mus = None
+                if muscle_sets is not None and muscle_sets[k] is not None:
+                    mus = muscle_sets[k][start:start + per_sheet]
                 with open(page, "w") as f:
-                    f.write(_page_bones(meshes, chunk, cell, cols, rows, cam))
+                    f.write(_page_bones(meshes, chunk, cell, cols, rows, cam, muscles=mus))
                 subprocess.run(
                     [chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
                      "--enable-unsafe-swiftshader", "--allow-file-access-from-files",
