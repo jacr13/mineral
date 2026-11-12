@@ -78,3 +78,5 @@ mentor:
     lr: 5e-4
     lr_min: 1e-5
     batch_size: 1024
+    loss: action  # action: ||pi(s) - a*||^2; effect: ||W J (pi(s) - a*)||^2 through the simulator Jacobian (over-actuated bodies)
+    action_weight: 1e-3  # small action term added to the effect loss (null space)

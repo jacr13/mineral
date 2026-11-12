@@ -397,8 +397,45 @@ class MENTOR(Agent):
         return stats
 
     # ---- Stage III ----
+    @torch.no_grad()
+    def sync_jacobians(self, h=1e-2, batch=1000):
+        """Weighted action Jacobians W df/da at every dataset (state, label) pair not covered yet.
+
+        Forward differences through one simulator step (act_dim + 1 forward steps per sample),
+        with W = 1/std(s' - s) as in Stage I. Used by the effect-space fit loss.
+        """
+        n_have = 0 if getattr(self, 'data_J', None) is None else self.data_J.shape[0]
+        n_all = self.data_s.shape[0]
+        if n_have >= n_all:
+            return
+        if getattr(self, 'jac_step', None) is None:
+            self.jac_step = OneStep(self.spec, batch, self.device, self.counter)
+        out = []
+        for c0 in range(n_have, n_all, batch):
+            s = self.data_s[c0 : c0 + batch]
+            a = self.data_a[c0 : c0 + batch].clamp(-1, 1)
+            k = s.shape[0]
+            if k < batch:
+                s = torch.cat([s, s[:1].expand(batch - k, -1)])
+                a = torch.cat([a, a[:1].expand(batch - k, -1)])
+            y = self.jac_step(s, a, grad=False)
+            cols = []
+            for j in range(self.spec.act_dim):
+                ap = a.clone()
+                sign = torch.where(a[:, j] + h > 1, -1.0, 1.0)
+                ap[:, j] = (a[:, j] + sign * h).clamp(-1, 1)
+                da = (ap[:, j] - a[:, j]).unsqueeze(-1)
+                cols.append((self.jac_step(s, ap, grad=False) - y) * self.w_step / da)
+            out.append(torch.stack(cols, -1)[:k])
+        new = torch.cat(out)
+        self.data_J = new if n_have == 0 else torch.cat([self.data_J, new])
+
     def fit(self, steps, lr, round_idx):
         cfg = self.mentor_config.fit
+        effect = str(cfg.get('loss', 'action')) == 'effect'
+        if effect:  # fit the action's effect on the next state, ||W J (pi(s) - a*)||^2 (+ small action term)
+            self.sync_jacobians()
+            action_weight = float(cfg.get('action_weight', 1e-3))
         opt = torch.optim.Adam(self.policy.parameters(), lr=lr)
         sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps, eta_min=float(cfg.lr_min))
         g = torch.Generator(device=self.device)
@@ -407,7 +444,12 @@ class MENTOR(Agent):
         self.policy.train()
         for _ in range(steps):
             idx = torch.randint(0, self.data_s.shape[0], (bs,), device=self.device, generator=g)
-            loss = ((self.policy(self.data_s[idx]) - self.data_a[idx]) ** 2).sum(-1).mean()
+            diff = self.policy(self.data_s[idx]) - self.data_a[idx]
+            if effect:
+                moved = (self.data_J[idx] @ diff.unsqueeze(-1)).squeeze(-1)
+                loss = (moved**2).sum(-1).mean() + action_weight * (diff**2).sum(-1).mean()
+            else:
+                loss = (diff**2).sum(-1).mean()
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()
