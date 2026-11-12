@@ -31,10 +31,19 @@ from .mentor_sim import OneStep, SimCounter, SynergySpec, get_spec
 
 
 class MentorPolicy(nn.Module):
-    """Deterministic MLP policy, tanh output, input standardised with the demo statistics."""
+    """Deterministic MLP policy, input standardised with the demo statistics.
 
-    def __init__(self, obs_dim, act_dim, mean, std, units=(256, 256)):
+    ``squash='tanh'``: tanh output. ``squash='clip'``: linear output while training (the regression
+    keeps its gradient for labels at the action bounds, e.g. muscles that are fully off) and clipped
+    to [-1, 1] everywhere else (rollouts, teacher queries, evaluation). ``fitting`` is set by fit().
+    """
+
+    def __init__(self, obs_dim, act_dim, mean, std, units=(256, 256), squash='tanh'):
         super().__init__()
+        if squash not in ('tanh', 'clip'):
+            raise ValueError(f'unknown policy squash {squash!r}')
+        self.squash = squash
+        self.fitting = False
         self.register_buffer('mean', mean.clone())
         self.register_buffer('std', std.clone())
         layers, d = [], obs_dim
@@ -45,7 +54,10 @@ class MentorPolicy(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, obs):
-        return torch.tanh(self.net((obs - self.mean) / self.std))
+        out = self.net((obs - self.mean) / self.std)
+        if self.squash == 'tanh':
+            return torch.tanh(out)
+        return out if self.fitting else out.clamp(-1, 1)
 
 
 @torch.no_grad()
@@ -366,7 +378,14 @@ class MENTOR(Agent):
         # --- Policy ---
         units = tuple(self.network_config.get('units', [256, 256]))
         n_syn = int(cfg.get('synergies', {}).get('dims', 0))
-        self.policy = MentorPolicy(D, n_syn or self.spec.act_dim, S_valid.mean(0), S_valid.std(0).clamp_min(1e-6), units)
+        self.policy = MentorPolicy(
+            D,
+            n_syn or self.spec.act_dim,
+            S_valid.mean(0),
+            S_valid.std(0).clamp_min(1e-6),
+            units,
+            squash=str(self.network_config.get('squash', 'tanh')),
+        )
         self.policy = self.policy.to(self.device)
         print(self.policy, '\n')
 
@@ -533,6 +552,7 @@ class MENTOR(Agent):
         g.manual_seed(self.seed * 100 + round_idx)
         bs = int(cfg.batch_size)
         self.policy.train()
+        self.policy.fitting = True
         for _ in range(steps):
             idx = torch.randint(0, self.data_s.shape[0], (bs,), device=self.device, generator=g)
             diff = self.policy(self.data_s[idx]) - self.data_a[idx]
@@ -545,6 +565,7 @@ class MENTOR(Agent):
             loss.backward()
             opt.step()
             sch.step()
+        self.policy.fitting = False
         self.policy.eval()
         with torch.no_grad():
             full = (

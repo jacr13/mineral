@@ -9,6 +9,7 @@ ckpt_every: 1  # in DAgger rounds
 network:
   normalize_input: False  # the policy standardises inputs with the demo statistics
   units: [256, 256]
+  squash: tanh  # tanh, or clip: linear output in training, clipped to [-1, 1] when acting
 
 mentor:
   num_actors: ${...task.env.numEnvs}
