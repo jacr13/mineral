@@ -208,6 +208,11 @@ class RejoinTeacher:
         self.N, self.T, self.D = N, T, D
         valid = torch.arange(T, device=device)[None] < lengths[:, None]
         self.w = 1.0 / S[valid].std(0).clamp_min(1e-6)
+        # Optional: observation coordinates the teacher ignores when matching windows and in its cost, e.g. a goal
+        # pose the actions cannot change (AllegroHand: "45:52"). Comma-separated 'a:b' ranges or indices.
+        for part in [p for p in str(cfg.get('ignore_dims', '') or '').split(',') if p.strip()]:
+            a_, _, b_ = part.strip().partition(':')
+            self.w[int(a_) : (int(b_) if b_ else int(a_) + 1)] = 0.0
         self.S_flat = (S * self.w).reshape(-1, D)
         # Support barrier (optional): penalise planned states outside the per-coordinate range
         # the demos visit (widened by support_margin standard deviations), e.g. a torso too low.
