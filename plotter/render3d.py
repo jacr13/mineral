@@ -47,6 +47,92 @@ PALETTE = {
     "fifth": "0x3f9fa8",
 }
 
+# Colour is a property of the METHOD, not of the panel position. Assigning by
+# index made FOCUS-OT-Cos blue on Humanoid and green on Ant, which invites
+# exactly the cross-task misreading the clips exist to prevent.
+METHOD_COLOURS = {
+    "expert": "0xc98a3c",        # amber -- the reference, warm against cool learners
+    "focus-l2": "0x8a6fb0",      # purple
+    "focus-ot-l2": "0x3f7fbf",   # blue
+    "focus-ot-cos": "0x4a9e6a",  # green
+}
+
+# Canonical panel order, left to right. Same sequence in every clip so a
+# reader can compare one column across tasks without re-reading the labels.
+METHOD_ORDER = ["expert", "focus-l2", "focus-ot-l2", "focus-ot-cos"]
+
+
+def method_key(label):
+    """Label as written on a panel -> canonical method key, or None.
+
+    Order of tests matters: 'FOCUS-OT-L2' contains 'l2', so the OT variants
+    have to be matched before the plain one.
+    """
+    s = str(label).lower().replace("_", "-")
+    if "expert" in s:
+        return "expert"
+    if "ot-cos" in s or "cosine" in s:
+        return "focus-ot-cos"
+    if "ot-l2" in s:
+        return "focus-ot-l2"
+    if "l2" in s:
+        return "focus-l2"
+    return None
+
+
+def colour_for(label, index=0):
+    """three.js hex for a panel; falls back to the positional palette."""
+    k = method_key(label)
+    if k in METHOD_COLOURS:
+        return METHOD_COLOURS[k]
+    return list(PALETTE.values())[index % len(PALETTE)]
+
+
+def rgb_for(label, index=0):
+    h = colour_for(label, index)
+    v = int(h, 16)
+    return ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+
+
+LABEL_STRIP = 30
+
+
+def _label_font(size=14):
+    from PIL import ImageFont
+    for path in ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                 "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                 "/usr/share/fonts/TTF/DejaVuSans.ttf"):
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+
+def _draw_labels(canvas, row, labels, strip=LABEL_STRIP):
+    """Per-panel name, preceded by a small square in the method's colour.
+
+    That square carries the method colour even where the body cannot: the
+    bone-mesh renders are all the same ivory, and in the muscle view blue and
+    red are already spoken for by activation.
+    """
+    from PIL import ImageDraw
+    d = ImageDraw.Draw(canvas)
+    font = _label_font()
+    truetype = hasattr(font, "path")
+    x = 0
+    for k, (im, lab) in enumerate(zip(row, labels)):
+        top = (strip - 12) // 2
+        d.rounded_rectangle([x + 12, top, x + 24, top + 12], radius=3,
+                            fill=rgb_for(lab, k))
+        if truetype:
+            d.text((x + 32, strip // 2), str(lab), fill=(40, 44, 52),
+                   font=font, anchor="lm")
+        else:
+            d.text((x + 32, top), str(lab), fill=(40, 44, 52), font=font)
+        x += im.width
+
 
 def _chromium():
     for b in ("chromium-browser", "chromium", "google-chrome"):
@@ -116,6 +202,11 @@ ground.rotation.x = -Math.PI / 2;
 ground.position.y = 0;
 ground.receiveShadow = true;
 scene.add(ground);
+// The plane is finite, so a fast policy runs off it and the panel loses its
+// floor. Keep it centred under the camera target and slide the texture back
+// by the same amount, so the checkers stay anchored in world space and
+// forward motion is still visible.
+const TILE = 240 / 60;
 
 const key = new THREE.DirectionalLight(0xffffff, 2.3);
 key.position.set(4, 8, 5);
@@ -206,6 +297,8 @@ function place(fr) {{
   const d = CAM.dist, h = CAM.height;
   camera.position.set(cx + d * Math.sin(CAM.yaw), h, cz + d * Math.cos(CAM.yaw));
   camera.lookAt(cx, CAM.look, cz);
+  ground.position.set(cx, 0, cz);
+  tex.offset.set(cx / TILE, -cz / TILE);
   key.position.set(cx + 4, 8, cz + 5);
   key.target.position.set(cx, 0, cz);
   key.target.updateMatrixWorld();
@@ -224,13 +317,47 @@ document.title = "done";
 """
 
 
+def _shoot(chrome, page, png, width, height, timeout=1800):
+    subprocess.run(
+        [chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
+         "--enable-unsafe-swiftshader", "--allow-file-access-from-files",
+         "--hide-scrollbars", "--virtual-time-budget=120000",
+         f"--screenshot={png}", f"--window-size={width},{height}",
+         f"file://{page}"],
+        check=False, capture_output=True, timeout=timeout)
+    if not os.path.exists(png):
+        raise RuntimeError(f"chromium produced no screenshot for {page}")
+    return png
+
+
+def _shoot_many(jobs, workers=None):
+    """Rasterize sheets concurrently.
+
+    Chromium here is software-rasterizing (no GPU in headless), so a sheet is
+    pure CPU and the loop used one core out of twelve. Each sheet is an
+    independent process writing its own PNG, so they parallelize directly.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    if workers is None:
+        # SwiftShader is itself multithreaded, so more processes than this
+        # oversubscribe the cores: each sheet then takes long enough to trip
+        # its own timeout, and total throughput barely improves.
+        workers = max(1, min(3, (os.cpu_count() or 4) // 4))
+    if workers == 1 or len(jobs) == 1:
+        for j in jobs:
+            _shoot(*j)
+        return
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(lambda j: _shoot(*j), jobs))
+
+
 def render_sheets(frames, out_dir, colour, style, cell=360, per_sheet=40,
                   cam=None, timeout=300):
     """Render ``frames`` to sprite-sheet PNGs; returns the list of paths."""
     cam = cam or {"dist": 3.4, "height": 1.35, "yaw": 0.62, "look": 0.75}
     os.makedirs(out_dir, exist_ok=True)
     chrome = _chromium()
-    sheets = []
+    sheets, jobs = [], []
     for start in range(0, len(frames), per_sheet):
         chunk = [_frame_payload(f, style) for f in frames[start:start + per_sheet]]
         cols = int(math.ceil(math.sqrt(len(chunk))))
@@ -245,16 +372,9 @@ def render_sheets(frames, out_dir, colour, style, cell=360, per_sheet=40,
         link = os.path.join(out_dir, "three.module.js")
         if not os.path.exists(link):
             shutil.copy(THREE, link)
-        subprocess.run(
-            [chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
-             "--enable-unsafe-swiftshader", "--allow-file-access-from-files",
-             "--hide-scrollbars", "--virtual-time-budget=120000",
-             f"--screenshot={png}", f"--window-size={cols * cell},{rows * cell}",
-             f"file://{page}"],
-            check=False, capture_output=True, timeout=timeout)
-        if not os.path.exists(png):
-            raise RuntimeError(f"chromium produced no screenshot for {page}")
+        jobs.append((chrome, page, png, cols * cell, rows * cell, timeout))
         sheets.append((png, cols, rows, len(chunk)))
+    _shoot_many(jobs)
     return sheets
 
 
@@ -283,7 +403,7 @@ def render_video(frame_sets, labels, out_path, style="capsule", cell=360,
     try:
         panels = []
         for k, fs in enumerate(frame_sets):
-            colour = list(PALETTE.values())[k % len(PALETTE)]
+            colour = colour_for(labels[k], k)
             sheets = render_sheets(fs[:n], os.path.join(work, f"p{k}"), colour, style,
                                    cell=cell, cam=cam)
             panels.append(frames_from_sheets(sheets, cell))
@@ -292,16 +412,12 @@ def render_video(frame_sets, labels, out_path, style="capsule", cell=360,
             for t in range(n):
                 row = [p[t] for p in panels]
                 w = sum(im.width for im in row)
-                canvas = Image.new("RGB", (w, row[0].height + 26), "white")
+                canvas = Image.new("RGB", (w, row[0].height + LABEL_STRIP), "white")
                 x = 0
                 for im in row:
-                    canvas.paste(im, (x, 26))
+                    canvas.paste(im, (x, LABEL_STRIP))
                     x += im.width
-                d = ImageDraw.Draw(canvas)
-                x = 0
-                for im, lab in zip(row, labels):
-                    d.text((x + 10, 7), lab, fill=(40, 44, 52))
-                    x += im.width
+                _draw_labels(canvas, row, labels)
                 writer.append_data(np.asarray(canvas))
         finally:
             writer.close()
@@ -440,6 +556,9 @@ const tex = (() => {{
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240),
   new THREE.MeshStandardMaterial({{map: tex, roughness: 0.98}}));
 ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+// See the note in _page: the ground follows the camera target so a long
+// rollout never runs off the plane.
+const TILE = 240 / 60;
 
 const key = new THREE.DirectionalLight(0xffffff, 2.2);
 key.position.set(4, 8, 5); key.castShadow = true;
@@ -522,6 +641,8 @@ for (let i = 0; i < D.frames.length; i++) {{
   cz = pz !== null ? pz : (n ? cz / n : 0);
   camera.position.set(cx + CAM.dist * Math.sin(CAM.yaw), CAM.height, cz + CAM.dist * Math.cos(CAM.yaw));
   camera.lookAt(cx, CAM.look, cz);
+  ground.position.set(cx, 0, cz);
+  tex.offset.set(cx / TILE, -cz / TILE);
   key.position.set(cx + 4, 8, cz + 5);
   key.target.position.set(cx, 0, cz); key.target.updateMatrixWorld();
   const col = i % COLS, row = Math.floor(i / COLS);
@@ -552,7 +673,7 @@ def render_bones_video(meshes, frame_sets, labels, out_path, cell=420, fps=30,
             out_dir = os.path.join(work, f"p{k}")
             os.makedirs(out_dir, exist_ok=True)
             shutil.copy(THREE, os.path.join(out_dir, "three.module.js"))
-            sheets = []
+            sheets, jobs = [], []
             for start in range(0, n, per_sheet):
                 chunk = fs[start:start + per_sheet]
                 cols = int(math.ceil(math.sqrt(len(chunk))))
@@ -564,30 +685,20 @@ def render_bones_video(meshes, frame_sets, labels, out_path, cell=420, fps=30,
                     mus = muscle_sets[k][start:start + per_sheet]
                 with open(page, "w") as f:
                     f.write(_page_bones(meshes, chunk, cell, cols, rows, cam, muscles=mus))
-                subprocess.run(
-                    [chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
-                     "--enable-unsafe-swiftshader", "--allow-file-access-from-files",
-                     "--hide-scrollbars", "--virtual-time-budget=120000",
-                     f"--screenshot={png}",
-                     f"--window-size={cols * cell},{rows * cell}", f"file://{page}"],
-                    check=False, capture_output=True, timeout=600)
-                if not os.path.exists(png):
-                    raise RuntimeError(f"chromium produced no screenshot for {page}")
+                jobs.append((chrome, page, png, cols * cell, rows * cell, 1800))
                 sheets.append((png, cols, rows, len(chunk)))
+            _shoot_many(jobs)
             panels.append(frames_from_sheets(sheets, cell))
         writer = imageio.get_writer(out_path, fps=fps, macro_block_size=1)
         try:
             for t in range(n):
                 row = [p[t] for p in panels]
                 w = sum(im.width for im in row)
-                canvas = Image.new("RGB", (w, row[0].height + 26), "white")
+                canvas = Image.new("RGB", (w, row[0].height + LABEL_STRIP), "white")
                 x = 0
                 for im in row:
-                    canvas.paste(im, (x, 26)); x += im.width
-                d = ImageDraw.Draw(canvas)
-                x = 0
-                for im, lab in zip(row, labels):
-                    d.text((x + 10, 7), lab, fill=(40, 44, 52)); x += im.width
+                    canvas.paste(im, (x, LABEL_STRIP)); x += im.width
+                _draw_labels(canvas, row, labels)
                 writer.append_data(np.asarray(canvas))
         finally:
             writer.close()
