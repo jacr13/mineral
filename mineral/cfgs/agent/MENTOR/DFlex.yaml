@@ -39,6 +39,7 @@ mentor:
     phase_offsets: [-2, -1, 0, 1, 2, 3, 4, 5, 6]
     support_barrier: 0.0  # > 0: penalise planned states outside the demos' per-coordinate range
     support_margin: 0.5  # widen that range by this many demo standard deviations
+    anchor_mix: 0.0  # > 0: regularise plans towards the policy's closed-loop actions (1 = policy only, 0 = demo only)
     batch: 340
     batches_per_round: 6
 

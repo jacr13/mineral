@@ -140,6 +140,11 @@ class RejoinTeacher:
         self.lr = float(cfg.lr)
         self.lam = float(cfg.action_reg)
         self.screen = bool(cfg.screen) and self.m > 1
+        # Policy anchor (optional): warm-start and regularise the plan towards the current policy's
+        # closed-loop actions (mixed with the demo actions by anchor_mix), so that over-actuated
+        # bodies get labels consistent with what the policy already does. Set policy via anchor_to().
+        self.anchor_mix = float(cfg.get('anchor_mix', 0.0))
+        self.anchor_policy = None
         self.offsets = torch.tensor(list(cfg.phase_offsets), device=device)
         N, T, D = S.shape
         self.N, self.T, self.D = N, T, D
@@ -202,6 +207,22 @@ class RejoinTeacher:
     def a_ref(self, traj, j):
         return torch.stack([self.A_hat[traj, j + k] for k in range(self.K)], 1)
 
+    def anchor_to(self, policy):
+        self.anchor_policy = policy if self.anchor_mix > 0 else None
+
+    @torch.no_grad()
+    def anchored(self, sim, x, a_demo):
+        """Reference actions: the demo window's, mixed with the policy's K closed-loop actions from x."""
+        if self.anchor_policy is None:
+            return a_demo
+        y, acts = x, []
+        for k in range(self.K):
+            a = self.anchor_policy(y).clamp(-1, 1)
+            acts.append(a)
+            if k < self.K - 1:
+                y = sim(y, a, grad=False)
+        return (1 - self.anchor_mix) * a_demo + self.anchor_mix * torch.stack(acts, 1)
+
     def rollout(self, sim, x, a, grad):
         """Final state and the support-barrier penalty accumulated along the plan."""
         y, outside = x, 0.0
@@ -256,11 +277,15 @@ class RejoinTeacher:
             sel = c0.view(n, m).argmin(1)
             traj, jj = top[ar, sel], j[ar, sel]
             a_ref = self.a_ref(traj, jj)
+            if self.anchor_policy is not None:
+                a_ref = self.anchored(self.sim_one, x, a_ref)
             if self.iters == 0:
                 return a_ref[:, 0], c0.view(n, m)[ar, sel]
             best_a, best = self.optimise(self.sim_one, x, traj, jj, a_ref)
             self.last_choice = (x, best_a, traj, jj)
             return best_a[:, 0], best
+        if self.anchor_policy is not None:
+            a_ref_all = self.anchored(self.sim_all, xr, a_ref_all)
         best_a, best = self.optimise(self.sim_all, xr, traj_all, j_all, a_ref_all)
         sel = best.view(n, m).argmin(1)
         plan = best_a.view(n, m, self.K, -1)[ar, sel]
@@ -734,6 +759,7 @@ class MENTOR(Agent):
         )
         gate_tau, gate_q = float(cfg.gate.tau), float(cfg.gate.quantile)
         self.pending_advantage = []
+        self.teacher.anchor_to(self.policy)
         auto_noise = float(cfg.gate.get('auto_noise', 0.0))
         if auto_noise > 0:  # tau = factor x median teacher cost on states a few noisy demo-replay steps away
             n_cal = int(cfg.gate.get('auto_batches', 3))
