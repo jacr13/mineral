@@ -221,8 +221,11 @@ class RejoinTeacher:
         if not self.window_ok.any():
             raise ValueError(f'demonstrations too short for a rejoin horizon of {self.K}')
         n_plan = batch * self.m
-        self.sim_all = OneStep(spec, n_plan, device, counter)
-        self.sim_one = OneStep(spec, batch, device, counter) if self.screen else None
+        self.sim_all = self.make_sim(spec, n_plan, device, counter)
+        self.sim_one = self.make_sim(spec, batch, device, counter) if self.screen else None
+
+    def make_sim(self, spec, n, device, counter):
+        return OneStep(spec, n, device, counter)
 
     def extend(self, S_new, S1_new, A_new, max_extra):
         """Append short trajectories [k, L, ...] to the library, padded to its length T.
@@ -393,7 +396,16 @@ class MENTOR(Agent):
 
         self.seed = int(full_cfg.seed)
         self.env_name = full_cfg.task.env.env_name
-        self.spec = get_spec(self.env_name)
+        if str(full_cfg.task.name) == 'Rewarped':  # full-state mode: plans start from saved simulator states
+            from .mentor_rewarped import RewarpedSpec
+
+            self.spec = RewarpedSpec(
+                full_cfg, cfg.get('obs_keys', 'joint_q|com_q'), str(cfg.get('stage1', 'joint_velocity')), self.device
+            )
+        else:
+            self.spec = get_spec(self.env_name)
+        self.full_state = bool(getattr(self.spec, 'full_state', False))
+        self.state_bank = None
         self.counter = SimCounter()  # Stage I + teacher simulator transitions
         self.generator = torch.Generator(device=self.device)
         self.generator.manual_seed(self.seed)
@@ -404,10 +416,15 @@ class MENTOR(Agent):
         self.expert_return = float(demos['expert_return'])
         D = self.spec.obs_dim
         obs, next_obs = demos['obs'], demos['next_obs']
-        obs = obs['obs'] if isinstance(obs, dict) else obs
-        next_obs = next_obs['obs'] if isinstance(next_obs, dict) else next_obs
-        self.S = obs[..., :D].float().contiguous()
-        self.S1 = next_obs[..., :D].float().contiguous()
+        if self.full_state:  # selected observation keys, flattened per step
+            N_, T_ = demos['done'].shape[:2]
+            self.S = torch.cat([obs[k].reshape(N_, T_, -1) for k in self.spec.obs_keys], -1).float().contiguous()
+            self.S1 = torch.cat([next_obs[k].reshape(N_, T_, -1) for k in self.spec.obs_keys], -1).float().contiguous()
+        else:
+            obs = obs['obs'] if isinstance(obs, dict) else obs
+            next_obs = next_obs['obs'] if isinstance(next_obs, dict) else next_obs
+            self.S = obs[..., :D].float().contiguous()
+            self.S1 = next_obs[..., :D].float().contiguous()
         self.lengths = self._lengths(demos['done'])
         # AUDIT ONLY (invert.audit_true_actions): replace the recovered actions by the stored expert actions, to
         # measure what action recovery costs. This reads demonstrator actions: never use it for reported results.
@@ -461,6 +478,8 @@ class MENTOR(Agent):
         return lengths
 
     def _state_obs(self, obs):
+        if self.full_state:
+            return self.spec.obs_vec(obs)
         obs = obs['obs'] if isinstance(obs, dict) else obs
         return obs[:, : self.spec.obs_dim]
 
@@ -510,6 +529,14 @@ class MENTOR(Agent):
         batch = int(cfg.batch)
         s, s1 = self.S[self.valid], self.S1[self.valid]
         n = s.shape[0]
+        if self.full_state:  # actions read off the observations (spec.stage1), no simulation
+            t0 = time.time()
+            A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
+            A_hat[self.valid] = self.spec.recover_actions(s, s1)
+            self.A_hat = self.A_labels = A_hat
+            self.stage1_steps = 0
+            print(f'[MENTOR] Stage I ({self.spec.stage1}): {n} transitions, no simulation')
+            return {'stage1/sim_steps': 0, 'stage1/time': time.time() - t0}
         step = OneStep(self.spec, batch, self.device, self.counter)
         acts, costs = [], []
         t0 = time.time()
@@ -646,19 +673,34 @@ class MENTOR(Agent):
             self.obs = self._state_obs(self._convert_obs(self.env.reset()))
         n_reset = int(round(frac * self.num_actors))
         visited, nexts, acts, breaks = [], [], [], []
+        if self.full_state:  # save the full state of the (step, env) pairs the teacher will label
+            tcfg = self.mentor_config.teacher
+            need = int(tcfg.batch) * int(tcfg.batches_per_round)
+            if need > T * self.num_actors:
+                raise ValueError(f'rollouts give {T * self.num_actors} states, the teacher needs {need}')
+            pick = torch.randperm(T * self.num_actors, device=self.device, generator=self.generator)[:need]
+            bank_obs, bank_states = [], []
         for t in range(T):
             broken = torch.zeros(self.num_actors, dtype=torch.bool, device=self.device)
             if reset_every > 0 and t % reset_every == 0 and n_reset > 0:
                 ids = torch.arange(n_reset, device=self.device)
                 self.env.reset(env_ids=ids)
-                self.obs = self._state_obs(self._convert_obs(self.env.obs_buf.clone()))
+                ob = self.env.obs_buf
+                ob = {k: v.clone() for k, v in ob.items()} if isinstance(ob, dict) else ob.clone()
+                self.obs = self._state_obs(self._convert_obs(ob))
                 broken[ids] = t > 0
             a = self.policy(self.obs)
             if noise > 0:
                 a = (a + noise * torch.randn(a.shape, device=self.device, generator=self.generator)).clamp(-1, 1)
             visited.append(self.obs.clone())
+            if self.full_state:
+                ids = pick[pick // self.num_actors == t] % self.num_actors
+                if len(ids) > 0:
+                    bank_obs.append(self.obs[ids].detach().clone())
+                    bank_states.append(self.spec.get_states(self.env, ids))
             obs, rew, done, info = self.env.step(self.env_action(a))
-            before_reset = info.get('obs_before_reset', obs) if isinstance(info, dict) else obs
+            before_reset = info.get('obs_before_reset') if isinstance(info, dict) else None
+            before_reset = obs if before_reset is None else before_reset  # Rewarped sets None when no env reset
             nexts.append(self._state_obs(self._convert_obs(before_reset)).clone())
             acts.append(a.clone())
             breaks.append(broken | done.bool())
@@ -671,6 +713,8 @@ class MENTOR(Agent):
             'act': torch.stack(acts),
             'broken': torch.stack(breaks),
         }
+        if self.full_state:
+            self.state_bank = (torch.cat(bank_obs), self.spec.cat_states(bank_states))
         return torch.cat(visited)
 
     def bootstrap_library(self, cost):
@@ -813,12 +857,22 @@ class MENTOR(Agent):
         if visited.shape[0] < need:
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]
+        if self.full_state:  # label the states saved during the rollouts (bank holds exactly `need` of them)
+            if self.state_bank is None or self.state_bank[0].shape[0] < need:
+                raise ValueError('full-state MENTOR labels the states saved by collect(); the bank is too small')
+            perm = torch.arange(need, device=self.device)
+            visited = self.state_bank[0]
         self.last_label_index = perm
         xs, labels, costs, adv = [], [], [], []
         use_adv = float(self.mentor_config.gate.get('advantage', 0.0)) > 0
         for c0 in range(0, need, batch):
             x = visited[perm[c0 : c0 + batch]]
-            a0, c = self.teacher.label(x)
+            if self.full_state:
+                from .mentor_rewarped import RewarpedSpec
+
+                a0, c = self.teacher.label((x, RewarpedSpec.take(self.state_bank[1], perm[c0 : c0 + batch])))
+            else:
+                a0, c = self.teacher.label(x)
             xs.append(x)
             labels.append(a0.detach())
             costs.append(c.detach())
@@ -842,7 +896,24 @@ class MENTOR(Agent):
             fit_loss = self.fit(int(cfg.fit.init_steps), float(cfg.fit.init_lr), 0)
             self.epoch = 0
             self._log_round({**stats, 'train/fit_loss': fit_loss, 'train/dataset_size': self.data_s.shape[0]})
-        self.teacher = RejoinTeacher(
+        if self.full_state:
+            from .mentor_rewarped import make_state_teacher_class
+
+            TeacherCls = make_state_teacher_class(RejoinTeacher)
+            unsupported = {
+                'augment.replay_batches': int(cfg.get('augment', {}).get('replay_batches', 0)),
+                'augment.perturb_batches': int(cfg.get('augment', {}).get('perturb_batches', 0)),
+                'gate.auto_noise': float(cfg.gate.get('auto_noise', 0.0)),
+                'gate.advantage': float(cfg.gate.get('advantage', 0.0)),
+                'bootstrap.max_segments': int(cfg.get('bootstrap', {}).get('max_segments', 0)),
+                'bootstrap.teacher_steps': int(cfg.get('bootstrap', {}).get('teacher_steps', 0)),
+            }
+            bad = [k for k, v in unsupported.items() if v > 0]
+            if bad:
+                raise ValueError(f'full-state MENTOR has no observation-to-state map, so these need to be off: {bad}')
+        else:
+            TeacherCls = RejoinTeacher
+        self.teacher = TeacherCls(
             self.spec,
             self.S,
             self.S1,
@@ -976,6 +1047,8 @@ class MENTOR(Agent):
 
         Every env contributes its first ``episodes_per_env`` episodes, as in SHAC/FOCUS eval.
         """
+        if not hasattr(self, 'eval_env') and self.full_state:
+            self.eval_env = self.spec.make_env(self.num_actors, self.device, seed=self.seed + 12345, grad=False)
         if not hasattr(self, 'eval_env'):
             env_cfg = self.full_cfg.task.env
             self.eval_env = self.spec.make_env(
@@ -987,7 +1060,7 @@ class MENTOR(Agent):
             )
         env = self.eval_env
         self.policy.eval()
-        obs = self._state_obs(env.reset())
+        obs = self._state_obs(self._convert_obs(env.reset()))
         n = self.num_actors
         ret = torch.zeros(n, device=self.device)
         length = torch.zeros(n, dtype=torch.long, device=self.device)
@@ -995,8 +1068,9 @@ class MENTOR(Agent):
         returns, lengths = [], []
         max_steps = episodes_per_env * env.episode_length + 10
         for _ in range(max_steps):
-            o, r, d, _ = env.step(self.env_action(self.policy(obs)))
-            obs = self._state_obs(o).clone()
+            with torch.no_grad():
+                o, r, d, _ = env.step(self.env_action(self.policy(obs)))
+            obs = self._state_obs(self._convert_obs(o)).clone()
             ret += r
             length += 1
             for i in d.nonzero(as_tuple=False).flatten().tolist():

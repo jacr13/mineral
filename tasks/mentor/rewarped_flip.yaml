@@ -1,0 +1,34 @@
+# DexDeform Flip (Rewarped): a hand flips an MPM dough disc; non-periodic, one-shot manipulation.
+# Full-state MENTOR: no observation-to-state map; the teacher plans from saved simulator states of the learner.
+task:
+  name: Rewarped
+  env:
+    env_name: Flip
+    env_suite: dexdeform
+    no_grad: True  # MENTOR never back-propagates through the learner's rollouts
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    obs_keys: "joint_q|com_q|particle_q"
+    stage1: joint_velocity
+    demos:
+      path: ""  # SAPO expert demos (to be generated)
+      n_trajs: 8
+    teacher:
+      batch: 32
+      batches_per_round: 6
+    rollout:
+      length: 60
+      reset_every: 60
+num_envs: 32
+logdir: "workdir/RewarpedFlip-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"
+  gpu_memory: 22
