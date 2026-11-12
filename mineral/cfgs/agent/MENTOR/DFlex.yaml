@@ -67,6 +67,8 @@ mentor:
     min_labelled: 8
     max_new: 8  # segments added per round
     max_extra: 64  # library cap beyond the original demos (oldest dropped first)
+    teacher_steps: 0  # > 0: before DAgger, roll out the closed-loop teacher this many steps on num_actors envs
+    teacher_tau: 1.0  # accept a teacher trajectory that never falls and has rejoin-cost quantile <= teacher_tau
 
   # Stage III: regression on the aggregated labels
   fit:

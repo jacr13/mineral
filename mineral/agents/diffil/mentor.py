@@ -499,6 +499,64 @@ class MENTOR(Agent):
             'train/segment_cost_median': float(finite.median()) if len(finite) else float('nan'),
         }
 
+    def teacher_demonstrations(self):
+        """Roll out the closed-loop teacher from random initial states before DAgger.
+
+        Trajectories that never fall and whose rejoin-cost quantile is <= bootstrap.teacher_tau
+        join the teacher's library and their (state, teacher action) pairs join the dataset:
+        a few demonstrations become many simulator-checked reference trajectories.
+        """
+        cfg = self.mentor_config
+        bcfg = cfg.bootstrap
+        steps, n = int(bcfg.teacher_steps), self.num_actors
+        tau = float(bcfg.get('teacher_tau', bcfg.get('tau', 0.1)))
+        q = float(bcfg.get('quantile', 0.8))
+        t0 = time.time()
+        driver = RejoinTeacher(self.spec, self.S, self.S1, self.A_hat, self.lengths, n, self.device, self.counter, cfg.teacher)
+        env_cfg = self.full_cfg.task.env
+        env = self.spec.make_env(
+            n,
+            self.device,
+            seed=self.seed + 777,
+            stochastic_init=bool(env_cfg.get('stochastic_init', True)),
+            early_termination=bool(env_cfg.get('early_termination', True)),
+        )
+        with torch.no_grad():
+            obs = self._state_obs(env.reset()).detach().clone()
+        alive = torch.ones(n, dtype=torch.bool, device=self.device)
+        S, S1, A, C = [], [], [], []
+        for _ in range(steps):
+            a, c = driver.label(obs)
+            with torch.no_grad():
+                o, _, done, info = env.step(a)
+            before = info.get('obs_before_reset', o) if isinstance(info, dict) else o
+            S.append(obs)
+            S1.append(self._state_obs(before).detach().clone())
+            A.append(a.detach())
+            C.append(c.detach())
+            alive &= ~done.bool()
+            obs = self._state_obs(o).detach().clone()
+        S, S1, A, C = torch.stack(S, 1), torch.stack(S1, 1), torch.stack(A, 1), torch.stack(C, 1)
+        ok = alive & (C.quantile(q, dim=1) <= tau)
+        keep = ok.nonzero().flatten()
+        if len(keep):
+            self.teacher.extend(S[keep], S1[keep], A[keep], int(bcfg.get('max_extra', 64)))
+            good = (
+                C[keep] <= float(cfg.gate.tau) if float(cfg.gate.quantile) == 0 else torch.ones_like(C[keep], dtype=torch.bool)
+            )
+            self.data_s = torch.cat([self.data_s, S[keep][good]])
+            self.data_a = torch.cat([self.data_a, A[keep][good]])
+        del driver, env
+        torch.cuda.empty_cache()
+        print(
+            f'[MENTOR] teacher demonstrations: {int(alive.sum())}/{n} stayed up for {steps} steps, {len(keep)} accepted, '
+            f'library {self.teacher.N} trajectories, {time.time() - t0:.0f}s'
+        )
+        self.writer.add(
+            self.agent_steps, {'bootstrap/teacher_alive': int(alive.sum()), 'bootstrap/teacher_accepted': len(keep)}
+        )
+        self.writer.write()
+
     def perturbed_demo_states(self, count):
         """Demo states plus Gaussian noise of augment.perturb_scale demo standard deviations per coordinate."""
         scale = float(self.mentor_config.get('augment', {}).get('perturb_scale', 0.1))
@@ -549,6 +607,8 @@ class MENTOR(Agent):
             cfg.teacher,
         )
         gate_tau, gate_q = float(cfg.gate.tau), float(cfg.gate.quantile)
+        if int(cfg.get('bootstrap', {}).get('teacher_steps', 0)) > 0 and self.round == 0:
+            self.teacher_demonstrations()
         while self.round < rounds:
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
