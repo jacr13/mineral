@@ -52,6 +52,9 @@ mentor:
     auto_steps: 4
     auto_factor: 2.0
     auto_batches: 3
+    # advantage gate (> 0): keep a label only if the teacher's K-step plan ends closer to the demo than the policy
+    # run closed loop for K steps from the same state (teacher error <= advantage x policy error); scale-free
+    advantage: 0.0
 
   # learner rollouts per round (envs keep running across rounds; auto-reset on falls)
   rollout:

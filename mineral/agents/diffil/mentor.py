@@ -259,10 +259,36 @@ class RejoinTeacher:
             if self.iters == 0:
                 return a_ref[:, 0], c0.view(n, m)[ar, sel]
             best_a, best = self.optimise(self.sim_one, x, traj, jj, a_ref)
+            self.last_choice = (x, best_a, traj, jj)
             return best_a[:, 0], best
         best_a, best = self.optimise(self.sim_all, xr, traj_all, j_all, a_ref_all)
         sel = best.view(n, m).argmin(1)
-        return best_a.view(n, m, self.K, -1)[ar, sel][:, 0], best.view(n, m)[ar, sel]
+        plan = best_a.view(n, m, self.K, -1)[ar, sel]
+        self.last_choice = (x, plan, top[ar, sel], j[ar, sel])
+        return plan[:, 0], best.view(n, m)[ar, sel]
+
+    def terminal_error(self, y, traj, j):
+        idx = j[:, None] + self.K - 1 + self.offsets[None]
+        idx = torch.minimum(idx.clamp_min(0), (self.lengths[traj] - 1)[:, None])
+        return (((y[:, None] - self.S1[traj[:, None], idx]) * self.w) ** 2).sum(-1).min(-1).values
+
+    @torch.no_grad()
+    def advantage(self, policy):
+        """Rejoin errors of the teacher's plan and of the policy after K steps.
+
+        From the states and windows of the last label() call; the policy runs closed loop. The
+        teacher helps where its error is lower.
+        """
+        x, plan, traj, j = self.last_choice
+        if getattr(self, 'sim_eval', None) is None:
+            self.sim_eval = (
+                self.sim_one if self.sim_one is not None else OneStep(self.spec, self.batch, self.device, self.sim_all.counter)
+            )
+        y_t, y_p = x, x
+        for k in range(self.K):
+            y_t = self.sim_eval(y_t, plan[:, k], grad=False)
+            y_p = self.sim_eval(y_p, policy(y_p), grad=False)
+        return self.terminal_error(y_t, traj, j), self.terminal_error(y_p, traj, j)
 
 
 class MENTOR(Agent):
@@ -667,13 +693,18 @@ class MENTOR(Agent):
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]
         self.last_label_index = perm
-        xs, labels, costs = [], [], []
+        xs, labels, costs, adv = [], [], [], []
+        use_adv = float(self.mentor_config.gate.get('advantage', 0.0)) > 0
         for c0 in range(0, need, batch):
             x = visited[perm[c0 : c0 + batch]]
             a0, c = self.teacher.label(x)
             xs.append(x)
             labels.append(a0.detach())
             costs.append(c.detach())
+            if use_adv:
+                adv.append(torch.stack(self.teacher.advantage(self.policy), 1))
+        if use_adv:  # (teacher error, policy error) per label, consumed by the gate in train()
+            self.pending_advantage.append(torch.cat(adv))
         return torch.cat(xs), torch.cat(labels), torch.cat(costs)
 
     # ---- training loop ----
@@ -702,12 +733,14 @@ class MENTOR(Agent):
             cfg.teacher,
         )
         gate_tau, gate_q = float(cfg.gate.tau), float(cfg.gate.quantile)
+        self.pending_advantage = []
         auto_noise = float(cfg.gate.get('auto_noise', 0.0))
         if auto_noise > 0:  # tau = factor x median teacher cost on states a few noisy demo-replay steps away
             n_cal = int(cfg.gate.get('auto_batches', 3))
             xs = self.replay_demo_states(n_cal * int(cfg.teacher.batch), int(cfg.gate.get('auto_steps', 4)), auto_noise)
             _, _, c_cal = self.label(xs, n_cal)
             gate_tau, gate_q = float(cfg.gate.get('auto_factor', 2.0)) * c_cal.median().item(), 0.0
+            self.pending_advantage = []
             print(f'[MENTOR] calibrated gate: tau = {gate_tau:.4g} (median calibration cost {c_cal.median().item():.4g})')
             self.writer.add(
                 self.agent_steps, {'gate/auto_tau': gate_tau, 'gate/calibration_cost_median': c_cal.median().item()}
@@ -742,6 +775,17 @@ class MENTOR(Agent):
                 x, a0, cost = torch.cat([x, xr]), torch.cat([a0, ar]), torch.cat([cost, cr])
             threshold = max(gate_tau, cost.quantile(gate_q).item()) if gate_q > 0 else gate_tau
             keep = cost <= threshold
+            adv_stats = {}
+            if self.pending_advantage:  # keep a label only where the teacher's plan beats the policy
+                errs = torch.cat(self.pending_advantage)
+                beats = errs[:, 0] <= float(cfg.gate.advantage) * errs[:, 1]
+                keep = keep & beats
+                adv_stats = {
+                    'gate/teacher_beats_policy': beats.float().mean().item(),
+                    'gate/teacher_err_q50': errs[:, 0].median().item(),
+                    'gate/policy_err_q50': errs[:, 1].median().item(),
+                }
+            self.pending_advantage = []
             self.data_s = torch.cat([self.data_s, x[keep]])
             self.data_a = torch.cat([self.data_a, a0[keep]])
             t_teach = time.time() - t0 - t_roll
@@ -759,6 +803,7 @@ class MENTOR(Agent):
                     'train/dataset_size': self.data_s.shape[0],
                     'train/fit_loss': fit_loss,
                     **library_stats,
+                    **adv_stats,
                     'time/rollout': t_roll,
                     'time/teacher': t_teach,
                     'time/fit': time.time() - t1,
