@@ -162,8 +162,10 @@ class RejoinTeacher:
         self.sim_one = OneStep(spec, batch, device, counter) if self.screen else None
 
     def extend(self, S_new, S1_new, A_new, max_extra):
-        """Append short trajectories [k, L, ...] to the library (padded to its length T); keeps the
-        original demos and at most max_extra added trajectories (oldest dropped first)."""
+        """Append short trajectories [k, L, ...] to the library, padded to its length T.
+
+        Keeps the original demos and at most max_extra added trajectories (oldest dropped first).
+        """
         if not hasattr(self, 'n_original'):
             self.n_original = self.N
         k, L = S_new.shape[:2]
@@ -449,9 +451,12 @@ class MENTOR(Agent):
             self.obs = self._state_obs(self._convert_obs(obs)).clone()
             self.agent_steps += self.num_actors
         # per-step tensors [T, n, ...] for library bootstrapping
-        self.last_rollout = dict(
-            obs=torch.stack(visited), next=torch.stack(nexts), act=torch.stack(acts), broken=torch.stack(breaks)
-        )
+        self.last_rollout = {
+            'obs': torch.stack(visited),
+            'next': torch.stack(nexts),
+            'act': torch.stack(acts),
+            'broken': torch.stack(breaks),
+        }
         return torch.cat(visited)
 
     def bootstrap_library(self, cost):
@@ -467,7 +472,7 @@ class MENTOR(Agent):
         roll, n = self.last_rollout, self.num_actors
         T = roll['obs'].shape[0]
         idx = self.last_label_index
-        t_of, env_of = idx // n, idx % n
+        env_of = idx % n
         q = float(bcfg.get('quantile', 0.8))  # robust per-segment cost (1.0 = the worst labelled state)
         seg_cost = torch.full((n,), float('inf'), device=self.device)
         labelled = torch.zeros(n, device=self.device).scatter_add(0, env_of, torch.ones_like(cost))
