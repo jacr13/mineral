@@ -361,7 +361,7 @@ class MENTOR(Agent):
 
         # --- Demonstrations (state only) ---
         demos = get_demos(self.device, **cfg.demos)
-        demos.pop('act')  # never read: state-only imitation
+        stored_actions = demos.pop('act')  # never read (state-only imitation), except by the flagged audit below
         self.expert_return = float(demos['expert_return'])
         D = self.spec.obs_dim
         obs, next_obs = demos['obs'], demos['next_obs']
@@ -370,6 +370,13 @@ class MENTOR(Agent):
         self.S = obs[..., :D].float().contiguous()
         self.S1 = next_obs[..., :D].float().contiguous()
         self.lengths = self._lengths(demos['done'])
+        # AUDIT ONLY (invert.audit_true_actions): replace the recovered actions by the stored expert actions, to
+        # measure what action recovery costs. This reads demonstrator actions: never use it for reported results.
+        self.audit_actions = None
+        if bool(cfg.invert.get('audit_true_actions', False)):
+            self.audit_actions = stored_actions[..., : self.spec.act_dim].float().clamp(-1, 1).contiguous()
+            print('[MENTOR] AUDIT: Stage I labels will be the STORED EXPERT ACTIONS (diagnostic run, not state-only)')
+        del stored_actions
         T = self.S.shape[1]
         self.valid = torch.arange(T, device=self.device)[None] < self.lengths[:, None]
         S_valid = self.S[self.valid]
@@ -488,6 +495,10 @@ class MENTOR(Agent):
         torch.cuda.empty_cache()
         self.stage1_steps = self.counter.total - before
         a_flat, cost = torch.cat(acts), torch.cat(costs)
+        if self.audit_actions is not None:
+            a_rec = a_flat
+            a_flat = self.audit_actions[self.valid]
+            print(f'[MENTOR] AUDIT: rms(recovered - stored) = {((a_rec - a_flat) ** 2).mean().sqrt().item():.3f}')
         A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
         A_hat[self.valid] = a_flat
         self.A_hat = A_hat

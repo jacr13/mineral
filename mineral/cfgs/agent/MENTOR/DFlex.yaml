@@ -30,6 +30,7 @@ mentor:
     reg: 0.0  # > 0 picks a minimum-norm solution for over-actuated bodies (SNU)
     jacobian: fd  # fd: finite differences every iteration; broyden: once per start, then rank-1 updates
     refresh: 0  # broyden only: recompute the finite-difference Jacobian every this many iterations (0 = never)
+    audit_true_actions: False  # AUDIT ONLY: use the stored expert actions instead of the recovered ones (not state-only)
 
   # Stage II: rejoin teacher
   teacher:
