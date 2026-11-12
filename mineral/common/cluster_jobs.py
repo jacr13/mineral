@@ -142,10 +142,24 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
                 f'ln -s {shell_path(absolute)} {dest}',
             ])
     if docker and image:
+        # Warp builds straight into its cache folder, so concurrent jobs must not share one: each job compiles into
+        # a private copy seeded from the shared cache, and on exit publishes new modules with an atomic rename.
         name = re.sub(r'[^A-Za-z0-9_.-]', '_', Path(str(image)).stem) or 'image'
         lines.extend([
-            f'WARP_CACHE_ROOT="${{MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}}/cache/warp/{name}"',
+            f'WARP_CACHE_SHARED="${{MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}}/cache/warp/{name}"',
+            'mkdir -p "$WARP_CACHE_SHARED"',
+            'WARP_CACHE_ROOT="$RUN_ROOT/warp_cache"',
             'mkdir -p "$WARP_CACHE_ROOT"',
+            'cp -a "$WARP_CACHE_SHARED/." "$WARP_CACHE_ROOT/" 2>/dev/null || true',
+            'publish_warp_cache() {',
+            '  for module in "$WARP_CACHE_ROOT"/*/; do',
+            '    target="$WARP_CACHE_SHARED/$(basename "$module")"',
+            '    [ -e "$target" ] && continue',
+            '    staging="$WARP_CACHE_SHARED/.staging-$$-$(basename "$module")"',
+            '    cp -a "$module" "$staging" && mv -T "$staging" "$target" 2>/dev/null || rm -rf "$staging"',
+            '  done',
+            '}',
+            'trap publish_warp_cache EXIT',
             'export APPTAINERENV_WARP_CACHE_PATH=/cache/warp',
         ])
     lines.append('cd "$RUN_ROOT/source"')
