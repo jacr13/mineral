@@ -152,9 +152,9 @@ rm -rf .coverage
 
 # docker
 # --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)
-docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 -t candidj0/mineral:new ."
+docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 -t candidj0/mineral:latest ."
 
-docker_push = "docker push candidj0/mineral:new"
+docker_push = "docker push candidj0/mineral:latest"
 dbp = ["docker_build", "docker_push"]
 
 docker = """
@@ -167,7 +167,7 @@ docker run \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v .:/workspace \
-    candidj0/mineral:new bash
+    candidj0/mineral:latest bash
 """
 
 docker_win = """
