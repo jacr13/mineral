@@ -62,7 +62,20 @@ class MentorPolicy(nn.Module):
 
 @torch.no_grad()
 def lm_invert(
-    step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, param='box', generator=None, jacobian='fd', refresh=0
+    step,
+    s,
+    s1,
+    w,
+    iters=5,
+    starts=1,
+    h=1e-2,
+    lam0=1e-2,
+    reg=0.0,
+    param='box',
+    generator=None,
+    jacobian='fd',
+    refresh=0,
+    reg_kind='l2',
 ):
     """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 + reg ||a||^2 with |a| <= 1.
 
@@ -75,10 +88,19 @@ def lm_invert(
     ``jacobian='broyden'`` computes the forward-difference Jacobian only at the first iteration of
     each start (and every ``refresh`` iterations if > 0) and otherwise applies Broyden's rank-1
     update, so an iteration costs one forward step instead of act_dim + 1.
+    ``reg_kind='activation'`` replaces reg ||a||^2 (which favours a = 0, i.e. half-activated muscles) by
+    reg * sum (a + 1) / 2, the total muscle activation (the effort that muscle-driven experts minimise).
     Returns actions (n, act_dim) and the residual part ||w * (step(s, a) - s1)||^2 (n,).
     """
     if jacobian not in ('fd', 'broyden'):
         raise ValueError(f'unknown inversion Jacobian {jacobian!r}')
+    if reg_kind not in ('l2', 'activation'):
+        raise ValueError(f'unknown inversion reg_kind {reg_kind!r}')
+    act_term = reg_kind == 'activation'
+
+    def penalty(a):
+        return ((a + 1) * 0.5).sum(-1) if act_term else (a**2).sum(-1)
+
     if param not in ('box', 'tanh'):
         raise ValueError(f'unknown inversion parametrisation {param!r}')
     n, act_dim = s.shape[0], step.spec.act_dim
@@ -98,7 +120,7 @@ def lm_invert(
         r = residual(x)
         a = to_action(x)
         cost = (r**2).sum(-1)
-        total = cost + reg * (a**2).sum(-1)
+        total = cost + reg * penalty(a)
         lam = torch.full_like(cost, lam0)
         J = None
         for it in range(iters):
@@ -116,14 +138,18 @@ def lm_invert(
                 J = torch.stack(cols, -1)
             a = to_action(x)
             da = 1 - a**2 if tanh else torch.ones_like(a)  # d a / d x
-            H = J.transpose(1, 2) @ J + reg * torch.diag_embed(da**2)
-            g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + reg * a * da
+            if act_term:  # linear penalty: gradient only (LM damping regularises the step)
+                H = J.transpose(1, 2) @ J
+                g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + 0.25 * reg * da
+            else:
+                H = J.transpose(1, 2) @ J + reg * torch.diag_embed(da**2)
+                g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + reg * a * da
             A = H + lam[:, None, None] * torch.diag_embed(torch.diagonal(H, dim1=1, dim2=2).clamp_min(1e-6 if tanh else 1e-12))
             x_new = x - torch.linalg.solve(A, g.unsqueeze(-1)).squeeze(-1)
             x_new = x_new if tanh else x_new.clamp(-1, 1)
             r_new = residual(x_new)
             c_new = (r_new**2).sum(-1)
-            t_new = c_new + reg * (to_action(x_new) ** 2).sum(-1)
+            t_new = c_new + reg * penalty(to_action(x_new))
             ok = t_new < total
             if jacobian == 'broyden':  # secant update from this trial step, accepted or not
                 dx = x_new - x
@@ -385,10 +411,15 @@ class MENTOR(Agent):
         self.lengths = self._lengths(demos['done'])
         # AUDIT ONLY (invert.audit_true_actions): replace the recovered actions by the stored expert actions, to
         # measure what action recovery costs. This reads demonstrator actions: never use it for reported results.
-        self.audit_actions = None
-        if bool(cfg.invert.get('audit_true_actions', False)):
-            self.audit_actions = stored_actions[..., : self.spec.act_dim].float().clamp(-1, 1).contiguous()
-            print('[MENTOR] AUDIT: Stage I labels will be the STORED EXPERT ACTIONS (diagnostic run, not state-only)')
+        # True / 'both': the Stage I labels and the teacher's reference actions; 'labels' or 'teacher': only one of them.
+        self.audit_actions, self.audit_mode = None, None
+        mode = cfg.invert.get('audit_true_actions', False)
+        mode = 'both' if mode is True else (None if mode in (False, None, 'none') else str(mode))
+        if mode is not None:
+            if mode not in ('both', 'labels', 'teacher'):
+                raise ValueError(f'unknown invert.audit_true_actions {mode!r}')
+            self.audit_actions, self.audit_mode = stored_actions[..., : self.spec.act_dim].float().clamp(-1, 1).contiguous(), mode
+            print(f'[MENTOR] AUDIT ({mode}): using the STORED EXPERT ACTIONS (diagnostic run, not state-only)')
         del stored_actions
         T = self.S.shape[1]
         self.valid = torch.arange(T, device=self.device)[None] < self.lengths[:, None]
@@ -466,7 +497,7 @@ class MENTOR(Agent):
         self.use_synergies(mean, basis, scale)
         z = torch.zeros(*self.A_hat.shape[:2], d, device=self.device)
         z[self.valid] = self.spec.encode(A)
-        self.A_hat = z
+        self.A_hat = self.A_labels = z
         print(f'[MENTOR] synergies: {d} of {A.shape[1]} dims, explained variance {explained:.3f}')
         return {'synergies/explained_variance': explained}
 
@@ -501,6 +532,7 @@ class MENTOR(Agent):
                 generator=self.generator,
                 jacobian=str(cfg.get('jacobian', 'fd')),
                 refresh=int(cfg.get('refresh', 0)),
+                reg_kind=str(cfg.get('reg_kind', 'l2')),
             )
             acts.append(a[:k])
             costs.append(c[:k])
@@ -508,13 +540,17 @@ class MENTOR(Agent):
         torch.cuda.empty_cache()
         self.stage1_steps = self.counter.total - before
         a_flat, cost = torch.cat(acts), torch.cat(costs)
-        if self.audit_actions is not None:
-            a_rec = a_flat
-            a_flat = self.audit_actions[self.valid]
-            print(f'[MENTOR] AUDIT: rms(recovered - stored) = {((a_rec - a_flat) ** 2).mean().sqrt().item():.3f}')
         A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
         A_hat[self.valid] = a_flat
-        self.A_hat = A_hat
+        self.A_hat = self.A_labels = A_hat  # teacher reference actions and Stage I labels
+        if self.audit_actions is not None:
+            A_true = torch.zeros_like(A_hat)
+            A_true[self.valid] = self.audit_actions[self.valid]
+            print(f'[MENTOR] AUDIT: rms(recovered - stored) = {((a_flat - A_true[self.valid]) ** 2).mean().sqrt().item():.3f}')
+            if self.audit_mode in ('both', 'teacher'):
+                self.A_hat = A_true
+            if self.audit_mode in ('both', 'labels'):
+                self.A_labels = A_true
         rel = cost.sqrt() / ((s1 - s) * self.w_step).norm(dim=-1).clamp_min(1e-9)
         q = torch.quantile(rel, torch.tensor([0.5, 0.95, 0.99], device=self.device))
         stats = {
@@ -802,7 +838,7 @@ class MENTOR(Agent):
             if int(cfg.get('synergies', {}).get('dims', 0)) > 0:
                 stats.update(self.fit_synergies())
             self.data_s = self.S[self.valid].clone()
-            self.data_a = self.A_hat[self.valid].clone()
+            self.data_a = getattr(self, 'A_labels', self.A_hat)[self.valid].clone()
             fit_loss = self.fit(int(cfg.fit.init_steps), float(cfg.fit.init_lr), 0)
             self.epoch = 0
             self._log_round({**stats, 'train/fit_loss': fit_loss, 'train/dataset_size': self.data_s.shape[0]})
