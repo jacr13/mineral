@@ -27,6 +27,8 @@ mentor:
     starts: 1
     param: box  # box: clip each step to [-1, 1]; tanh: optimise u with a = tanh(u) (many actions at a bound)
     reg: 0.0  # > 0 picks a minimum-norm solution for over-actuated bodies (SNU)
+    jacobian: fd  # fd: finite differences every iteration; broyden: once per start, then rank-1 updates
+    refresh: 0  # broyden only: recompute the finite-difference Jacobian every this many iterations (0 = never)
 
   # Stage II: rejoin teacher
   teacher:

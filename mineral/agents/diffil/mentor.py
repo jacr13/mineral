@@ -49,7 +49,9 @@ class MentorPolicy(nn.Module):
 
 
 @torch.no_grad()
-def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, param='box', generator=None):
+def lm_invert(
+    step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, param='box', generator=None, jacobian='fd', refresh=0
+):
     """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 + reg ||a||^2 with |a| <= 1.
 
     Forward-difference Jacobian (act_dim + 1 forward steps per iteration). The first start
@@ -58,8 +60,13 @@ def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, par
     which avoids the clipping distortion when many actions sit at a bound. ``reg > 0`` picks
     one consistent (minimum-norm) solution when the actions outnumber what the next state
     determines, as for muscle-driven bodies (SNU: 152 muscles, 18 dofs).
+    ``jacobian='broyden'`` computes the forward-difference Jacobian only at the first iteration of
+    each start (and every ``refresh`` iterations if > 0) and otherwise applies Broyden's rank-1
+    update, so an iteration costs one forward step instead of act_dim + 1.
     Returns actions (n, act_dim) and the residual part ||w * (step(s, a) - s1)||^2 (n,).
     """
+    if jacobian not in ('fd', 'broyden'):
+        raise ValueError(f'unknown inversion Jacobian {jacobian!r}')
     if param not in ('box', 'tanh'):
         raise ValueError(f'unknown inversion parametrisation {param!r}')
     n, act_dim = s.shape[0], step.spec.act_dim
@@ -81,18 +88,20 @@ def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, par
         cost = (r**2).sum(-1)
         total = cost + reg * (a**2).sum(-1)
         lam = torch.full_like(cost, lam0)
-        for _ in range(iters):
-            cols = []
-            for j in range(act_dim):
-                xp = x.clone()
-                if tanh:
-                    xp[:, j] = x[:, j] + h
-                else:
-                    sign = torch.where(x[:, j] + h > 1, -1.0, 1.0)
-                    xp[:, j] = (x[:, j] + sign * h).clamp(-1, 1)
-                dx = (xp[:, j] - x[:, j]).unsqueeze(-1)
-                cols.append((residual(xp) - r) / dx)
-            J = torch.stack(cols, -1)
+        J = None
+        for it in range(iters):
+            if J is None or jacobian == 'fd' or (refresh > 0 and it % refresh == 0):
+                cols = []
+                for j in range(act_dim):
+                    xp = x.clone()
+                    if tanh:
+                        xp[:, j] = x[:, j] + h
+                    else:
+                        sign = torch.where(x[:, j] + h > 1, -1.0, 1.0)
+                        xp[:, j] = (x[:, j] + sign * h).clamp(-1, 1)
+                    dx = (xp[:, j] - x[:, j]).unsqueeze(-1)
+                    cols.append((residual(xp) - r) / dx)
+                J = torch.stack(cols, -1)
             a = to_action(x)
             da = 1 - a**2 if tanh else torch.ones_like(a)  # d a / d x
             H = J.transpose(1, 2) @ J + reg * torch.diag_embed(da**2)
@@ -104,6 +113,10 @@ def lm_invert(step, s, s1, w, iters=5, starts=1, h=1e-2, lam0=1e-2, reg=0.0, par
             c_new = (r_new**2).sum(-1)
             t_new = c_new + reg * (to_action(x_new) ** 2).sum(-1)
             ok = t_new < total
+            if jacobian == 'broyden':  # secant update from this trial step, accepted or not
+                dx = x_new - x
+                denom = (dx**2).sum(-1, keepdim=True).clamp_min(1e-12)
+                J = J + ((r_new - r - (J @ dx.unsqueeze(-1)).squeeze(-1)) / denom).unsqueeze(-1) * dx.unsqueeze(1)
             x = torch.where(ok[:, None], x_new, x)
             r = torch.where(ok[:, None], r_new, r)
             cost = torch.where(ok, c_new, cost)
@@ -447,6 +460,8 @@ class MENTOR(Agent):
                 reg=float(cfg.get('reg', 0.0)),
                 param=str(cfg.get('param', 'box')),
                 generator=self.generator,
+                jacobian=str(cfg.get('jacobian', 'fd')),
+                refresh=int(cfg.get('refresh', 0)),
             )
             acts.append(a[:k])
             costs.append(c[:k])
