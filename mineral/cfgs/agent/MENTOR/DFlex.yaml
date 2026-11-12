@@ -59,6 +59,15 @@ mentor:
     perturb_batches: 0  # number of teacher batches of perturbed demo states per round
     perturb_scale: 0.1  # noise, in demo standard deviations per coordinate
 
+  # library bootstrapping: learner segments that stay up and close to the demos join the teacher's library
+  bootstrap:
+    enabled: False
+    tau: 0.1  # accept a segment if its labelled states' rejoin-cost quantile is <= tau
+    quantile: 0.8  # 1.0 = the worst labelled state of the segment
+    min_labelled: 8
+    max_new: 8  # segments added per round
+    max_extra: 64  # library cap beyond the original demos (oldest dropped first)
+
   # Stage III: regression on the aggregated labels
   fit:
     init_steps: 6000

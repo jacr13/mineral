@@ -161,6 +161,35 @@ class RejoinTeacher:
         self.sim_all = OneStep(spec, n_plan, device, counter)
         self.sim_one = OneStep(spec, batch, device, counter) if self.screen else None
 
+    def extend(self, S_new, S1_new, A_new, max_extra):
+        """Append short trajectories [k, L, ...] to the library (padded to its length T); keeps the
+        original demos and at most max_extra added trajectories (oldest dropped first)."""
+        if not hasattr(self, 'n_original'):
+            self.n_original = self.N
+        k, L = S_new.shape[:2]
+        pad = self.T - L
+        if pad < 0:
+            S_new, S1_new, A_new, L, pad = S_new[:, : self.T], S1_new[:, : self.T], A_new[:, : self.T], self.T, 0
+        padf = lambda x: torch.cat([x, x.new_zeros(k, pad, *x.shape[2:])], 1)
+        self.S = torch.cat([self.S, padf(S_new)])
+        self.S1 = torch.cat([self.S1, padf(S1_new)])
+        self.A_hat = torch.cat([self.A_hat, padf(A_new)])
+        self.lengths = torch.cat([self.lengths, torch.full((k,), L, device=self.device, dtype=self.lengths.dtype)])
+        extra = self.S.shape[0] - self.n_original
+        if extra > max_extra:
+            keep = torch.cat(
+                [
+                    torch.arange(self.n_original, device=self.device),
+                    torch.arange(self.S.shape[0] - max_extra, self.S.shape[0], device=self.device),
+                ]
+            )
+            self.S, self.S1, self.A_hat, self.lengths = self.S[keep], self.S1[keep], self.A_hat[keep], self.lengths[keep]
+        self.N = self.S.shape[0]
+        self.S_flat = (self.S * self.w).reshape(-1, self.D)
+        t = torch.arange(self.T, device=self.device)[None]
+        margin = int(self.offsets.max().clamp_min(0).item()) + 2
+        self.window_ok = (t >= 3) & (t <= (self.lengths[:, None] - self.K - margin))
+
     def windows(self, x):
         d = torch.cdist(x * self.w, self.S_flat).view(-1, self.N, self.T)
         d = d.masked_fill(~self.window_ok[None], float('inf'))
@@ -400,20 +429,70 @@ class MENTOR(Agent):
         if self.obs is None:
             self.obs = self._state_obs(self._convert_obs(self.env.reset()))
         n_reset = int(round(frac * self.num_actors))
-        visited = []
+        visited, nexts, acts, breaks = [], [], [], []
         for t in range(T):
+            broken = torch.zeros(self.num_actors, dtype=torch.bool, device=self.device)
             if reset_every > 0 and t % reset_every == 0 and n_reset > 0:
                 ids = torch.arange(n_reset, device=self.device)
                 self.env.reset(env_ids=ids)
                 self.obs = self._state_obs(self._convert_obs(self.env.obs_buf.clone()))
+                broken[ids] = t > 0
             a = self.policy(self.obs)
             if noise > 0:
                 a = (a + noise * torch.randn(a.shape, device=self.device, generator=self.generator)).clamp(-1, 1)
             visited.append(self.obs.clone())
             obs, rew, done, info = self.env.step(a)
+            before_reset = info.get('obs_before_reset', obs) if isinstance(info, dict) else obs
+            nexts.append(self._state_obs(self._convert_obs(before_reset)).clone())
+            acts.append(a.clone())
+            breaks.append(broken | done.bool())
             self.obs = self._state_obs(self._convert_obs(obs)).clone()
             self.agent_steps += self.num_actors
+        # per-step tensors [T, n, ...] for library bootstrapping
+        self.last_rollout = dict(
+            obs=torch.stack(visited), next=torch.stack(nexts), act=torch.stack(acts), broken=torch.stack(breaks)
+        )
         return torch.cat(visited)
+
+    def bootstrap_library(self, cost):
+        """Add learner segments that stayed up and close to the demos to the teacher's library.
+
+        A segment is one env's rollout of this round (bootstrap.min_len steps or more, no fall or
+        reset); it is accepted when every labelled state in it has rejoin cost <= bootstrap.tau.
+        Its states, next states and executed actions become a new (short) library trajectory.
+        """
+        bcfg = self.mentor_config.get('bootstrap', {})
+        if not bcfg or not bool(bcfg.get('enabled', False)):
+            return {}
+        roll, n = self.last_rollout, self.num_actors
+        T = roll['obs'].shape[0]
+        idx = self.last_label_index
+        t_of, env_of = idx // n, idx % n
+        q = float(bcfg.get('quantile', 0.8))  # robust per-segment cost (1.0 = the worst labelled state)
+        seg_cost = torch.full((n,), float('inf'), device=self.device)
+        labelled = torch.zeros(n, device=self.device).scatter_add(0, env_of, torch.ones_like(cost))
+        for e in range(n):
+            c = cost[env_of == e]
+            if len(c):
+                seg_cost[e] = c.quantile(q)
+        intact = ~roll['broken'].any(0)
+        ok = intact & (labelled >= int(bcfg.get('min_labelled', 8))) & (seg_cost <= float(bcfg.get('tau', 0.1)))
+        envs = ok.nonzero().flatten()[: int(bcfg.get('max_new', 8))]
+        if len(envs) and T >= self.teacher.K + 12:
+            self.teacher.extend(
+                roll['obs'][:, envs].transpose(0, 1),
+                roll['next'][:, envs].transpose(0, 1),
+                roll['act'][:, envs].transpose(0, 1),
+                int(bcfg.get('max_extra', 64)),
+            )
+        finite = seg_cost[intact & torch.isfinite(seg_cost)]
+        return {
+            'train/library_trajs': self.teacher.N,
+            'train/library_added': int(len(envs)),
+            'train/segments_ok': int(ok.sum()),
+            'train/segments_intact': int(intact.sum()),
+            'train/segment_cost_median': float(finite.median()) if len(finite) else float('nan'),
+        }
 
     def perturbed_demo_states(self, count):
         """Demo states plus Gaussian noise of augment.perturb_scale demo standard deviations per coordinate."""
@@ -431,6 +510,7 @@ class MENTOR(Agent):
         if visited.shape[0] < need:
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]
+        self.last_label_index = perm
         xs, labels, costs = [], [], []
         for c0 in range(0, need, batch):
             x = visited[perm[c0 : c0 + batch]]
@@ -476,6 +556,7 @@ class MENTOR(Agent):
             visited = self.collect()
             t_roll = time.time() - t0
             x, a0, cost = self.label(visited)
+            library_stats = self.bootstrap_library(cost)
             n_perturb = int(cfg.get('augment', {}).get('perturb_batches', 0))
             if n_perturb > 0:  # teacher labels on noisy copies of demo states (DART-style coverage)
                 xp, ap, cp = self.label(self.perturbed_demo_states(n_perturb * int(cfg.teacher.batch)), n_perturb)
@@ -498,6 +579,7 @@ class MENTOR(Agent):
                     'train/kept_fraction': keep.float().mean().item(),
                     'train/dataset_size': self.data_s.shape[0],
                     'train/fit_loss': fit_loss,
+                    **library_stats,
                     'time/rollout': t_roll,
                     'time/teacher': t_teach,
                     'time/fit': time.time() - t1,
