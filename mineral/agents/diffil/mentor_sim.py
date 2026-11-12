@@ -204,6 +204,37 @@ class SNUHumanoidSpec(AntSpec):
         )
 
 
+class SynergySpec(EnvSpec):
+    """Actions in a low-dimensional synergy space z in [-1, 1]^d.
+
+    Decoded to the base env's actions as a = clip(mean + (z * scale) @ basis.T, -1, 1), with a PCA
+    basis of recovered muscle activations. Everything else is delegated to the base spec.
+    """
+
+    def __init__(self, base, mean, basis, scale):
+        self.base, self.mean, self.basis, self.scale = base, mean, basis, scale
+        self.env_name, self.obs_dim, self.act_offset = base.env_name, base.obs_dim, base.act_offset
+        self.act_dim = basis.shape[1]
+
+    def decode(self, z):
+        return (self.mean + (torch.clip(z, -1, 1) * self.scale) @ self.basis.T).clamp(-1, 1)
+
+    def encode(self, a):
+        return (((a - self.mean) @ self.basis) / self.scale).clamp(-1, 1)
+
+    def make_env(self, *args, **kwargs):
+        return self.base.make_env(*args, **kwargs)
+
+    def apply_action(self, env, state, z, n, num_qd):
+        self.base.apply_action(env, state, self.decode(z), n, num_qd)
+
+    def to_state(self, env, obs):
+        return self.base.to_state(env, obs)
+
+    def from_state(self, env, q, qd):
+        return self.base.from_state(env, q, qd)
+
+
 SPECS = {'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec, 'snu_humanoid': SNUHumanoidSpec}
 
 

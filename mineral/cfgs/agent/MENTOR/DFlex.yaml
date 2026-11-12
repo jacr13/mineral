@@ -79,6 +79,11 @@ mentor:
     teacher_steps: 0  # > 0: before DAgger, roll out the closed-loop teacher this many steps on num_actors envs
     teacher_tau: 1.0  # accept a teacher trajectory that never falls and has rejoin-cost quantile <= teacher_tau
 
+  # muscle synergies (dims > 0): after Stage I, PCA of the recovered actions; teacher and policy act in a
+  # dims-dimensional synergy space decoded to the env's actions (for over-actuated bodies such as SNU)
+  synergies:
+    dims: 0
+
   # Stage III: regression on the aggregated labels
   fit:
     init_steps: 6000

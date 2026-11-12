@@ -27,7 +27,7 @@ import torch.nn as nn
 
 from ...common.demos import get_demos
 from ..agent import Agent
-from .mentor_sim import OneStep, SimCounter, get_spec
+from .mentor_sim import OneStep, SimCounter, SynergySpec, get_spec
 
 
 class MentorPolicy(nn.Module):
@@ -301,7 +301,8 @@ class MENTOR(Agent):
 
         # --- Policy ---
         units = tuple(self.network_config.get('units', [256, 256]))
-        self.policy = MentorPolicy(D, self.spec.act_dim, S_valid.mean(0), S_valid.std(0).clamp_min(1e-6), units)
+        n_syn = int(cfg.get('synergies', {}).get('dims', 0))
+        self.policy = MentorPolicy(D, n_syn or self.spec.act_dim, S_valid.mean(0), S_valid.std(0).clamp_min(1e-6), units)
         self.policy = self.policy.to(self.device)
         print(self.policy, '\n')
 
@@ -342,8 +343,32 @@ class MENTOR(Agent):
             'sim_steps/total': learner + int(self.counter.total),
         }
 
+    def env_action(self, a):
+        """Policy/teacher action → the env's action (decodes synergies when they are on)."""
+        return self.spec.decode(a) if isinstance(self.spec, SynergySpec) else a
+
+    def use_synergies(self, mean, basis, scale):
+        self.spec_base = getattr(self, 'spec_base', self.spec)
+        self.spec = SynergySpec(self.spec_base, mean, basis, scale)
+
+    def fit_synergies(self):
+        """PCA of the recovered actions; switch the teacher, labels and policy to synergy space."""
+        d = int(self.mentor_config.synergies.dims)
+        A = self.A_hat[self.valid]
+        mean = A.mean(0)
+        U, S, V = torch.linalg.svd(A - mean, full_matrices=False)
+        basis = V[:d].T  # (act_dim, d)
+        scale = 3.0 * (S[:d] / (A.shape[0] - 1) ** 0.5)  # 3 std per component
+        explained = float((S[:d] ** 2).sum() / (S**2).sum())
+        self.use_synergies(mean, basis, scale)
+        z = torch.zeros(*self.A_hat.shape[:2], d, device=self.device)
+        z[self.valid] = self.spec.encode(A)
+        self.A_hat = z
+        print(f'[MENTOR] synergies: {d} of {A.shape[1]} dims, explained variance {explained:.3f}')
+        return {'synergies/explained_variance': explained}
+
     def get_actions(self, obs, sample: bool = False):
-        return self.policy(self._state_obs(obs))
+        return self.env_action(self.policy(self._state_obs(obs)))
 
     # ---- Stage I ----
     def invert(self):
@@ -485,7 +510,7 @@ class MENTOR(Agent):
             if noise > 0:
                 a = (a + noise * torch.randn(a.shape, device=self.device, generator=self.generator)).clamp(-1, 1)
             visited.append(self.obs.clone())
-            obs, rew, done, info = self.env.step(a)
+            obs, rew, done, info = self.env.step(self.env_action(a))
             before_reset = info.get('obs_before_reset', obs) if isinstance(info, dict) else obs
             nexts.append(self._state_obs(self._convert_obs(before_reset)).clone())
             acts.append(a.clone())
@@ -570,7 +595,7 @@ class MENTOR(Agent):
         for _ in range(steps):
             a, c = driver.label(obs)
             with torch.no_grad():
-                o, _, done, info = env.step(a)
+                o, _, done, info = env.step(self.env_action(a))
             before = info.get('obs_before_reset', o) if isinstance(info, dict) else o
             S.append(obs)
             S1.append(self._state_obs(before).detach().clone())
@@ -658,6 +683,8 @@ class MENTOR(Agent):
         rounds = int(cfg.rounds)
         if self.A_hat is None:
             stats = self.invert()
+            if int(cfg.get('synergies', {}).get('dims', 0)) > 0:
+                stats.update(self.fit_synergies())
             self.data_s = self.S[self.valid].clone()
             self.data_a = self.A_hat[self.valid].clone()
             fit_loss = self.fit(int(cfg.fit.init_steps), float(cfg.fit.init_lr), 0)
@@ -801,7 +828,7 @@ class MENTOR(Agent):
         returns, lengths = [], []
         max_steps = episodes_per_env * env.episode_length + 10
         for _ in range(max_steps):
-            o, r, d, _ = env.step(self.policy(obs))
+            o, r, d, _ = env.step(self.env_action(self.policy(obs)))
             obs = self._state_obs(o).clone()
             ret += r
             length += 1
@@ -843,6 +870,7 @@ class MENTOR(Agent):
             'agent_steps': self.agent_steps,
             'policy': self.policy.state_dict(),
             'A_hat': self.A_hat,
+            'synergies': (self.spec.mean, self.spec.basis, self.spec.scale) if isinstance(self.spec, SynergySpec) else None,
             'data_s': self.data_s,
             'data_a': self.data_a,
             'counter': self.counter.state_dict(),
@@ -856,6 +884,8 @@ class MENTOR(Agent):
         self.policy.load_state_dict(ckpt['policy'])
         self.epoch, self.round, self.agent_steps = ckpt['epoch'], ckpt['round'], ckpt['agent_steps']
         self.A_hat, self.data_s, self.data_a = ckpt['A_hat'], ckpt['data_s'], ckpt['data_a']
+        if ckpt.get('synergies') is not None:
+            self.use_synergies(*ckpt['synergies'])
         self.counter.load_state_dict(ckpt['counter'])
         self.stage1_steps = ckpt['stage1_steps']
         self.wall_offset = ckpt.get('wall', 0.0)
