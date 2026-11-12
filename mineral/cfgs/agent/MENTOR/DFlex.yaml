@@ -44,6 +44,9 @@ mentor:
     support_barrier: 0.0  # > 0: penalise planned states outside the demos' per-coordinate range
     support_margin: 0.5  # widen that range by this many demo standard deviations
     anchor_mix: 0.0  # > 0: regularise plans towards the policy's closed-loop actions (1 = policy only, 0 = demo only)
+    effort_weight: 0.0  # > 0: penalise planned effort (effort_kind activation: sum (a+1)/2; l2: sum a^2)
+    effort_kind: activation
+    smooth_weight: 0.0  # > 0: penalise sum_k ||u_k - u_{k-1}||^2 within the plan
     batch: 340
     batches_per_round: 6
 

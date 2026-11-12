@@ -170,6 +170,13 @@ class RejoinTeacher:
         # bodies get labels consistent with what the policy already does. Set policy via anchor_to().
         self.anchor_mix = float(cfg.get('anchor_mix', 0.0))
         self.anchor_policy = None
+        # Optional terms on the planned actions: effort (activation: sum of (a + 1) / 2, i.e. the muscle activations
+        # of the SNU convention; l2: sum of a^2) and temporal smoothness sum_k ||u_k - u_{k-1}||^2 within the plan.
+        self.effort = float(cfg.get('effort_weight', 0.0))
+        self.effort_kind = str(cfg.get('effort_kind', 'activation'))
+        if self.effort_kind not in ('activation', 'l2'):
+            raise ValueError(f'unknown teacher effort_kind {self.effort_kind!r}')
+        self.smooth = float(cfg.get('smooth_weight', 0.0))
         self.offsets = torch.tensor(list(cfg.phase_offsets), device=device)
         N, T, D = S.shape
         self.N, self.T, self.D = N, T, D
@@ -263,7 +270,13 @@ class RejoinTeacher:
         idx = torch.minimum(idx.clamp_min(0), (self.lengths[traj] - 1)[:, None])
         target = self.S1[traj[:, None], idx]
         err = (((y[:, None] - target) * self.w) ** 2).sum(-1).min(-1).values
-        return err + self.lam * ((a - a_ref) ** 2).sum((-1, -2)) + self.barrier * outside
+        c = err + self.lam * ((a - a_ref) ** 2).sum((-1, -2)) + self.barrier * outside
+        if self.effort > 0:
+            e = (a.clamp(-1, 1) + 1) * 0.5 if self.effort_kind == 'activation' else a**2
+            c = c + self.effort * e.sum((-1, -2))
+        if self.smooth > 0 and a.shape[1] > 1:
+            c = c + self.smooth * ((a[:, 1:] - a[:, :-1]) ** 2).sum((-1, -2))
+        return c
 
     def optimise(self, sim, x, traj, j, a_ref):
         a = a_ref.clone().requires_grad_(True)
