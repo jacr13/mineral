@@ -52,7 +52,7 @@ mentor:
     effort_weight: 0.0  # > 0: penalise planned effort (effort_kind activation: sum (a+1)/2; l2: sum a^2)
     effort_kind: activation
     smooth_weight: 0.0  # > 0: penalise sum_k ||u_k - u_{k-1}||^2 within the plan
-    ignore_dims: ""  # observation coordinates the teacher ignores (window matching and cost), e.g. "45:52"
+    ignore_dims: ""  # observation coordinates the teacher ignores (window matching and cost), e.g. "45-52"
     batch: 340
     batches_per_round: 6
 

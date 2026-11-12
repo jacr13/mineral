@@ -209,9 +209,10 @@ class RejoinTeacher:
         valid = torch.arange(T, device=device)[None] < lengths[:, None]
         self.w = 1.0 / S[valid].std(0).clamp_min(1e-6)
         # Optional: observation coordinates the teacher ignores when matching windows and in its cost, e.g. a goal
-        # pose the actions cannot change (AllegroHand: "45:52"). Comma-separated 'a:b' ranges or indices.
+        # pose the actions cannot change (AllegroHand: "45-52"). Comma-separated 'a-b' (or 'a:b') ranges or indices;
+        # prefer 'a-b' on command lines: YAML 1.1 reads an unquoted 45:52 as the base-60 number 2752.
         for part in [p for p in str(cfg.get('ignore_dims', '') or '').split(',') if p.strip()]:
-            a_, _, b_ = part.strip().partition(':')
+            a_, _, b_ = part.strip().replace(':', '-').partition('-')
             self.w[int(a_) : (int(b_) if b_ else int(a_) + 1)] = 0.0
         self.S_flat = (S * self.w).reshape(-1, D)
         # Support barrier (optional): penalise planned states outside the per-coordinate range
