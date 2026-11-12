@@ -46,6 +46,12 @@ mentor:
   gate:
     tau: 1.0
     quantile: 0.0
+    # automatic gate (auto_noise > 0): tau = auto_factor x median teacher cost on states reached by auto_steps
+    # noisy (auto_noise) replays of the demo actions, measured once before DAgger; overrides tau and quantile
+    auto_noise: 0.0
+    auto_steps: 4
+    auto_factor: 2.0
+    auto_batches: 3
 
   # learner rollouts per round (envs keep running across rounds; auto-reset on falls)
   rollout:
@@ -58,6 +64,9 @@ mentor:
   augment:
     perturb_batches: 0  # number of teacher batches of perturbed demo states per round
     perturb_scale: 0.1  # noise, in demo standard deviations per coordinate
+    replay_batches: 0  # teacher batches per round of states reached by noisy replays of the demo actions
+    replay_steps: 4  # replay 1..replay_steps simulator steps
+    replay_noise: 0.2  # action noise during the replay
 
   # library bootstrapping: learner segments that stay up and close to the demos join the teacher's library
   bootstrap:

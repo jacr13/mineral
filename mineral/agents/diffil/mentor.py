@@ -599,6 +599,32 @@ class MENTOR(Agent):
         )
         self.writer.write()
 
+    @torch.no_grad()
+    def replay_demo_states(self, count, steps, noise):
+        """Physically consistent states near the demos.
+
+        From a random demo state, replay its recovered actions plus Gaussian noise for 1..steps
+        simulator steps (count must be a multiple of teacher.batch).
+        """
+        B = int(self.mentor_config.teacher.batch)
+        if getattr(self, 'replay_step', None) is None:
+            self.replay_step = OneStep(self.spec, B, self.device, self.counter)
+        out = []
+        for _ in range(0, count, B):
+            traj = torch.randint(0, self.S.shape[0], (B,), device=self.device, generator=self.generator)
+            room = (self.lengths[traj] - steps - 1).clamp_min(1)
+            t = (torch.rand(B, device=self.device, generator=self.generator) * room).long()
+            k = torch.randint(1, steps + 1, (B,), device=self.device, generator=self.generator)
+            x, states = self.S[traj, t], []
+            for j in range(steps):
+                a = self.A_hat[traj, t + j] + noise * torch.randn(
+                    B, self.spec.act_dim, device=self.device, generator=self.generator
+                )
+                x = self.replay_step(x, a.clamp(-1, 1), grad=False)
+                states.append(x)
+            out.append(torch.stack(states, 1)[torch.arange(B, device=self.device), k - 1])
+        return torch.cat(out)[:count]
+
     def perturbed_demo_states(self, count):
         """Demo states plus Gaussian noise of augment.perturb_scale demo standard deviations per coordinate."""
         scale = float(self.mentor_config.get('augment', {}).get('perturb_scale', 0.1))
@@ -649,6 +675,17 @@ class MENTOR(Agent):
             cfg.teacher,
         )
         gate_tau, gate_q = float(cfg.gate.tau), float(cfg.gate.quantile)
+        auto_noise = float(cfg.gate.get('auto_noise', 0.0))
+        if auto_noise > 0:  # tau = factor x median teacher cost on states a few noisy demo-replay steps away
+            n_cal = int(cfg.gate.get('auto_batches', 3))
+            xs = self.replay_demo_states(n_cal * int(cfg.teacher.batch), int(cfg.gate.get('auto_steps', 4)), auto_noise)
+            _, _, c_cal = self.label(xs, n_cal)
+            gate_tau, gate_q = float(cfg.gate.get('auto_factor', 2.0)) * c_cal.median().item(), 0.0
+            print(f'[MENTOR] calibrated gate: tau = {gate_tau:.4g} (median calibration cost {c_cal.median().item():.4g})')
+            self.writer.add(
+                self.agent_steps, {'gate/auto_tau': gate_tau, 'gate/calibration_cost_median': c_cal.median().item()}
+            )
+            self.writer.write()
         if int(cfg.get('bootstrap', {}).get('teacher_steps', 0)) > 0 and self.round == 0:
             self.teacher_demonstrations()
         while self.round < rounds:
@@ -668,6 +705,14 @@ class MENTOR(Agent):
             if n_perturb > 0:  # teacher labels on noisy copies of demo states (DART-style coverage)
                 xp, ap, cp = self.label(self.perturbed_demo_states(n_perturb * int(cfg.teacher.batch)), n_perturb)
                 x, a0, cost = torch.cat([x, xp]), torch.cat([a0, ap]), torch.cat([cost, cp])
+            aug = cfg.get('augment', {})
+            n_replay = int(aug.get('replay_batches', 0))
+            if n_replay > 0:  # teacher labels on states reached by noisy replays of the demo actions
+                xs = self.replay_demo_states(
+                    n_replay * int(cfg.teacher.batch), int(aug.get('replay_steps', 4)), float(aug.get('replay_noise', 0.2))
+                )
+                xr, ar, cr = self.label(xs, n_replay)
+                x, a0, cost = torch.cat([x, xr]), torch.cat([a0, ar]), torch.cat([cost, cr])
             threshold = max(gate_tau, cost.quantile(gate_q).item()) if gate_q > 0 else gate_tau
             keep = cost <= threshold
             self.data_s = torch.cat([self.data_s, x[keep]])
