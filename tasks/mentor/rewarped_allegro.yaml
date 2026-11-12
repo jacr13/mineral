@@ -1,0 +1,42 @@
+# IsaacGymEnvs AllegroHand cube reorientation (Rewarped): non-periodic, goal-conditioned, rigid bodies.
+# Needs the Rewarped 1.3.3 / Warp 1.3.3 stack (branch mentor-wip-warp13, image candidj0/mineral:warp13);
+# Rewarped main + Warp 1.9 sends half the envs to NaN on the first step.
+# The observation determines the state (hand joints + cube pose/velocity; the goal is restored as an env variable),
+# so Stage I inverts the simulator; the last 16 coordinates (previous action) are not used.
+task:
+  name: Rewarped
+  env:
+    env_name: AllegroHand
+    env_suite: isaacgymenvs
+    no_grad: True  # MENTOR never back-propagates through the learner's rollouts
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    obs_keys: "obs[:56]"
+    stage1: invert
+    demos:
+      path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
+      n_trajs: 8
+    invert:  # finite differences, 3 starts: residual 7.1e-3 = the stored actions' 6.9e-3 (Broyden x10: 7.6e-2)
+      batch: 500
+      iters: 20
+      starts: 3
+    teacher:
+      batch: 64
+      batches_per_round: 6
+    gate:
+      tau: 10.0
+    rollout:
+      length: 60
+      reset_every: 60
+num_envs: 64
+logdir: "workdir/RewarpedAllegroHand-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"
