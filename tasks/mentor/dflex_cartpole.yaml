@@ -1,0 +1,21 @@
+# Cart-pole swing-up: a non-periodic task (swing up from a random start, then balance).
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 10
+    demos:
+      path: "experts/demos/DFlex_cartpoleswingup_demos128_return-286_len240.pt"
+      n_trajs: 8
+logdir: "workdir/DFlexCartpole-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "1h"

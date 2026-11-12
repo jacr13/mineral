@@ -71,7 +71,7 @@ class EnvSpec:
     def apply_action(self, env, state, a, n, num_qd):
         """Torque actuation: joint torques act_scale * clip(a) on the actuated dofs."""
         act = torch.zeros(n, num_qd, device=a.device, dtype=a.dtype)
-        act[:, self.act_offset :] = torch.clip(a, -1, 1) * self.act_scale(env, n)
+        act[:, self.act_offset : self.act_offset + self.act_dim] = torch.clip(a, -1, 1) * self.act_scale(env, n)
         state.joint_act = act.reshape(-1).contiguous()
 
     def to_state(self, env, obs):
@@ -94,6 +94,26 @@ class HopperSpec(EnvSpec):
 
     def from_state(self, env, q, qd):
         return torch.cat([q[:, 1:], qd], -1)
+
+
+class CartPoleSpec(EnvSpec):
+    """Cart-pole swing-up: obs = [x, xdot, sin(theta), cos(theta), theta_dot], one force on the cart.
+
+    The map is exact (theta = atan2(sin, cos); the dynamics are 2pi-periodic in theta). The task is
+    not periodic: swing up from a random start, then balance.
+    """
+
+    env_name, obs_dim, act_dim, act_offset = 'cartpoleswingup', 5, 1, 0
+
+    def act_scale(self, env, n):
+        return env.action_strength
+
+    def to_state(self, env, obs):
+        q = torch.stack([obs[:, 0], torch.atan2(obs[:, 2], obs[:, 3])], 1)
+        return q, torch.stack([obs[:, 1], obs[:, 4]], 1)
+
+    def from_state(self, env, q, qd):
+        return torch.stack([q[:, 0], qd[:, 0], torch.sin(q[:, 1]), torch.cos(q[:, 1]), qd[:, 1]], 1)
 
 
 class AntSpec(EnvSpec):
@@ -235,7 +255,7 @@ class SynergySpec(EnvSpec):
         return self.base.from_state(env, q, qd)
 
 
-SPECS = {'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec, 'snu_humanoid': SNUHumanoidSpec}
+SPECS = {'cartpoleswingup': CartPoleSpec, 'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec, 'snu_humanoid': SNUHumanoidSpec}
 
 
 def get_spec(env_name):
