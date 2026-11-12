@@ -418,14 +418,25 @@ class MENTOR(Agent):
         obs, next_obs = demos['obs'], demos['next_obs']
         if self.full_state:  # selected observation keys, flattened per step
             N_, T_ = demos['done'].shape[:2]
-            self.S = torch.cat([obs[k].reshape(N_, T_, -1) for k in self.spec.obs_keys], -1).float().contiguous()
-            self.S1 = torch.cat([next_obs[k].reshape(N_, T_, -1) for k in self.spec.obs_keys], -1).float().contiguous()
+            ks = self.spec.key_slices
+            self.S = torch.cat([obs[k].reshape(N_, T_, -1)[..., ks[k]] for k in self.spec.obs_keys], -1).float().contiguous()
+            self.S1 = torch.cat([next_obs[k].reshape(N_, T_, -1)[..., ks[k]] for k in self.spec.obs_keys], -1)
+            self.S1 = self.S1.float().contiguous()
         else:
             obs = obs['obs'] if isinstance(obs, dict) else obs
             next_obs = next_obs['obs'] if isinstance(next_obs, dict) else next_obs
             self.S = obs[..., :D].float().contiguous()
             self.S1 = next_obs[..., :D].float().contiguous()
         self.lengths = self._lengths(demos['done'])
+        if self.full_state:  # Rewarped zeroes the observations of envs that went NaN: end those demos there
+            zero = (self.S.abs().sum(-1) == 0) | (self.S1.abs().sum(-1) == 0)
+            for i in range(zero.shape[0]):
+                idx = zero[i].nonzero(as_tuple=True)[0]
+                if len(idx) > 0:
+                    self.lengths[i] = min(int(self.lengths[i]), int(idx[0]))
+            n_cut = int((zero.any(1)).sum())
+            if n_cut:
+                print(f'[MENTOR] {n_cut} demonstrations cut at their first zeroed (NaN-reset) step')
         # AUDIT ONLY (invert.audit_true_actions): replace the recovered actions by the stored expert actions, to
         # measure what action recovery costs. This reads demonstrator actions: never use it for reported results.
         # True / 'both': the Stage I labels and the teacher's reference actions; 'labels' or 'teacher': only one of them.
@@ -529,7 +540,7 @@ class MENTOR(Agent):
         batch = int(cfg.batch)
         s, s1 = self.S[self.valid], self.S1[self.valid]
         n = s.shape[0]
-        if self.full_state:  # actions read off the observations (spec.stage1), no simulation
+        if self.full_state and self.spec.stage1 != 'invert':  # actions read off the observations, no simulation
             t0 = time.time()
             A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
             A_hat[self.valid] = self.spec.recover_actions(s, s1)
@@ -537,7 +548,10 @@ class MENTOR(Agent):
             self.stage1_steps = 0
             print(f'[MENTOR] Stage I ({self.spec.stage1}): {n} transitions, no simulation')
             return {'stage1/sim_steps': 0, 'stage1/time': time.time() - t0}
-        step = OneStep(self.spec, batch, self.device, self.counter)
+        if self.full_state:  # Levenberg-Marquardt through Rewarped via the adapter's observation-to-state map
+            step = self.spec.make_obs_step(batch, self.device, self.counter)
+        else:
+            step = OneStep(self.spec, batch, self.device, self.counter)
         acts, costs = [], []
         t0 = time.time()
         before = self.counter.total

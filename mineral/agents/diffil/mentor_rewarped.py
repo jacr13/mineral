@@ -29,8 +29,18 @@ class RewarpedSpec:
     def __init__(self, full_cfg, obs_keys, stage1='joint_velocity', device='cuda:0'):
         self.env_cfg = OmegaConf.to_container(full_cfg.task.env, resolve=True)
         self.env_name = self.env_cfg['env_name']
-        self.obs_keys = [k for k in obs_keys.split('|') if k] if isinstance(obs_keys, str) else list(obs_keys)
+        keys = [k for k in obs_keys.split('|') if k] if isinstance(obs_keys, str) else list(obs_keys)
+        self.obs_keys, self.key_slices = [], {}
+        for k in keys:  # 'name' or 'name[a:b]' (a slice of the flattened entry, e.g. obs[:56] drops the last action)
+            name, _, rest = k.partition('[')
+            sl = slice(None)
+            if rest:
+                a, _, b = rest.rstrip(']').partition(':')
+                sl = slice(int(a) if a else None, int(b) if b else None)
+            self.obs_keys.append(name)
+            self.key_slices[name] = sl
         self.stage1 = stage1
+        self.adapter = ADAPTERS.get(self.env_name, Adapter)()
         self.device = device
         probe = self.make_env(1, device, grad=False)
         obs = probe.reset()
@@ -39,7 +49,7 @@ class RewarpedSpec:
         self.action_scale = float(getattr(probe, 'action_scale', 1.0))
         self.slices, start = {}, 0
         for k in self.obs_keys:
-            size = obs[k].reshape(1, -1).shape[1]
+            size = obs[k].reshape(1, -1)[:, self.key_slices[k]].shape[1]
             self.slices[k] = slice(start, start + size)
             start += size
         self.obs_dim = start
@@ -59,7 +69,7 @@ class RewarpedSpec:
 
     def obs_vec(self, obs):
         n = obs[self.obs_keys[0]].shape[0]
-        return torch.cat([obs[k].reshape(n, -1) for k in self.obs_keys], 1)
+        return torch.cat([obs[k].reshape(n, -1)[:, self.key_slices[k]] for k in self.obs_keys], 1)
 
     # ---- full state ----
     def get_states(self, env, ids=None):
@@ -70,7 +80,17 @@ class RewarpedSpec:
             v = getattr(env.state, k).detach()
             v = v.view(n, -1, *v.shape[1:])
             out[k] = (v if ids is None else v[ids]).clone()
+        for k in self.adapter.extra:  # env variables that enter the observation (e.g. a goal)
+            v = getattr(env, k).detach()
+            out[k] = (v if ids is None else v[ids]).clone()
         return out
+
+    def states_from_obs(self, env, obs):
+        return self.adapter.states_from_obs(self, env, obs)
+
+    def make_obs_step(self, n, device, counter):
+        """``step(obs, a, grad)`` for Stage I inversion, when the adapter has an observation-to-state map."""
+        return ObsStep(self, n, device, counter)
 
     @staticmethod
     def cat_states(states):
@@ -87,6 +107,8 @@ class RewarpedSpec:
     # ---- Stage I ----
     def recover_actions(self, S, S1):
         """Demo actions from observations (no simulation). S, S1: [..., obs_dim]."""
+        if self.stage1 == 'invert':
+            raise ValueError("stage1 'invert' runs Levenberg-Marquardt through make_obs_step(), not recover_actions()")
         if self.stage1 != 'joint_velocity':
             raise ValueError(f'unknown Rewarped Stage I {self.stage1!r}')
         if 'joint_q' not in self.slices:
@@ -102,16 +124,21 @@ class StateStep:
     Simulator transitions are counted like OneStep (``fwdbwd`` with a backward pass, ``fwd`` without).
     """
 
-    def __init__(self, spec, n, device, counter):
+    def __init__(self, spec, n, device, counter, grad=True):
         self.spec, self.n, self.device, self.counter = spec, n, device, counter
-        self.env = spec.make_env(n, device, grad=True)
+        self.env = spec.make_env(n, device, grad=grad)
         self.env.reset()
 
     def load(self, states):
         if next(iter(states.values())).shape[0] != self.n:
             raise ValueError(f'StateStep built for batch {self.n}, got {next(iter(states.values())).shape[0]}')
+        extra = self.spec.adapter.extra
         for k, v in states.items():
-            self.env.state.assign(k, v.reshape(-1, *v.shape[2:]).clone().contiguous())
+            if k in extra:
+                getattr(self.env, k)[:] = v
+            else:
+                self.env.state.assign(k, v.reshape(-1, *v.shape[2:]).clone().contiguous())
+        self.spec.adapter.after_load(self.env)
 
     def step(self, a, grad=True):
         env = self.env
@@ -125,6 +152,70 @@ class StateStep:
         else:
             self.counter.fwd += self.n
         return y if grad else y.detach()
+
+
+class ObsStep:
+    """``step(obs, a, grad) -> next obs`` through Rewarped, via the adapter's observation-to-state map (Stage I)."""
+
+    def __init__(self, spec, n, device, counter):
+        self.spec = spec
+        self.sim = StateStep(spec, n, device, counter, grad=False)  # Levenberg-Marquardt is forward-only
+
+    def __call__(self, obs, a, grad=False):
+        self.sim.load(self.spec.states_from_obs(self.sim.env, obs))
+        return self.sim.step(a, grad=grad)
+
+
+class Adapter:
+    """Task-specific pieces of a Rewarped env. ``extra``: env attributes saved and restored with the state."""
+
+    extra = ()
+
+    def states_from_obs(self, spec, env, obs):
+        raise ValueError(f'no observation-to-state map for {spec.env_name}; use a Stage I that needs none')
+
+    def after_load(self, env):
+        pass
+
+
+class AllegroHandAdapter(Adapter):
+    """IsaacGymEnvs AllegroHand (Rewarped, observationType full_state without forces): exact state map.
+
+    obs[0:16] hand joints (unscaled to [-1, 1]), [16:32] hand joint velocities (x vel_obs_scale), [32:35] cube
+    position, [35:39] cube quaternion, [39:42] cube linear velocity (COM), [42:45] angular velocity (x vel_obs_scale),
+    [45:52] goal pose, [52:56] cube-goal rotation, [56:72] previous action (not used: obs[:56]).
+    """
+
+    extra = ('goal_states',)
+
+    def states_from_obs(self, spec, env, obs):
+        from rewarped.envs.isaacgymenvs.allegro_hand import scale
+
+        n = obs.shape[0]
+        lo = env.hand_dof_lower_limits.reshape(-1, 16)[:1]
+        hi = env.hand_dof_upper_limits.reshape(-1, 16)[:1]
+        vs = env.vel_obs_scale
+        pos = obs[:, 32:35] + env.env_offsets.reshape(-1, 3)[:n]
+        ang = obs[:, 42:45] / vs
+        q = torch.cat([scale(obs[:, 0:16], lo, hi), pos, obs[:, 35:39]], 1)
+        qd = torch.cat([obs[:, 16:32] / vs, ang, obs[:, 39:42] + torch.cross(pos, ang, dim=-1)], 1)
+        out = {'joint_q': q, 'joint_qd': qd}
+        if 'joint_tau' in spec.state_names:
+            out['joint_tau'] = torch.zeros_like(getattr(env.state, 'joint_tau').view(env.num_envs, -1)[:n])
+        goal = env.goal_states[:n].detach().clone()
+        goal[:, 0:3] = obs[:, 45:48] + env.env_offsets.reshape(-1, 3)[:n]
+        goal[:, 3:7] = obs[:, 48:52]
+        out['goal_states'] = goal
+        return out
+
+    def after_load(self, env):
+        import warp as wp
+
+        # maximal coordinates (contacts) from the assigned joint coordinates
+        wp.sim.eval_fk(env.model, env.state_0.joint_q, env.state_0.joint_qd, None, env.state_0)
+
+
+ADAPTERS = {'AllegroHand': AllegroHandAdapter}
 
 
 def make_state_teacher_class(base):
