@@ -383,13 +383,16 @@ def _write_slurm_script(script_path, name, command, args):
     modules = ""
     run_info = getattr(args, '_supervisor_run', None)
     if run_info:
-        modules = bootstrap(args.cluster_repo, run_info['git_commit'], run_info['run_id'], run_info['inputs'], args.docker)
+        modules = bootstrap(
+            args.cluster_repo, run_info['git_commit'], run_info['run_id'], run_info['inputs'], args.docker, args.docker_image
+        )
     if args.docker:
         if args.docker_image is None:
             raise ValueError("Docker image must be specified when using Apptainer.")
         if run_info:
             binds = ['-B "$RUN_ROOT/source:/workspace"', '-B "$RUN_ROOT/results:/results"']
             binds += ['-B ' + shell_path(host, f':/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
+            binds += ['-B "$WARP_CACHE_ROOT:/cache/warp"']  # persistent kernel cache, set up by bootstrap()
             command = (
                 '-n 1 apptainer exec ' + ('--nv ' if args.device == 'gpu' else '')
                 + '--containall ' + ' '.join(binds) + ' ' + shlex.quote(args.docker_image)

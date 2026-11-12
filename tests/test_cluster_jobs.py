@@ -208,6 +208,9 @@ def test_mcp_input_is_bound_into_apptainer(project, tmp_path):
     assert generated.returncode == 0, generated.stderr
     script = (next((state / 'previews').iterdir()) / 'job.sbatch').read_text()
     assert '-B "${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/inputs/experts/demos:/workspace/experts/demos:ro"' in script
+    assert 'WARP_CACHE_ROOT="${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/cache/warp/mineral"' in script
+    assert 'mkdir -p "$WARP_CACHE_ROOT"' in script and 'export APPTAINERENV_WARP_CACHE_PATH=/cache/warp' in script
+    assert '-B "$WARP_CACHE_ROOT:/cache/warp"' in script
     both = generate(project, tmp_path / 'other', '--mcp_input', 'experts/demos', '--cluster_input', 'experts/demos=/data')
     assert both.returncode != 0 and 'both' in both.stderr
     traversal = generate(project, tmp_path / 'bad', '--mcp_input', '../secrets')

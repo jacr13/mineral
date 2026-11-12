@@ -107,8 +107,11 @@ def run_identity():
     return name, uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-supervisor:' + name).hex
 
 
-def bootstrap(repo, commit, run_id, inputs, docker):
+def bootstrap(repo, commit, run_id, inputs, docker, image=None):
     """Prepare source without touching the shared checkout or fetching moving refs.
+
+    With an Apptainer ``image``, kernel caches persist in ``$MCP_RUNS_DIR/cache/warp/<image name>`` (bound to
+    /cache/warp): the first job compiles Warp's kernels, later jobs on the same image reuse them.
 
     ``repo=None``: the supervisor prepares a per-branch checkout and passes its path
     in ``MCP_CHECKOUT`` (it clones and fetches; the job only reads the commit).
@@ -138,6 +141,13 @@ def bootstrap(repo, commit, run_id, inputs, docker):
                 f'mkdir -p "$(dirname {dest})"',
                 f'ln -s {shell_path(absolute)} {dest}',
             ])
+    if docker and image:
+        name = re.sub(r'[^A-Za-z0-9_.-]', '_', Path(str(image)).stem) or 'image'
+        lines.extend([
+            f'WARP_CACHE_ROOT="${{MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}}/cache/warp/{name}"',
+            'mkdir -p "$WARP_CACHE_ROOT"',
+            'export APPTAINERENV_WARP_CACHE_PATH=/cache/warp',
+        ])
     lines.append('cd "$RUN_ROOT/source"')
     return '\n'.join(lines)
 
