@@ -209,7 +209,7 @@ def test_mcp_input_is_bound_into_apptainer(project, tmp_path):
     script = (next((state / 'previews').iterdir()) / 'job.sbatch').read_text()
     assert '-B "${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/inputs/experts/demos:/workspace/experts/demos:ro"' in script
     assert 'WARP_CACHE_SHARED="${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/cache/warp/mineral"' in script
-    assert 'WARP_CACHE_ROOT="$RUN_ROOT/warp_cache"' in script and 'trap publish_warp_cache EXIT' in script
+    assert 'mineral-warp-cache.XXXXXX' in script and 'trap publish_warp_cache EXIT' in script
     assert 'export APPTAINERENV_WARP_CACHE_PATH=/cache/warp' in script
     assert '-B "$WARP_CACHE_ROOT:/cache/warp"' in script
     both = generate(project, tmp_path / 'other', '--mcp_input', 'experts/demos', '--cluster_input', 'experts/demos=/data')

@@ -148,8 +148,7 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
         lines.extend([
             f'WARP_CACHE_SHARED="${{MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}}/cache/warp/{name}"',
             'mkdir -p "$WARP_CACHE_SHARED"',
-            'WARP_CACHE_ROOT="$RUN_ROOT/warp_cache"',
-            'mkdir -p "$WARP_CACHE_ROOT"',
+            'WARP_CACHE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/mineral-warp-cache.XXXXXX")"',  # node-local, not downloaded
             'cp -a "$WARP_CACHE_SHARED/." "$WARP_CACHE_ROOT/" 2>/dev/null || true',
             'publish_warp_cache() {',
             '  for module in "$WARP_CACHE_ROOT"/*/; do',
@@ -158,6 +157,7 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
             '    staging="$WARP_CACHE_SHARED/.staging-$$-$(basename "$module")"',
             '    cp -a "$module" "$staging" && mv -T "$staging" "$target" 2>/dev/null || rm -rf "$staging"',
             '  done',
+            '  rm -rf "$WARP_CACHE_ROOT"',
             '}',
             'trap publish_warp_cache EXIT',
             'export APPTAINERENV_WARP_CACHE_PATH=/cache/warp',
