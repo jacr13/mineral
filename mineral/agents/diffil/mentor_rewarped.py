@@ -31,12 +31,15 @@ class RewarpedSpec:
         self.env_name = self.env_cfg['env_name']
         keys = [k for k in obs_keys.split('|') if k] if isinstance(obs_keys, str) else list(obs_keys)
         self.obs_keys, self.key_slices = [], {}
-        for k in keys:  # 'name' or 'name[a:b]' (a slice of the flattened entry, e.g. obs[:56] drops the last action)
-            name, _, rest = k.partition('[')
-            sl = slice(None)
-            if rest:
+        for k in keys:  # 'name', 'name:a:b' or 'name[a:b]': a slice of the flattened entry (obs::56 drops the last action)
+            if '[' in k:
+                name, _, rest = k.partition('[')
                 a, _, b = rest.rstrip(']').partition(':')
-                sl = slice(int(a) if a else None, int(b) if b else None)
+            elif ':' in k:  # unquoted on a Hydra command line, unlike brackets
+                name, a, b = (k.split(':') + ['', ''])[:3]
+            else:
+                name, a, b = k, '', ''
+            sl = slice(int(a) if a else None, int(b) if b else None)
             self.obs_keys.append(name)
             self.key_slices[name] = sl
         self.stage1 = stage1
@@ -183,7 +186,7 @@ class AllegroHandAdapter(Adapter):
 
     obs[0:16] hand joints (unscaled to [-1, 1]), [16:32] hand joint velocities (x vel_obs_scale), [32:35] cube
     position, [35:39] cube quaternion, [39:42] cube linear velocity (COM), [42:45] angular velocity (x vel_obs_scale),
-    [45:52] goal pose, [52:56] cube-goal rotation, [56:72] previous action (not used: obs[:56]).
+    [45:52] goal pose, [52:56] cube-goal rotation, [56:72] previous action (not used: obs::56).
     """
 
     extra = ('goal_states',)

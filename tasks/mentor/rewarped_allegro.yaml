@@ -13,7 +13,7 @@ agent:
   name: MENTOR/DFlex
   mentor:
     rounds: 12
-    obs_keys: "obs[:56]"
+    obs_keys: "obs::56"  # first 56 coordinates (the last 16 are the previous action)
     stage1: invert
     demos:
       path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
