@@ -1,5 +1,5 @@
 # IsaacGymEnvs AllegroHand cube reorientation (Rewarped): non-periodic, goal-conditioned, rigid bodies.
-# Needs the Rewarped 1.3.3 / Warp 1.3.3 stack (branch mentor-wip-warp13, image candidj0/mineral:warp13);
+# Needs the Rewarped 1.3.3 / Warp 1.3.3 stack (branch mentor-wip, image candidj0/mineral:warp13 = ~/docker/mineral_uv.sif);
 # Rewarped main + Warp 1.9 sends half the envs to NaN on the first step.
 # The observation determines the state (hand joints + cube pose/velocity; the goal is restored as an env variable),
 # so Stage I inverts the simulator; the last 16 coordinates (previous action) are not used.
