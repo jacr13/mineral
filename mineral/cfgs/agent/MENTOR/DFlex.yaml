@@ -14,6 +14,10 @@ network:
 mentor:
   num_actors: ${...task.env.numEnvs}
   rounds: 10
+  # Rewarped tasks only (full-state MENTOR): observation keys ('name', 'name:a:b' slices) and the Stage I rule
+  # (joint_velocity: actions read off joint displacements; invert: Levenberg-Marquardt through the simulator)
+  obs_keys: "joint_q|com_q"
+  stage1: joint_velocity
   eval_episodes_per_env: 2  # as SHAC/FOCUS eval: num_actors * 2 episodes
 
   demos:
