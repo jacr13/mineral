@@ -71,7 +71,10 @@ mentor:
     horizon: 8
     num_windows: 3
     screen: True  # rank windows by warm-start cost, optimise only the best one
-    iters: 20
+    iters: 20  # Adam iterations (maximum when adaptive_tol > 0)
+    adaptive_tol: 0.0  # > 0: stop once the mean cost improved by < adaptive_tol (relative) over adaptive_patience its
+    adaptive_patience: 2
+    adaptive_min: 2
     lr: 0.2
     action_reg: 0.05
     phase_offsets: [-2, -1, 0, 1, 2, 3, 4, 5, 6]

@@ -436,6 +436,10 @@ class RejoinTeacher:
         self.iters = int(cfg.iters)
         self.lr = float(cfg.lr)
         self.lam = float(cfg.action_reg)
+        self.adaptive_tol = float(cfg.get('adaptive_tol', 0.0))
+        self.adaptive_patience = int(cfg.get('adaptive_patience', 2))
+        self.adaptive_min = int(cfg.get('adaptive_min', 2))
+        self.iters_used = []  # Adam iterations actually run per labelled batch (reset by the agent each round)
         self.screen = bool(cfg.screen) and self.m > 1
         # Policy anchor (optional): warm-start and regularise the plan towards the current policy's
         # closed-loop actions (mixed with the demo actions by anchor_mix), so that over-actuated
@@ -564,6 +568,10 @@ class RejoinTeacher:
         opt = torch.optim.Adam([a], lr=self.lr)
         best = torch.full((a.shape[0],), float('inf'), device=self.device)
         best_a = a_ref.clone()
+        # adaptive stopping (teacher.adaptive_tol > 0): stop the batch once the mean best cost improved by less than
+        # adaptive_tol (relative) over the last adaptive_patience iterations, after at least adaptive_min iterations
+        tol, patience, min_it = self.adaptive_tol, self.adaptive_patience, self.adaptive_min
+        hist = []
         for it in range(self.iters + 1):
             last = it == self.iters
             with torch.set_grad_enabled(not last):
@@ -572,7 +580,12 @@ class RejoinTeacher:
                 better = c < best
                 best = torch.where(better, c.detach(), best)
                 best_a[better] = a.detach()[better].clamp(-1, 1)
+                hist.append(best.mean().item())
+            if not last and tol > 0 and it >= max(min_it, patience):
+                if hist[-1 - patience] - hist[-1] < tol * hist[-1 - patience]:
+                    last = True
             if last:
+                self.iters_used.append(it)
                 break
             opt.zero_grad()
             c.sum().backward()
@@ -1516,12 +1529,21 @@ class MENTOR(Agent):
                     **library_stats,
                     **adv_stats,
                     **relabel_stats,
+                    **self._teacher_iter_stats(),
                     'time/rollout': t_roll,
                     'time/teacher': t_teach,
                     'time/fit': time.time() - t1,
                 }
             )
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
+
+    def _teacher_iter_stats(self):
+        used = getattr(self.teacher, 'iters_used', None)
+        if not used:
+            return {}
+        stats = {'train/teacher_iters_mean': float(np.mean(used)), 'train/teacher_iters_max': float(np.max(used))}
+        self.teacher.iters_used = []
+        return stats
 
     def _log_round(self, train_stats):
         t0 = time.time()
