@@ -59,6 +59,7 @@ mentor:
     ilqr_r: 1.0
     ilqr_qf: 1.0
     ilqr_iters: 1
+    ilqr_jacobian: fd  # fd (gradient-free) or autodiff (exact Jacobians through the simulator; diagnostic)
     ilqr_stage: 1.0  # weight of the intermediate states (0 = terminal only, best phase offset among phase_offsets)
     ilqr_alphas: [1.0, 0.5, 0.25]
     # sample: sample_n noisy closed-loop rollouts around the anchored references (noise sample_noise),

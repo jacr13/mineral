@@ -235,6 +235,9 @@ class ILQRTeacher:
         self.ok_flat = ok.reshape(-1)
         self.S_flat = (S * self.ws).reshape(self.N * self.T, self.D)
         self.h_s, self.h_a = 1e-3 / self.ws, 1e-2
+        # ilqr_jacobian: fd (forward differences, gradient-free) or autodiff (exact, through the simulator's backward
+        # pass, one forward + backward per state coordinate) -- a diagnostic of the finite-difference Jacobians
+        self.jac_kind = str(cfg.get('ilqr_jacobian', 'fd'))
         self.sim = OneStep(spec, self.n, device, counter)
         self.policy = None
 
@@ -251,6 +254,16 @@ class ILQRTeacher:
         return (e.sum(-1) * wk).sum(-1) + self.r * ((us - us_pi) ** 2).sum((-1, -2))
 
     def _jacobians(self, x, u):
+        if self.jac_kind == 'autodiff':
+            rows_s, rows_a = [], []
+            for i in range(self.D):
+                xg, ug = x.detach().clone().requires_grad_(True), u.detach().clone().requires_grad_(True)
+                with torch.enable_grad():
+                    yi = self.sim(xg, ug.clamp(-1, 1), grad=True)[:, i]
+                    gx, gu = torch.autograd.grad(yi.sum(), (xg, ug), allow_unused=True)
+                rows_s.append(torch.zeros_like(x) if gx is None else gx)
+                rows_a.append(torch.zeros_like(u) if gu is None else gu)
+            return torch.stack(rows_s, 1), torch.stack(rows_a, 1)
         y = self._step(x, u)
         cols = []
         for j in range(self.D):
