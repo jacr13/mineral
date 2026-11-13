@@ -182,6 +182,140 @@ def lm_invert(
     return best_a, best_c
 
 
+class ILQRTeacher:
+    """Local corrections around the learner's own rollout, by iLQR with finite-difference Jacobians.
+
+    For a visited state x_0, the current policy runs K steps (x_k, u_k = pi(x_k)). The reference is the
+    nearest demo point j and the demo states s_{j+k} that follow. The one-step map is linearised along the
+    learner's segment by forward differences (forward simulator steps only, no simulator gradients), and a
+    backward pass on the tracking cost sum_k ||x_k - s_{j+k}||_Q^2 (terminal weight qf) plus r ||u_k - a_bar_k||^2,
+    a trust region around anchored references a_bar_k = mix pi(x_k) + (1 - mix) a_hat_{j+k}, gives feedforward and
+    feedback corrections. A line search
+    over the step size runs the corrected controller in the simulator; the label is its first action and the
+    gate cost its true tracking cost. This is the local-controller step of mirror-descent guided policy search
+    (Montgomery and Levine 2016), here with a demo-tracking cost from state-only demonstrations.
+    """
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        self.spec, self.device, self.counter = spec, device, counter
+        self.S, self.A_hat, self.lengths = S, A_hat, lengths
+        self.N, self.T, self.D = S.shape
+        self.M = spec.act_dim
+        self.K = int(cfg.horizon)
+        self.n = int(batch)
+        self.r = float(cfg.get('ilqr_r', 1.0))
+        self.qf = float(cfg.get('ilqr_qf', 1.0))
+        self.iters = int(cfg.get('ilqr_iters', 1))
+        self.alphas = [float(a) for a in cfg.get('ilqr_alphas', [1.0, 0.5, 0.25])]
+        # centre of the trust region: mix * policy action + (1 - mix) * the demo's Stage I action (anchor_mix)
+        self.mix = float(cfg.get('ilqr_mix', cfg.get('anchor_mix', 0.5)))
+        valid = torch.arange(self.T, device=device)[None] < lengths[:, None]
+        self.ws = 1.0 / S[valid].std(0).clamp_min(1e-6)
+        self.Q = torch.diag(self.ws**2)
+        ok = torch.arange(self.T, device=device)[None] <= (lengths[:, None] - 1 - self.K)
+        self.ok_flat = ok.reshape(-1)
+        self.S_flat = (S * self.ws).reshape(self.N * self.T, self.D)
+        self.h_s, self.h_a = 1e-3 / self.ws, 1e-2
+        self.sim = OneStep(spec, self.n, device, counter)
+        self.policy = None
+
+    def anchor_to(self, policy):
+        self.policy = policy  # the corrections are relative to the policy's own actions
+
+    def _step(self, x, u):
+        return torch.nan_to_num(self.sim(x, u.clamp(-1, 1), grad=False), nan=1e3)
+
+    def _cost(self, xs, us, us_pi, ref):
+        e = ((xs[:, 1:] - ref[:, 1:]) * self.ws) ** 2  # (n, K, D)
+        wk = torch.ones(self.K, device=self.device)
+        wk[-1] = self.qf
+        return (e.sum(-1) * wk).sum(-1) + self.r * ((us - us_pi) ** 2).sum((-1, -2))
+
+    def _jacobians(self, x, u):
+        y = self._step(x, u)
+        cols = []
+        for j in range(self.D):
+            xp = x.clone()
+            xp[:, j] += self.h_s[j]
+            cols.append((self._step(xp, u) - y) / self.h_s[j])
+        for j in range(self.M):
+            up = u.clone()
+            sign = torch.where(u[:, j] + self.h_a > 1, -1.0, 1.0)
+            up[:, j] = (u[:, j] + sign * self.h_a).clamp(-1, 1)
+            cols.append((self._step(x, up) - y) / (up[:, j] - u[:, j]).unsqueeze(-1))
+        J = torch.stack(cols, -1)
+        return J[..., : self.D], J[..., self.D :]
+
+    @torch.no_grad()
+    def label(self, x):
+        """Corrected first actions (batch, act_dim) and the true tracking costs of the corrected rollouts."""
+        if self.policy is None:
+            raise ValueError('teacher.kind=ilqr needs the policy (anchor_to)')
+        x = x.detach()
+        n, K, D, M = x.shape[0], self.K, self.D, self.M
+        if n != self.n:
+            raise ValueError(f'ILQR teacher built for batch {self.n}, got {n}')
+        d = torch.cdist(x * self.ws, self.S_flat).masked_fill(~self.ok_flat[None], float('inf'))
+        idx = d.argmin(1)
+        traj, j = idx // self.T, idx % self.T
+        ref = torch.stack([self.S[traj, j + k] for k in range(K + 1)], 1)  # (n, K+1, D)
+        # nominal: the policy's closed-loop rollout
+        xs = [x]
+        us = []
+        for _ in range(K):
+            u = self.policy(xs[-1]).clamp(-1, 1)
+            us.append(u)
+            xs.append(self._step(xs[-1], u))
+        xs, us = torch.stack(xs, 1), torch.stack(us, 1)
+        a_demo = torch.stack([self.A_hat[traj, j + k] for k in range(K)], 1)
+        us_pi = self.mix * us + (1 - self.mix) * a_demo  # trust-region centre (anchored references)
+        cost = self._cost(xs, us, us_pi, ref)
+        eyeM = torch.eye(M, device=self.device)
+        for _ in range(self.iters):
+            A, B = zip(*[self._jacobians(xs[:, k], us[:, k]) for k in range(K)], strict=True)
+            e = (xs - ref) * self.ws**2  # gradient of ||x - ref||_Q^2 / 2
+            Vx = self.qf * e[:, K]
+            Vxx = (self.qf * self.Q).expand(n, D, D)
+            kff, Kfb = [None] * K, [None] * K
+            for k in reversed(range(K)):
+                Ak, Bk = A[k], B[k]
+                lx = e[:, k] if k > 0 else torch.zeros_like(e[:, k])
+                lxx = self.Q if k > 0 else torch.zeros_like(self.Q)
+                Qx = lx + (Ak.transpose(1, 2) @ Vx.unsqueeze(-1)).squeeze(-1)
+                Qu = (Bk.transpose(1, 2) @ Vx.unsqueeze(-1)).squeeze(-1) + self.r * (us[:, k] - us_pi[:, k])
+                Qxx = lxx + Ak.transpose(1, 2) @ Vxx @ Ak
+                Quu = self.r * eyeM + Bk.transpose(1, 2) @ Vxx @ Bk
+                Qux = Bk.transpose(1, 2) @ Vxx @ Ak
+                kk = -torch.linalg.solve(Quu, Qu.unsqueeze(-1)).squeeze(-1)
+                KK = -torch.linalg.solve(Quu, Qux)
+                Vx = Qx + (KK.transpose(1, 2) @ (Quu @ kk.unsqueeze(-1) + Qu.unsqueeze(-1))).squeeze(-1)
+                Vx = Vx + (Qux.transpose(1, 2) @ kk.unsqueeze(-1)).squeeze(-1)
+                Vxx = Qxx + KK.transpose(1, 2) @ Quu @ KK + KK.transpose(1, 2) @ Qux + Qux.transpose(1, 2) @ KK
+                Vxx = 0.5 * (Vxx + Vxx.transpose(1, 2))
+                kff[k], Kfb[k] = kk, KK
+            best_xs, best_us, best_c = xs, us, cost
+            for alpha in self.alphas:  # line search on the true simulator, per sample
+                xn, un = [x], []
+                for k in range(K):
+                    u = (us[:, k] + alpha * kff[k] + (Kfb[k] @ (xn[-1] - xs[:, k]).unsqueeze(-1)).squeeze(-1)).clamp(-1, 1)
+                    un.append(u)
+                    xn.append(self._step(xn[-1], u))
+                xn, un = torch.stack(xn, 1), torch.stack(un, 1)
+                c = self._cost(xn, un, us_pi, ref)
+                better = c < best_c
+                best_xs = torch.where(better[:, None, None], xn, best_xs)
+                best_us = torch.where(better[:, None, None], un, best_us)
+                best_c = torch.where(better, c, best_c)
+            xs, us, cost = best_xs, best_us, best_c
+        return us[:, 0], cost
+
+    def extend(self, *args, **kwargs):
+        raise ValueError('teacher.kind=ilqr does not support the bootstrap library')
+
+    def advantage(self, policy):
+        raise ValueError('teacher.kind=ilqr does not support gate.advantage')
+
+
 class TVLQRTeacher:
     """Time-varying LQR funnel around the demonstrations, built once from the Stage I actions.
 
@@ -1124,6 +1258,10 @@ class MENTOR(Agent):
             if self.full_state:
                 raise ValueError('teacher.kind=tvlqr needs an observation-to-state map (DFlex bodies)')
             TeacherCls = TVLQRTeacher
+        elif kind == 'ilqr':
+            if self.full_state:
+                raise ValueError('teacher.kind=ilqr needs an observation-to-state map (DFlex bodies)')
+            TeacherCls = ILQRTeacher
         elif kind != 'rejoin':
             raise ValueError(f'unknown teacher.kind {kind!r}')
         self.teacher = TeacherCls(

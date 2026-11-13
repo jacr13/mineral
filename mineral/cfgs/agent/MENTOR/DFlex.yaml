@@ -49,9 +49,15 @@ mentor:
 
   # Stage II: rejoin teacher
   teacher:
-    kind: rejoin  # rejoin: K-step plan back onto a demo window; tvlqr: time-varying LQR funnel around the demos
+    kind: rejoin  # rejoin: K-step plan onto a demo window; tvlqr: LQR funnel around the demos; ilqr: iLQR around the policy rollout
     lqr_r: 10.0  # tvlqr: action cost R = lqr_r I (state cost Q = diag(1 / std(s)^2))
     lqr_batch: 2000  # tvlqr: batch of the one-step simulator for the finite-difference Jacobians
+    # ilqr: corrections around the policy's own K-step rollout (FD Jacobians along it, demo-tracking cost,
+    # trust region ilqr_r ||u - pi(x)||^2, terminal weight ilqr_qf, line search over ilqr_alphas)
+    ilqr_r: 1.0
+    ilqr_qf: 1.0
+    ilqr_iters: 1
+    ilqr_alphas: [1.0, 0.5, 0.25]
     horizon: 8
     num_windows: 3
     screen: True  # rank windows by warm-start cost, optimise only the best one
