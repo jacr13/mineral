@@ -1,0 +1,44 @@
+# GradSim soft Jumper (Rewarped, "table" body: 204 particles, 444 tetrahedra driven by 222 activations): a soft body
+# that hops forward. Full-state MENTOR; the observation determines the particle state (JumperAdapter), so Stage I
+# inverts the simulator by Levenberg-Marquardt.
+task:
+  name: Rewarped
+  env:
+    env_name: Jumper
+    env_suite: gradsim
+    no_grad: True  # MENTOR never back-propagates through the learner's rollouts
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    obs_keys: "particle_q|particle_qd|phase"
+    stage1: invert
+    demos:
+      path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
+      n_trajs: 8
+    invert:
+      batch: 500
+      iters: 20
+      starts: 1
+      jacobian: broyden
+      refresh: 5
+    teacher:
+      batch: 64
+      batches_per_round: 6
+      anchor_mix: 0.5
+    gate:
+      tau: 1000000000
+      quantile: 0
+    rollout:
+      length: 60
+      reset_every: 60
+num_envs: 64
+logdir: "workdir/RewarpedJumper-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"

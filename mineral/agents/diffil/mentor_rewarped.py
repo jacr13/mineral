@@ -148,6 +148,7 @@ class StateStep:
         with torch.set_grad_enabled(grad and torch.is_grad_enabled()):
             env.pre_physics_step(a)
             env.do_physics_step()
+            env.progress_buf += 1  # as WarpEnv.step: time-dependent observations (Jumper's phase) see the next step
             env.compute_observations()
             y = self.spec.obs_vec(env.obs_buf)
         if grad:
@@ -218,7 +219,36 @@ class AllegroHandAdapter(Adapter):
         wp.sim.eval_fk(env.model, env.state_0.joint_q, env.state_0.joint_qd, None, env.state_0)
 
 
-ADAPTERS = {'AllegroHand': AllegroHandAdapter}
+class JumperAdapter(Adapter):
+    """GradSim Jumper ("table", 204 particles, no downsampling): exact state map.
+
+    obs particle_q = 0.1 (x - env offset), particle_qd = 0.1 v, so the particle state is read back exactly.
+    The phase input sin(5 t + k pi / 4) only depends on the time step: the env's progress counter is set to the step
+    of the episode whose phase vector matches best, so that the next observation carries the next phase.
+    The observed previous actions are not used (obs keys particle_q|particle_qd|phase).
+    """
+
+    extra = ('progress_buf',)
+
+    def states_from_obs(self, spec, env, obs):
+        n = obs.shape[0]
+        off = env.env_offsets.reshape(-1, 1, 3)[:n]
+        out = {
+            'particle_q': obs[:, spec.slices['particle_q']].reshape(n, -1, 3) / 0.1 + off,
+            'particle_qd': obs[:, spec.slices['particle_qd']].reshape(n, -1, 3) / 0.1,
+        }
+        if 'phase' in spec.slices:  # the time step (within an episode) whose phase vector matches best
+            ph = obs[:, spec.slices['phase']]
+            steps = torch.arange(int(env.episode_length) + 1, device=obs.device, dtype=torch.float)
+            k = torch.arange(env.phase_count, device=obs.device, dtype=torch.float)
+            table = torch.sin(env.phase_freq * steps[:, None] * env.frame_dt + k[None] * env.phase_step)
+            out['progress_buf'] = torch.cdist(ph, table).argmin(1).to(env.progress_buf.dtype)
+        else:
+            out['progress_buf'] = env.progress_buf[:n].detach().clone()
+        return out
+
+
+ADAPTERS = {'AllegroHand': AllegroHandAdapter, 'Jumper': JumperAdapter}
 
 
 def make_state_teacher_class(base):
