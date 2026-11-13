@@ -650,6 +650,12 @@ class SampleTeacher(RejoinTeacher):
         self.P = int(cfg.get('sample_n', 8))
         self.sigma = float(cfg.get('sample_noise', 0.3))
         self.sample_iters = int(cfg.get('sample_iters', 1))
+        # sample_mode: best (keep the best sequence, re-sample around it) or cem (re-sample around the mean of the
+        # best quarter, with its spread); sample_u0_iters > 0 then refines the first action alone (CEM, 32 samples,
+        # noise sample_u0_noise) with the rest of the plan fixed, so the cost measures the label itself
+        self.sample_mode = str(cfg.get('sample_mode', 'best'))
+        self.u0_iters = int(cfg.get('sample_u0_iters', 0))
+        self.u0_noise = float(cfg.get('sample_u0_noise', 0.2))
         self.sim_sample = self.sim_one if self.sim_one is not None else self.make_sim(spec, batch, device, counter)
 
     @torch.no_grad()
@@ -669,18 +675,47 @@ class SampleTeacher(RejoinTeacher):
             traj, jj = top[:, 0], j[:, 0]
         a_demo = self.a_ref(traj, jj)
         a_ref = self.anchored(self.sim_sample, x, a_demo) if self.anchor_policy is not None else a_demo
-        best_a, best_c = a_ref, None
-        for it in range(self.sample_iters):
-            cands = [a_ref, a_demo] if it == 0 else []
-            cands += [(best_a + self.sigma * torch.randn_like(best_a)).clamp(-1, 1) for _ in range(self.P - len(cands))]
-            for a in cands:
-                c = self.cost(self.rollout(self.sim_sample, x, a, grad=False), a, traj, jj, a_ref)
-                if best_c is None:
-                    best_a, best_c = a, c
-                else:
-                    better = c < best_c
-                    best_a = torch.where(better[:, None, None], a, best_a)
-                    best_c = torch.where(better, c, best_c)
+        def cost(a):
+            return self.cost(self.rollout(self.sim_sample, x, a, grad=False), a, traj, jj, a_ref)
+
+        best_a, best_c = a_ref, cost(a_ref)
+        c_demo = cost(a_demo)
+        better = c_demo < best_c
+        best_a, best_c = torch.where(better[:, None, None], a_demo, best_a), torch.where(better, c_demo, best_c)
+        mean, std = best_a.clone(), torch.full_like(best_a, self.sigma)
+        for _ in range(self.sample_iters):
+            centre = best_a if self.sample_mode == 'best' else mean
+            cands = torch.stack([(centre + std * torch.randn_like(centre)).clamp(-1, 1) for _ in range(self.P)], 1)
+            cs = torch.stack([cost(cands[:, i]) for i in range(self.P)], 1)
+            b = cs.argmin(1)
+            better = cs[ar, b] < best_c
+            best_a = torch.where(better[:, None, None], cands[ar, b], best_a)
+            best_c = torch.where(better, cs[ar, b], best_c)
+            if self.sample_mode == 'cem':
+                top = cs.topk(max(1, self.P // 4), dim=1, largest=False).indices
+                elite = cands[ar[:, None], top]
+                mean, std = elite.mean(1), elite.std(1).clamp_min(0.01)
+        if self.sample_mode == 'cem':  # the elite mean if it beats the best single sample
+            c_mean = cost(mean)
+            better = c_mean < best_c
+            best_a, best_c = torch.where(better[:, None, None], mean, best_a), torch.where(better, c_mean, best_c)
+        if self.u0_iters > 0:  # first action alone, rest of the plan fixed
+            m0, s0 = best_a[:, 0].clone(), torch.full_like(best_a[:, 0], self.u0_noise)
+            for _ in range(self.u0_iters):
+                U = torch.stack([(m0 + s0 * torch.randn_like(m0)).clamp(-1, 1) for _ in range(32)], 1)
+                cs = []
+                for i in range(32):
+                    a = best_a.clone()
+                    a[:, 0] = U[:, i]
+                    cs.append(cost(a))
+                cs = torch.stack(cs, 1)
+                el = U[ar[:, None], cs.topk(8, dim=1, largest=False).indices]
+                m0, s0 = el.mean(1), el.std(1).clamp_min(0.01)
+            a = best_a.clone()
+            a[:, 0] = m0
+            c = cost(a)
+            better = c < best_c
+            best_a, best_c = torch.where(better[:, None, None], a, best_a), torch.where(better, c, best_c)
         self.last_choice = (x, best_a, traj, jj)
         return best_a[:, 0], best_c
 

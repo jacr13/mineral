@@ -64,6 +64,9 @@ mentor:
     sample_n: 8
     sample_noise: 0.3
     sample_iters: 1
+    sample_mode: best  # best: re-sample around the best sequence; cem: around the mean of the best quarter
+    sample_u0_iters: 0  # > 0: then refine the first action alone (rest of the plan fixed)
+    sample_u0_noise: 0.2
     plan_labels: 1  # rejoin: also add (x_k, u_k) for the first plan_labels - 1 later steps of each plan
     horizon: 8
     num_windows: 3
