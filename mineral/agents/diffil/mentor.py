@@ -626,6 +626,68 @@ class RejoinTeacher:
         return self.terminal_error(y_t, traj, j), self.terminal_error(y_p, traj, j)
 
 
+class SampleTeacher(RejoinTeacher):
+    """Gradient-free rejoin teacher: noisy closed-loop rollouts of the policy, keep the one that rejoins best.
+
+    Same windows, screening and rejoin cost as RejoinTeacher, but the Adam plan is replaced by sampling: from a
+    visited state x, P rollouts of K steps follow u_k = clamp(c_k(x_k) + d_k + sigma eps), with the anchored
+    centre c_k(x_k) = (1 - mix) a_hat_{j+k} + mix pi(x_k) evaluated in closed loop, eps ~ N(0, I), d the best
+    offset sequence so far (zero at the first iteration; sample 0 is noise-free). Each rollout is scored by the
+    true rejoin cost; the label is the first action of the best one. Forward simulator steps only.
+    """
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.P = int(cfg.get('sample_n', 8))
+        self.sigma = float(cfg.get('sample_noise', 0.3))
+        self.sample_iters = int(cfg.get('sample_iters', 1))
+        self.policy = None
+        self.sim_sample = self.sim_one if self.sim_one is not None else self.make_sim(spec, batch, device, counter)
+
+    def anchor_to(self, policy):
+        super().anchor_to(policy)
+        self.policy = policy
+
+    @torch.no_grad()
+    def label(self, x):
+        x = x.detach()
+        n, m = x.shape[0], self.m
+        top, j = self.windows(x)
+        ar = torch.arange(n, device=self.device)
+        if m > 1:  # screening: forward-only warm-start cost of each window
+            xr = x[:, None].expand(n, m, self.D).reshape(-1, self.D)
+            traj_all, j_all = top.reshape(-1), j.reshape(-1)
+            a_all = self.a_ref(traj_all, j_all)
+            c0 = self.cost(self.rollout(self.sim_all, xr, a_all, grad=False), a_all, traj_all, j_all, a_all)
+            sel = c0.view(n, m).argmin(1)
+            traj, jj = top[ar, sel], j[ar, sel]
+        else:
+            traj, jj = top[:, 0], j[:, 0]
+        a_demo = self.a_ref(traj, jj)
+        mix = self.anchor_mix if self.policy is not None else 0.0
+        d_best = torch.zeros_like(a_demo)
+        best_c = torch.full((n,), float('inf'), device=self.device)
+        best_a0 = a_demo[:, 0].clone()
+        for it in range(self.sample_iters):
+            d_it = d_best.clone()
+            for p_ in range(self.P):
+                y, acts, centres = x, [], []
+                for k in range(self.K):
+                    c = a_demo[:, k] if mix == 0 else (1 - mix) * a_demo[:, k] + mix * self.policy(y).clamp(-1, 1)
+                    noise = 0.0 if (p_ == 0 and it == 0) else self.sigma * torch.randn_like(c)
+                    u = (c + d_it[:, k] + noise).clamp(-1, 1)
+                    acts.append(u)
+                    centres.append(c)
+                    y = torch.nan_to_num(self.sim_sample(y, u, grad=False), nan=1e3)
+                acts, centres = torch.stack(acts, 1), torch.stack(centres, 1)
+                cost = self.cost((y, 0.0), acts, traj, jj, centres)
+                better = cost < best_c
+                best_c = torch.where(better, cost, best_c)
+                best_a0 = torch.where(better[:, None], acts[:, 0], best_a0)
+                d_best = torch.where(better[:, None, None], acts - centres, d_best)
+        return best_a0, best_c
+
+
 class MENTOR(Agent):
     r"""MENTOR: Mimicking Expert states by iNverting the simulaTOR (see module docstring)."""
 
@@ -1258,6 +1320,10 @@ class MENTOR(Agent):
             if self.full_state:
                 raise ValueError('teacher.kind=tvlqr needs an observation-to-state map (DFlex bodies)')
             TeacherCls = TVLQRTeacher
+        elif kind == 'sample':
+            if self.full_state:
+                raise ValueError('teacher.kind=sample is not wired for full-state MENTOR yet')
+            TeacherCls = SampleTeacher
         elif kind == 'ilqr':
             if self.full_state:
                 raise ValueError('teacher.kind=ilqr needs an observation-to-state map (DFlex bodies)')
