@@ -209,10 +209,14 @@ class ILQRTeacher:
         self.alphas = [float(a) for a in cfg.get('ilqr_alphas', [1.0, 0.5, 0.25])]
         # centre of the trust region: mix * policy action + (1 - mix) * the demo's Stage I action (anchor_mix)
         self.mix = float(cfg.get('ilqr_mix', cfg.get('anchor_mix', 0.5)))
+        # weight of the intermediate states in the tracking cost (0 = reach, not track: terminal state only, with the
+        # phase offset of the terminal reference chosen on the nominal rollout among teacher.phase_offsets)
+        self.stage = float(cfg.get('ilqr_stage', 1.0))
+        self.offsets = [int(o) for o in cfg.get('phase_offsets', [0])]
         valid = torch.arange(self.T, device=device)[None] < lengths[:, None]
         self.ws = 1.0 / S[valid].std(0).clamp_min(1e-6)
         self.Q = torch.diag(self.ws**2)
-        ok = torch.arange(self.T, device=device)[None] <= (lengths[:, None] - 1 - self.K)
+        ok = torch.arange(self.T, device=device)[None] <= (lengths[:, None] - 1 - self.K - max(0, max(self.offsets)))
         self.ok_flat = ok.reshape(-1)
         self.S_flat = (S * self.ws).reshape(self.N * self.T, self.D)
         self.h_s, self.h_a = 1e-3 / self.ws, 1e-2
@@ -227,7 +231,7 @@ class ILQRTeacher:
 
     def _cost(self, xs, us, us_pi, ref):
         e = ((xs[:, 1:] - ref[:, 1:]) * self.ws) ** 2  # (n, K, D)
-        wk = torch.ones(self.K, device=self.device)
+        wk = torch.full((self.K,), self.stage, device=self.device)
         wk[-1] = self.qf
         return (e.sum(-1) * wk).sum(-1) + self.r * ((us - us_pi) ** 2).sum((-1, -2))
 
@@ -269,6 +273,11 @@ class ILQRTeacher:
         xs, us = torch.stack(xs, 1), torch.stack(us, 1)
         a_demo = torch.stack([self.A_hat[traj, j + k] for k in range(K)], 1)
         us_pi = self.mix * us + (1 - self.mix) * a_demo  # trust-region centre (anchored references)
+        if self.stage == 0 and len(self.offsets) > 1:  # terminal reference: best phase offset for the nominal end state
+            cands = torch.stack([self.S[traj, (j + K + o).clamp(0, self.T - 1)] for o in self.offsets], 1)
+            best = (((cands - xs[:, K, None]) * self.ws) ** 2).sum(-1).argmin(1)
+            ref = ref.clone()
+            ref[:, K] = cands[torch.arange(n, device=self.device), best]
         cost = self._cost(xs, us, us_pi, ref)
         eyeM = torch.eye(M, device=self.device)
         for _ in range(self.iters):
@@ -279,8 +288,8 @@ class ILQRTeacher:
             kff, Kfb = [None] * K, [None] * K
             for k in reversed(range(K)):
                 Ak, Bk = A[k], B[k]
-                lx = e[:, k] if k > 0 else torch.zeros_like(e[:, k])
-                lxx = self.Q if k > 0 else torch.zeros_like(self.Q)
+                lx = self.stage * e[:, k] if k > 0 else torch.zeros_like(e[:, k])
+                lxx = self.stage * self.Q if k > 0 else torch.zeros_like(self.Q)
                 Qx = lx + (Ak.transpose(1, 2) @ Vx.unsqueeze(-1)).squeeze(-1)
                 Qu = (Bk.transpose(1, 2) @ Vx.unsqueeze(-1)).squeeze(-1) + self.r * (us[:, k] - us_pi[:, k])
                 Qxx = lxx + Ak.transpose(1, 2) @ Vxx @ Ak
@@ -1267,6 +1276,16 @@ class MENTOR(Agent):
         self.last_label_index = perm
         xs, labels, costs, adv = [], [], [], []
         use_adv = float(self.mentor_config.gate.get('advantage', 0.0)) > 0
+        # plan_labels > 1: also label the states along the teacher's plan with the plan's own next actions
+        n_plan = int(cfg.get('plan_labels', 1))
+        if n_plan > 1:
+            ok = type(self.teacher) is RejoinTeacher and self.teacher.screen and self.teacher.iters > 0
+            if not ok or self.full_state or use_adv:
+                raise ValueError(
+                    'teacher.plan_labels > 1 needs the rejoin teacher with screening and iters > 0, '
+                    'no full-state MENTOR and no gate.advantage'
+                )
+            n_plan = min(n_plan, self.teacher.K)
         for c0 in range(0, need, batch):
             x = visited[perm[c0 : c0 + batch]]
             if self.full_state:
@@ -1278,6 +1297,15 @@ class MENTOR(Agent):
             xs.append(x)
             labels.append(a0.detach())
             costs.append(c.detach())
+            if n_plan > 1:  # replay the plan: (x_k, u_k) for k = 1 .. n_plan - 1, gated with the plan's cost
+                _, plan, _, _ = self.teacher.last_choice
+                y = x
+                with torch.no_grad():
+                    for k in range(1, n_plan):
+                        y = self.teacher.sim_one(y, plan[:, k - 1], grad=False)
+                        xs.append(y)
+                        labels.append(plan[:, k].detach())
+                        costs.append(c.detach())
             if use_adv:
                 adv.append(torch.stack(self.teacher.advantage(self.policy), 1))
         if use_adv:  # (teacher error, policy error) per label, consumed by the gate in train()
