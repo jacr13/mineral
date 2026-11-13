@@ -434,15 +434,22 @@ class MENTOR(Agent):
             self.S = obs[..., :D].float().contiguous()
             self.S1 = next_obs[..., :D].float().contiguous()
         self.lengths = self._lengths(demos['done'])
-        if self.full_state:  # Rewarped zeroes the observations of envs that went NaN: end those demos there
-            zero = (self.S.abs().sum(-1) == 0) | (self.S1.abs().sum(-1) == 0)
-            for i in range(zero.shape[0]):
-                idx = zero[i].nonzero(as_tuple=True)[0]
-                if len(idx) > 0:
-                    self.lengths[i] = min(int(self.lengths[i]), int(idx[0]))
-            n_cut = int((zero.any(1)).sum())
-            if n_cut:
-                print(f'[MENTOR] {n_cut} demonstrations cut at their first zeroed (NaN-reset) step')
+        # End each demo at its first non-finite step (e.g. the SNU simulator goes NaN at the terminal step of a fall);
+        # Rewarped zeroes the observations of envs that went NaN instead. One NaN target would otherwise reach the
+        # residual weights below and every Stage I residual.
+        bad = ~torch.isfinite(self.S).all(-1) | ~torch.isfinite(self.S1).all(-1)
+        if self.full_state:
+            bad |= (self.S.abs().sum(-1) == 0) | (self.S1.abs().sum(-1) == 0)
+        valid_before = torch.arange(bad.shape[1], device=bad.device)[None] < self.lengths[:, None]
+        n_cut = 0
+        for i in range(bad.shape[0]):
+            idx = (bad[i] & valid_before[i]).nonzero(as_tuple=True)[0]
+            if len(idx) > 0:
+                self.lengths[i] = min(int(self.lengths[i]), int(idx[0]))
+                n_cut += 1
+        if n_cut:
+            print(f'[MENTOR] {n_cut} demonstrations cut at their first non-finite or zeroed step')
+        self.S, self.S1 = torch.nan_to_num(self.S), torch.nan_to_num(self.S1)  # beyond the cut, never used
         # AUDIT ONLY (invert.audit_true_actions): replace the recovered actions by the stored expert actions, to
         # measure what action recovery costs. This reads demonstrator actions: never use it for reported results.
         # True / 'both': the Stage I labels and the teacher's reference actions; 'labels' or 'teacher': only one of them.
