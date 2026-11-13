@@ -137,3 +137,8 @@ mentor:
     batch_size: 1024
     loss: action  # action: ||pi(s) - a*||^2; effect: ||W J (pi(s) - a*)||^2 through the simulator Jacobian (over-actuated bodies)
     action_weight: 1e-3  # small action term added to the effect loss (null space)
+    # label weights (action loss): plan labels k steps along a teacher plan weigh plan_decay^k; offpolicy_sigma > 0
+    # also down-weights every row not at a visited state by exp(-d^2 / 2 sigma^2), d = distance to the current
+    # policy's visited states (state-spread units per sqrt(dim))
+    plan_decay: 1.0
+    offpolicy_sigma: 0.0

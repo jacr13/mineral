@@ -774,6 +774,7 @@ class MENTOR(Agent):
         self.valid = torch.arange(T, device=self.device)[None] < self.lengths[:, None]
         S_valid = self.S[self.valid]
         self.w_step = 1.0 / (self.S1[self.valid] - S_valid).std(0).clamp_min(1e-8)
+        self.w_state = 1.0 / S_valid.std(0).clamp_min(1e-6)  # state spread, for distances between dataset states
 
         # --- Policy ---
         units = tuple(self.network_config.get('units', [256, 256]))
@@ -1038,6 +1039,35 @@ class MENTOR(Agent):
         new = torch.cat(out)
         self.data_J = new if n_have == 0 else torch.cat([self.data_J, new])
 
+    @torch.no_grad()
+    def label_weights(self):
+        """Per-row fit weights, or None (all 1).
+
+        fit.plan_decay g: a label k steps along a teacher plan weighs g^k. fit.offpolicy_sigma s > 0: every row not
+        at a visited state (Stage I pairs, plan labels, labels on demo-derived states) also weighs
+        exp(-d^2 / (2 s^2)), d = distance (state-spread units, per sqrt(dim)) to the nearest state the current policy
+        visited in the last rollouts. Labels at the policy's own visited states keep weight 1.
+        """
+        cfg = self.mentor_config.fit
+        gamma, sigma = float(cfg.get('plan_decay', 1.0)), float(cfg.get('offpolicy_sigma', 0.0))
+        k = getattr(self, 'data_k', None)
+        if k is None or (gamma == 1.0 and sigma <= 0):
+            return None
+        w = torch.ones(k.shape[0], device=self.device)
+        if gamma != 1.0:
+            w = torch.where(k > 0, gamma ** k.clamp_min(0).float(), w)
+        visited = getattr(self, 'last_visited', None)
+        if sigma > 0 and visited is not None:
+            v = visited[torch.randperm(visited.shape[0], device=self.device)[:20000]] * self.w_state
+            off = (k != 0).nonzero().flatten()
+            if len(off):
+                d = []
+                for i in range(0, len(off), 8192):
+                    d.append(torch.cdist(self.data_s[off[i : i + 8192]] * self.w_state, v).min(1).values)
+                d = torch.cat(d) / self.data_s.shape[1] ** 0.5
+                w[off] = w[off] * torch.exp(-(d**2) / (2 * sigma**2))
+        return w
+
     def fit(self, steps, lr, round_idx):
         cfg = self.mentor_config.fit
         effect = str(cfg.get('loss', 'action')) == 'effect'
@@ -1049,6 +1079,7 @@ class MENTOR(Agent):
         g = torch.Generator(device=self.device)
         g.manual_seed(self.seed * 100 + round_idx)
         bs = int(cfg.batch_size)
+        weights = self.label_weights()
         self.policy.train()
         self.policy.fitting = True
         for _ in range(steps):
@@ -1057,6 +1088,9 @@ class MENTOR(Agent):
             if effect:
                 moved = (self.data_J[idx] @ diff.unsqueeze(-1)).squeeze(-1)
                 loss = (moved**2).sum(-1).mean() + action_weight * (diff**2).sum(-1).mean()
+            elif weights is not None:
+                wi = weights[idx]
+                loss = (wi * (diff**2).sum(-1)).sum() / wi.sum().clamp_min(1e-8)
             else:
                 loss = (diff**2).sum(-1).mean()
             opt.zero_grad(set_to_none=True)
@@ -1215,6 +1249,7 @@ class MENTOR(Agent):
             )
             self.data_s = torch.cat([self.data_s, S[keep][good]])
             self.data_a = torch.cat([self.data_a, A[keep][good]])
+            self.data_k = torch.cat([self.data_k, torch.full((int(good.sum()),), -1, dtype=torch.long, device=self.device)])
         del driver, env
         torch.cuda.empty_cache()
         print(
@@ -1274,7 +1309,7 @@ class MENTOR(Agent):
             perm = torch.arange(need, device=self.device)
             visited = self.state_bank[0]
         self.last_label_index = perm
-        xs, labels, costs, adv = [], [], [], []
+        xs, labels, costs, adv, ks = [], [], [], [], []
         use_adv = float(self.mentor_config.gate.get('advantage', 0.0)) > 0
         # plan_labels > 1: also label the states along the teacher's plan with the plan's own next actions
         n_plan = int(cfg.get('plan_labels', 1))
@@ -1297,6 +1332,7 @@ class MENTOR(Agent):
             xs.append(x)
             labels.append(a0.detach())
             costs.append(c.detach())
+            ks.append(torch.zeros(x.shape[0], dtype=torch.long, device=self.device))
             if n_plan > 1:  # replay the plan: (x_k, u_k) for k = 1 .. n_plan - 1, gated with the plan's cost
                 _, plan, _, _ = self.teacher.last_choice
                 y = x
@@ -1306,10 +1342,13 @@ class MENTOR(Agent):
                         xs.append(y)
                         labels.append(plan[:, k].detach())
                         costs.append(c.detach())
+                        ks.append(torch.full((x.shape[0],), k, dtype=torch.long, device=self.device))
             if use_adv:
                 adv.append(torch.stack(self.teacher.advantage(self.policy), 1))
         if use_adv:  # (teacher error, policy error) per label, consumed by the gate in train()
             self.pending_advantage.append(torch.cat(adv))
+        # origin of each label for the fit weights: 0 = a visited state, k > 0 = k steps along the teacher's plan
+        self.last_label_k = torch.cat(ks)
         return torch.cat(xs), torch.cat(labels), torch.cat(costs)
 
     # ---- training loop ----
@@ -1323,6 +1362,8 @@ class MENTOR(Agent):
                 stats.update(self.fit_synergies())
             self.data_s = self.S[self.valid].clone()
             self.data_a = getattr(self, 'A_labels', self.A_hat)[self.valid].clone()
+            # origin tags: -1 = demo-side (Stage I pairs, labels on demo-derived states), 0 = visited, k = plan step
+            self.data_k = torch.full((self.data_s.shape[0],), -1, dtype=torch.long, device=self.device)
             fit_loss = self.fit(int(cfg.fit.init_steps), float(cfg.fit.init_lr), 0)
             self.epoch = 0
             self._log_round({**stats, 'train/fit_loss': fit_loss, 'train/dataset_size': self.data_s.shape[0]})
@@ -1400,13 +1441,16 @@ class MENTOR(Agent):
                 relabel_stats = self.relabel_stage1()
             t0 = time.time()
             visited = self.collect()
+            self.last_visited = visited
             t_roll = time.time() - t0
             x, a0, cost = self.label(visited)
+            kk = self.last_label_k
             library_stats = self.bootstrap_library(cost)
             n_perturb = int(cfg.get('augment', {}).get('perturb_batches', 0))
             if n_perturb > 0:  # teacher labels on noisy copies of demo states (DART-style coverage)
                 xp, ap, cp = self.label(self.perturbed_demo_states(n_perturb * int(cfg.teacher.batch)), n_perturb)
                 x, a0, cost = torch.cat([x, xp]), torch.cat([a0, ap]), torch.cat([cost, cp])
+                kk = torch.cat([kk, torch.full_like(self.last_label_k, -1)])
             aug = cfg.get('augment', {})
             n_replay = int(aug.get('replay_batches', 0))
             if n_replay > 0:  # teacher labels on states reached by noisy replays of the demo actions
@@ -1415,6 +1459,7 @@ class MENTOR(Agent):
                 )
                 xr, ar, cr = self.label(xs, n_replay)
                 x, a0, cost = torch.cat([x, xr]), torch.cat([a0, ar]), torch.cat([cost, cr])
+                kk = torch.cat([kk, torch.full_like(self.last_label_k, -1)])
             threshold = max(gate_tau, cost.quantile(gate_q).item()) if gate_q > 0 else gate_tau
             keep = cost <= threshold
             adv_stats = {}
@@ -1430,6 +1475,7 @@ class MENTOR(Agent):
             self.pending_advantage = []
             self.data_s = torch.cat([self.data_s, x[keep]])
             self.data_a = torch.cat([self.data_a, a0[keep]])
+            self.data_k = torch.cat([self.data_k, kk[keep]])
             t_teach = time.time() - t0 - t_roll
             torch.cuda.empty_cache()
             t1 = time.time()
@@ -1564,6 +1610,7 @@ class MENTOR(Agent):
             'synergies': (self.spec.mean, self.spec.basis, self.spec.scale) if isinstance(self.spec, SynergySpec) else None,
             'data_s': self.data_s,
             'data_a': self.data_a,
+            'data_k': getattr(self, 'data_k', None),
             'counter': self.counter.state_dict(),
             'stage1_steps': self.stage1_steps,
             'wall': self._wall(),
@@ -1575,6 +1622,9 @@ class MENTOR(Agent):
         self.policy.load_state_dict(ckpt['policy'])
         self.epoch, self.round, self.agent_steps = ckpt['epoch'], ckpt['round'], ckpt['agent_steps']
         self.A_hat, self.data_s, self.data_a = ckpt['A_hat'], ckpt['data_s'], ckpt['data_a']
+        self.data_k = ckpt.get('data_k')
+        if self.data_k is None:
+            self.data_k = torch.zeros(self.data_s.shape[0], dtype=torch.long, device=self.device)
         if ckpt.get('synergies') is not None:
             self.use_synergies(*ckpt['synergies'])
         self.counter.load_state_dict(ckpt['counter'])
