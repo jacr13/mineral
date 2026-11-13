@@ -78,14 +78,27 @@ RUNTIME_OVERRIDE="${RUNTIME:-}"
 # The transport-plan gradient ablation lives in scripts/otil_gradpath.sh: it is
 # a different question (how the gradient is taken, not which alignment is used)
 # and needs its own wandb project so the provenance stays readable.
-ROW_NAME=(softdtw_k8 subseq_k1 subseq_k8 ot_l2_lowtau ot_cos_lowtau)
-ROW_LOSS=(softdtw softdtw_subseq softdtw_subseq ot ot)
-ROW_K=(8 1 8 8 8)
-ROW_TAU=(0.5 0.5 0.5 0.02 0.01)
-ROW_COST=(l2 l2 l2 l2 cosine)
-ROW_MLP=(64 64 64 64 null)
+#  5  softdtw (cosine) K=8 -- soft-DTW at FOCUS-OT-Cos's operating point.
+#     Rows 0-2 are controlled substitutions against FOCUS-OT-**L2**, which was
+#     the headline arm when this sweep was written. FOCUS-OT-Cos is now the
+#     strongest arm, and it differs from row 0 in three ways at once: cosine
+#     ground cost, log_exp reward transform, and raw features (mlp=null)
+#     instead of a 64-d MLP. So the existing table cannot separate "transport
+#     matters" from "cosine cost + log reward + raw features matter" -- which
+#     is exactly Reviewer Q9cS's objection. This row matches OT-Cos on all
+#     three and changes only the alignment, so it answers that question in
+#     whichever direction it falls.
+ROW_NAME=(softdtw_k8 subseq_k1 subseq_k8 ot_l2_lowtau ot_cos_lowtau softdtw_cos)
+ROW_LOSS=(softdtw softdtw_subseq softdtw_subseq ot ot softdtw)
+ROW_K=(8 1 8 8 8 8)
+ROW_TAU=(0.5 0.5 0.5 0.02 0.01 0.5)
+ROW_COST=(l2 l2 l2 l2 cosine cosine)
+ROW_MLP=(64 64 64 64 null null)
+# Reward transform per row. Rows 0-4 keep the exp they were launched with, so
+# their behaviour is unchanged; row 5 needs log_exp to match reported OT-Cos.
+ROW_MAP=(exp exp exp exp exp log_exp)
 
-ROWS="${ROWS:-0 1 2 3 4}"
+ROWS="${ROWS:-0 1 2 3 4 5}"
 
 n_envs=$(wc -w <<< "$ENVS"); n_rows=$(wc -w <<< "$ROWS")
 echo "============================================================"
@@ -158,7 +171,7 @@ for env in $ENVS; do
       --set "agent.otil.loss_mlp_features_dim=${ROW_MLP[$i]}"
       --set "agent.otil.loss_dtw_gamma=0.1"
       --set "agent.otil.loss_dtw_normalize=rows"
-      --set "agent.otil.critic_reward_mapping=exp"
+      --set "agent.otil.critic_reward_mapping=${ROW_MAP[$i]}"
       --set "agent.otil.loss_use_huber_speedup=false"
       --set "agent.otil.loss_use_detached_prev_obs=false"
       --set "agent.otil.critic_disabled=false"
