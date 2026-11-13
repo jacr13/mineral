@@ -571,9 +571,10 @@ class RejoinTeacher:
         # adaptive stopping (teacher.adaptive_tol > 0): stop the batch once the mean best cost improved by less than
         # adaptive_tol (relative) over the last adaptive_patience iterations, after at least adaptive_min iterations
         tol, patience, min_it = self.adaptive_tol, self.adaptive_patience, self.adaptive_min
-        hist = []
+        hist, stop = [], False
         for it in range(self.iters + 1):
-            last = it == self.iters
+            # the last pass is forward-only: a DFlex step recorded with grad=True must be back-propagated (tape leak)
+            last = it == self.iters or stop
             with torch.set_grad_enabled(not last):
                 c = self.cost(self.rollout(sim, x, a, grad=not last), a, traj, j, a_ref)
             with torch.no_grad():
@@ -581,12 +582,11 @@ class RejoinTeacher:
                 best = torch.where(better, c.detach(), best)
                 best_a[better] = a.detach()[better].clamp(-1, 1)
                 hist.append(best.mean().item())
-            if not last and tol > 0 and it >= max(min_it, patience):
-                if hist[-1 - patience] - hist[-1] < tol * hist[-1 - patience]:
-                    last = True
             if last:
                 self.iters_used.append(it)
                 break
+            if tol > 0 and it >= max(min_it, patience):  # decide now, stop after this update
+                stop = hist[-1 - patience] - hist[-1] < tol * hist[-1 - patience]
             opt.zero_grad()
             c.sum().backward()
             opt.step()
