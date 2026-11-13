@@ -76,6 +76,8 @@ def lm_invert(
     jacobian='fd',
     refresh=0,
     reg_kind='l2',
+    target=None,
+    x0=None,
 ):
     """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 + reg ||a||^2 with |a| <= 1.
 
@@ -90,6 +92,9 @@ def lm_invert(
     update, so an iteration costs one forward step instead of act_dim + 1.
     ``reg_kind='activation'`` replaces reg ||a||^2 (which favours a = 0, i.e. half-activated muscles) by
     reg * sum (a + 1) / 2, the total muscle activation (the effort that muscle-driven experts minimise).
+    ``target`` (n, act_dim): the l2 term becomes reg ||a - target||^2, e.g. the policy's actions or the mean of the
+    neighbouring transitions' solutions; on an over-actuated body it moves only the part of a the next state does
+    not determine. ``x0`` (n, act_dim): warm start of the first start, given as actions.
     Returns actions (n, act_dim) and the residual part ||w * (step(s, a) - s1)||^2 (n,).
     """
     if jacobian not in ('fd', 'broyden'):
@@ -97,9 +102,12 @@ def lm_invert(
     if reg_kind not in ('l2', 'activation'):
         raise ValueError(f'unknown inversion reg_kind {reg_kind!r}')
     act_term = reg_kind == 'activation'
+    if act_term and target is not None:
+        raise ValueError("an inversion target needs reg_kind='l2'")
+    tgt = 0.0 if target is None else target
 
     def penalty(a):
-        return ((a + 1) * 0.5).sum(-1) if act_term else (a**2).sum(-1)
+        return ((a + 1) * 0.5).sum(-1) if act_term else ((a - tgt) ** 2).sum(-1)
 
     if param not in ('box', 'tanh'):
         raise ValueError(f'unknown inversion parametrisation {param!r}')
@@ -112,7 +120,10 @@ def lm_invert(
 
     best_a, best_c, best_total = None, None, None
     for k in range(starts):
-        if k == 0:
+        if k == 0 and x0 is not None:
+            x0c = x0.clamp(-0.999, 0.999) if tanh else x0.clamp(-1, 1)
+            x = torch.atanh(x0c) if tanh else x0c.clone()
+        elif k == 0:
             x = torch.zeros(n, act_dim, device=s.device)
         else:
             x = torch.rand(n, act_dim, device=s.device, generator=generator) * 2 - 1
@@ -143,7 +154,7 @@ def lm_invert(
                 g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + 0.25 * reg * da
             else:
                 H = J.transpose(1, 2) @ J + reg * torch.diag_embed(da**2)
-                g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + reg * a * da
+                g = (J.transpose(1, 2) @ r.unsqueeze(-1)).squeeze(-1) + reg * (a - tgt) * da
             A = H + lam[:, None, None] * torch.diag_embed(torch.diagonal(H, dim1=1, dim2=2).clamp_min(1e-6 if tanh else 1e-12))
             x_new = x - torch.linalg.solve(A, g.unsqueeze(-1)).squeeze(-1)
             x_new = x_new if tanh else x_new.clamp(-1, 1)
@@ -550,7 +561,6 @@ class MENTOR(Agent):
     # ---- Stage I ----
     def invert(self):
         cfg = self.mentor_config.invert
-        batch = int(cfg.batch)
         s, s1 = self.S[self.valid], self.S1[self.valid]
         n = s.shape[0]
         if self.full_state and self.spec.stage1 != 'invert':  # actions read off the observations, no simulation
@@ -561,39 +571,16 @@ class MENTOR(Agent):
             self.stage1_steps = 0
             print(f'[MENTOR] Stage I ({self.spec.stage1}): {n} transitions, no simulation')
             return {'stage1/sim_steps': 0, 'stage1/time': time.time() - t0}
-        if self.full_state:  # Levenberg-Marquardt through Rewarped via the adapter's observation-to-state map
-            step = self.spec.make_obs_step(batch, self.device, self.counter)
-        else:
-            step = OneStep(self.spec, batch, self.device, self.counter)
-        acts, costs = [], []
         t0 = time.time()
         before = self.counter.total
-        for c0 in range(0, n, batch):
-            x, y = s[c0 : c0 + batch], s1[c0 : c0 + batch]
-            k = x.shape[0]
-            if k < batch:  # OneStep has a fixed batch: pad with copies of the first row
-                x = torch.cat([x, x[:1].expand(batch - k, -1)])
-                y = torch.cat([y, y[:1].expand(batch - k, -1)])
-            a, c = lm_invert(
-                step,
-                x,
-                y,
-                self.w_step,
-                iters=int(cfg.iters),
-                starts=int(cfg.starts),
-                reg=float(cfg.get('reg', 0.0)),
-                param=str(cfg.get('param', 'box')),
-                generator=self.generator,
-                jacobian=str(cfg.get('jacobian', 'fd')),
-                refresh=int(cfg.get('refresh', 0)),
-                reg_kind=str(cfg.get('reg_kind', 'l2')),
+        a_flat, cost = self._lm_solve(s, s1, int(cfg.iters), int(cfg.get('refresh', 0)))
+        mu, sweeps = float(cfg.get('smooth', 0.0)), int(cfg.get('smooth_sweeps', 0))
+        for _ in range(sweeps if mu > 0 else 0):  # couple neighbouring transitions: + mu ||a_t - mean(a_t-1, a_t+1)||^2
+            target, reg = self._stage1_target(a_flat)
+            a_flat, cost = self._lm_solve(
+                s, s1, int(cfg.get('sweep_iters', 10)), int(cfg.get('refresh', 0)), target=target, x0=a_flat, reg=reg
             )
-            acts.append(a[:k])
-            costs.append(c[:k])
-        del step
-        torch.cuda.empty_cache()
         self.stage1_steps = self.counter.total - before
-        a_flat, cost = torch.cat(acts), torch.cat(costs)
         A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
         A_hat[self.valid] = a_flat
         self.A_hat = self.A_labels = A_hat  # teacher reference actions and Stage I labels
@@ -617,6 +604,106 @@ class MENTOR(Agent):
         }
         print(
             f'[MENTOR] Stage I: {n} transitions, {self.stage1_steps} sim steps, {stats["stage1/time"]:.0f}s, rel residual q50/95/99 {q.tolist()}'
+        )
+        return stats
+
+    def _lm_solve(self, s, s1, iters, refresh, target=None, x0=None, reg=None):
+        """Stage I Levenberg-Marquardt over all (s, s1) pairs in fixed-size batches; returns actions and residuals."""
+        cfg = self.mentor_config.invert
+        batch = int(cfg.batch)
+        if self.full_state:  # Levenberg-Marquardt through Rewarped via the adapter's observation-to-state map
+            step = self.spec.make_obs_step(batch, self.device, self.counter)
+        else:
+            step = OneStep(self.spec, batch, self.device, self.counter)
+        acts, costs = [], []
+        n = s.shape[0]
+        for c0 in range(0, n, batch):
+            parts = [s[c0 : c0 + batch], s1[c0 : c0 + batch]]
+            parts += [None if v is None else v[c0 : c0 + batch] for v in (target, x0)]
+            k = parts[0].shape[0]
+            if k < batch:  # OneStep has a fixed batch: pad with copies of the first row
+                parts = [None if v is None else torch.cat([v, v[:1].expand(batch - k, -1)]) for v in parts]
+            x, y, tg, w0 = parts
+            a, c = lm_invert(
+                step,
+                x,
+                y,
+                self.w_step,
+                iters=iters,
+                starts=int(cfg.starts) if w0 is None else 1,
+                reg=float(cfg.get('reg', 0.0)) if reg is None else reg,
+                param=str(cfg.get('param', 'box')),
+                generator=self.generator,
+                jacobian=str(cfg.get('jacobian', 'fd')),
+                refresh=refresh,
+                reg_kind=str(cfg.get('reg_kind', 'l2')),
+                target=tg,
+                x0=w0,
+            )
+            acts.append(a[:k])
+            costs.append(c[:k])
+        del step
+        torch.cuda.empty_cache()
+        return torch.cat(acts), torch.cat(costs)
+
+    def _stage1_target(self, a_flat, prior=None):
+        """Target and total weight (reg + smooth) of the Stage I action term for the coupled solves.
+
+        target = (reg * prior + smooth * neighbour mean) / (reg + smooth), prior = 0 or the policy's actions; the
+        neighbour mean is over the adjacent transitions of the same demo.
+        """
+        cfg = self.mentor_config.invert
+        reg, mu = float(cfg.get('reg', 0.0)), float(cfg.get('smooth', 0.0))
+        tgt = torch.zeros_like(a_flat) if prior is None else prior.clone()
+        if mu > 0:
+            A = torch.zeros(*self.S.shape[:2], a_flat.shape[-1], device=self.device)
+            A[self.valid] = a_flat
+            v = self.valid.float().unsqueeze(-1)
+            tot = torch.zeros_like(A)
+            cnt = torch.zeros_like(v)
+            tot[:, 1:] += A[:, :-1] * v[:, :-1]
+            cnt[:, 1:] += v[:, :-1]
+            tot[:, :-1] += A[:, 1:] * v[:, 1:]
+            cnt[:, :-1] += v[:, 1:]
+            nbr = (tot / cnt.clamp_min(1))[self.valid]
+            tgt = (reg * tgt + mu * nbr) / max(reg + mu, 1e-12)
+        return tgt, reg + mu
+
+    @torch.no_grad()
+    def relabel_stage1(self):
+        """Re-solve the Stage I labels with the policy as prior, reg ||a - pi(s_t)||^2 (+ smoothness).
+
+        Warm-started from the current labels. On an over-actuated body this changes only the part of each label that
+        the next state does not determine, towards a pattern the policy already represents. Updates the dataset's
+        Stage I pairs and the teacher's reference actions in place.
+        """
+        cfg = self.mentor_config.invert
+        if self.full_state and self.spec.stage1 != 'invert':
+            raise ValueError('invert.policy_prior needs a Levenberg-Marquardt Stage I (stage1=invert)')
+        if self.audit_actions is not None or int(self.mentor_config.get('synergies', {}).get('dims', 0)) > 0:
+            raise ValueError('invert.policy_prior is incompatible with the action audit and with synergies')
+        s, s1 = self.S[self.valid], self.S1[self.valid]
+        before, t0 = self.counter.total, time.time()
+        self.policy.eval()
+        prior = torch.cat([self.policy(s[i : i + 65536]).clamp(-1, 1) for i in range(0, s.shape[0], 65536)])
+        a_old = self.A_labels[self.valid]
+        target, reg = self._stage1_target(a_old, prior=prior)
+        a_new, cost = self._lm_solve(
+            s, s1, int(cfg.get('relabel_iters', 10)), int(cfg.get('refresh', 0)), target=target, x0=a_old, reg=reg
+        )
+        self.A_labels[self.valid] = a_new  # A_hat is the same tensor (the teacher's reference actions)
+        self.data_a[: a_new.shape[0]] = a_new  # the Stage I pairs come first in the dataset
+        rel = cost.sqrt() / ((s1 - s) * self.w_step).norm(dim=-1).clamp_min(1e-9)
+        stats = {
+            'stage1/relabel_change_rms': ((a_new - a_old) ** 2).mean().sqrt().item(),
+            'stage1/relabel_policy_gap_rms': ((a_new - prior) ** 2).mean().sqrt().item(),
+            'stage1/relabel_rel_residual_q50': rel.median().item(),
+            'stage1/relabel_sim_steps': self.counter.total - before,
+            'stage1/relabel_time': time.time() - t0,
+        }
+        print(
+            f"[MENTOR] Stage I relabel (policy prior): change rms {stats['stage1/relabel_change_rms']:.3f}, "
+            f"label-policy gap rms {stats['stage1/relabel_policy_gap_rms']:.3f}, residual q50 {rel.median().item():.2e}"
         )
         return stats
 
@@ -976,6 +1063,10 @@ class MENTOR(Agent):
                     break
             self.round += 1
             self.epoch = self.round
+            relabel_stats = {}
+            every = int(cfg.invert.get('relabel_every', 0))
+            if cfg.invert.get('policy_prior', False) and every > 0 and (self.round - 1) % every == 0:
+                relabel_stats = self.relabel_stage1()
             t0 = time.time()
             visited = self.collect()
             t_roll = time.time() - t0
@@ -1024,6 +1115,7 @@ class MENTOR(Agent):
                     'train/fit_loss': fit_loss,
                     **library_stats,
                     **adv_stats,
+                    **relabel_stats,
                     'time/rollout': t_roll,
                     'time/teacher': t_teach,
                     'time/fit': time.time() - t1,

@@ -35,6 +35,16 @@ mentor:
     reg_kind: l2  # l2: reg ||a||^2 (favours half-activated muscles); activation: reg * sum (a+1)/2 (total activation)
     jacobian: fd  # fd: finite differences every iteration; broyden: once per start, then rank-1 updates
     refresh: 0  # broyden only: recompute the finite-difference Jacobian every this many iterations (0 = never)
+    # temporal smoothness: after the solve, smooth_sweeps re-solves (sweep_iters each, warm-started) with
+    # + smooth ||a_t - mean(a_t-1, a_t+1)||^2 within each demo; every residual is still one simulator step
+    smooth: 0.0
+    smooth_sweeps: 0
+    sweep_iters: 10
+    # policy prior: every relabel_every rounds, re-solve the Stage I labels with reg ||a - pi(s_t)||^2 (relabel_iters,
+    # warm-started); over-actuated bodies (SNU) then get the null-space part of each label from the policy
+    policy_prior: False
+    relabel_every: 1
+    relabel_iters: 10
     audit_true_actions: False  # AUDIT ONLY: use the stored expert actions instead of the recovered ones (not state-only)
 
   # Stage II: rejoin teacher
