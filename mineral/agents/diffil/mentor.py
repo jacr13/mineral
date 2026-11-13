@@ -78,6 +78,7 @@ def lm_invert(
     reg_kind='l2',
     target=None,
     x0=None,
+    refresh_jacobian='fd',
 ):
     """Batched Levenberg-Marquardt for min_a ||w * (step(s, a) - s1)||^2 + reg ||a||^2 with |a| <= 1.
 
@@ -95,9 +96,13 @@ def lm_invert(
     ``target`` (n, act_dim): the l2 term becomes reg ||a - target||^2, e.g. the policy's actions or the mean of the
     neighbouring transitions' solutions; on an over-actuated body it moves only the part of a the next state does
     not determine. ``x0`` (n, act_dim): warm start of the first start, given as actions.
+    ``jacobian='autodiff'`` computes the exact Jacobian every iteration through the simulator's backward pass (one
+    forward + backward per state coordinate); ``refresh_jacobian`` ('fd' or 'autodiff') is the source of the full
+    Jacobians of the Broyden scheme. ``h`` is the forward-difference step (raise it when the simulator is
+    nondeterministic and the step map is close to linear in the actions, as for SNU muscles).
     Returns actions (n, act_dim) and the residual part ||w * (step(s, a) - s1)||^2 (n,).
     """
-    if jacobian not in ('fd', 'broyden'):
+    if jacobian not in ('fd', 'broyden', 'autodiff') or refresh_jacobian not in ('fd', 'autodiff'):
         raise ValueError(f'unknown inversion Jacobian {jacobian!r}')
     if reg_kind not in ('l2', 'activation'):
         raise ValueError(f'unknown inversion reg_kind {reg_kind!r}')
@@ -135,7 +140,17 @@ def lm_invert(
         lam = torch.full_like(cost, lam0)
         J = None
         for it in range(iters):
-            if J is None or jacobian == 'fd' or (refresh > 0 and it % refresh == 0):
+            full = J is None or jacobian in ('fd', 'autodiff') or (refresh > 0 and it % refresh == 0)
+            if full and (jacobian == 'autodiff' or (jacobian == 'broyden' and refresh_jacobian == 'autodiff')):
+                rows = []
+                for i in range(r.shape[1]):  # DFlex's backward cannot be replayed: one forward + backward per row
+                    xg = x.detach().clone().requires_grad_(True)
+                    with torch.enable_grad():
+                        ri = (step(s, to_action(xg), grad=True)[:, i] - s1[:, i]) * w[i]
+                        (g,) = torch.autograd.grad(ri.sum(), xg, allow_unused=True)
+                    rows.append(torch.zeros_like(x) if g is None else g)
+                J = torch.stack(rows, 1)
+            elif full:
                 cols = []
                 for j in range(act_dim):
                     xp = x.clone()
@@ -973,6 +988,8 @@ class MENTOR(Agent):
                 reg_kind=str(cfg.get('reg_kind', 'l2')),
                 target=tg,
                 x0=w0,
+                h=float(cfg.get('fd_step', 1e-2)),
+                refresh_jacobian=str(cfg.get('refresh_jacobian', 'fd')),
             )
             acts.append(a[:k])
             costs.append(c[:k])

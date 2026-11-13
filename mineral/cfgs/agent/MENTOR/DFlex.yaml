@@ -33,8 +33,10 @@ mentor:
     param: box  # box: clip each step to [-1, 1]; tanh: optimise u with a = tanh(u) (many actions at a bound)
     reg: 0.0  # > 0 picks a minimum-norm solution for over-actuated bodies (SNU)
     reg_kind: l2  # l2: reg ||a||^2 (favours half-activated muscles); activation: reg * sum (a+1)/2 (total activation)
-    jacobian: fd  # fd: finite differences every iteration; broyden: once per start, then rank-1 updates
+    jacobian: fd  # fd: finite differences every iteration; broyden: once per start, then rank-1 updates; autodiff: exact
     refresh: 0  # broyden only: recompute the finite-difference Jacobian every this many iterations (0 = never)
+    refresh_jacobian: fd  # broyden refreshes from fd or autodiff (exact, through the simulator's backward pass)
+    fd_step: 0.01  # forward-difference step (SNU: the simulator is nondeterministic, F is linear in activations -> 0.1)
     # temporal smoothness: after the solve, smooth_sweeps re-solves (sweep_iters each, warm-started) with
     # + smooth ||a_t - mean(a_t-1, a_t+1)||^2 within each demo; every residual is still one simulator step
     smooth: 0.0
