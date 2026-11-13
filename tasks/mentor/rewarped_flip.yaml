@@ -13,11 +13,17 @@ agent:
     obs_keys: "joint_q|com_q|particle_q"
     stage1: joint_velocity
     demos:
-      path: ""  # SAPO expert demos (to be generated)
+      path: "experts/demos/Rewarped_Flip_demos64_return83_len300.pt"  # SAPO expert, seed 110 (eval 83.8)
       n_trajs: 8
     teacher:
       batch: 32
       batches_per_round: 6
+      anchor_mix: 0.5
+    # teacher costs are O(1e3) here (777 normalised dims, policy far from the demos early on); the gate is not
+    # needed at 8 demos on the DFlex bodies, so keep every label
+    gate:
+      tau: 1000000000
+      quantile: 0
     rollout:
       length: 60
       reset_every: 60
