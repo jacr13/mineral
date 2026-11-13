@@ -182,6 +182,98 @@ def lm_invert(
     return best_a, best_c
 
 
+class TVLQRTeacher:
+    """Time-varying LQR funnel around the demonstrations, built once from the Stage I actions.
+
+    Along every demo transition (s_t, a_hat_t) the one-step map is linearised by forward differences,
+    A_t = dF/ds and B_t = dF/da (forward simulator steps only, no simulator gradients), and a backward
+    Riccati pass with state cost Q = diag(1 / std(s)^2) and action cost R = r I gives gains K_t and
+    cost-to-go matrices P_t. A learner state x is labelled from its nearest demo point j:
+    a = a_hat_j - K_j (x - s_j), with cost V = (x - s_j)' P_j (x - s_j), a local quadratic estimate of the
+    cost of correcting the deviation (not a verified region of attraction). No simulation per label.
+    """
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        self.spec, self.device, self.counter = spec, device, counter
+        self.S, self.A_hat, self.lengths = S, A_hat, lengths
+        self.N, self.T, self.D = S.shape
+        self.M = spec.act_dim
+        self.K = 1
+        self.anchor_policy = None
+        valid = torch.arange(self.T, device=device)[None] < lengths[:, None]
+        self.valid = valid
+        s = S[valid]
+        self.ws = 1.0 / s.std(0).clamp_min(1e-6)
+        r = float(cfg.get('lqr_r', 10.0))
+        jb = int(cfg.get('lqr_batch', 2000))
+        h_s, h_a = 1e-3 / self.ws, 1e-2
+        step = OneStep(spec, jb, device, counter)
+        a_valid = A_hat[valid]
+        jac = []
+        with torch.no_grad():
+            for c0 in range(0, s.shape[0], jb):
+                x, a = s[c0 : c0 + jb], a_valid[c0 : c0 + jb]
+                k = x.shape[0]
+                if k < jb:
+                    x, a = torch.cat([x, x[:1].expand(jb - k, -1)]), torch.cat([a, a[:1].expand(jb - k, -1)])
+                y = step(x, a, grad=False)
+                cols = []
+                for j in range(self.D):
+                    xp = x.clone()
+                    xp[:, j] += h_s[j]
+                    cols.append((step(xp, a, grad=False) - y) / h_s[j])
+                for j in range(self.M):
+                    ap = a.clone()
+                    sign = torch.where(a[:, j] + h_a > 1, -1.0, 1.0)
+                    ap[:, j] = (a[:, j] + sign * h_a).clamp(-1, 1)
+                    cols.append((step(x, ap, grad=False) - y) / (ap[:, j] - a[:, j]).unsqueeze(-1))
+                jac.append(torch.stack(cols, -1)[:k])
+        del step
+        torch.cuda.empty_cache()
+        AB = torch.zeros(self.N, self.T, self.D, self.D + self.M, device=device)
+        AB[valid] = torch.cat(jac)
+        Q = torch.diag(self.ws**2)
+        R = r * torch.eye(self.M, device=device)
+        P = Q.expand(self.N, self.D, self.D).clone()
+        self.Kg = torch.zeros(self.N, self.T, self.M, self.D, device=device)
+        self.P = torch.zeros(self.N, self.T, self.D, self.D, device=device)
+        for t in reversed(range(self.T)):
+            At, Bt = AB[:, t, :, : self.D], AB[:, t, :, self.D :]
+            BtP = Bt.transpose(1, 2) @ P
+            Kt = torch.linalg.solve(R + BtP @ Bt, BtP @ At)
+            Pn = Q + At.transpose(1, 2) @ P @ (At - Bt @ Kt)
+            Pn = 0.5 * (Pn + Pn.transpose(1, 2))
+            on = valid[:, t, None, None]
+            P = torch.where(on, Pn, Q.expand_as(P))  # demos restart from the terminal cost after their end
+            self.Kg[:, t] = torch.where(on, Kt, torch.zeros_like(Kt))
+            self.P[:, t] = P
+        self.S_flat = (S * self.ws).reshape(self.N * self.T, self.D)
+        self.valid_flat = valid.reshape(-1)
+        print(f'[MENTOR] TVLQR teacher: {s.shape[0]} linearisations, r = {r}, {counter.total} sim steps so far')
+
+    def anchor_to(self, policy):
+        self.anchor_policy = None  # the funnel labels do not use the policy
+
+    @torch.no_grad()
+    def label(self, x):
+        """Labels a_hat_j - K_j (x - s_j) at the nearest demo point j, and their costs V_j(x)."""
+        x = x.detach()
+        d = torch.cdist(x * self.ws, self.S_flat)
+        d = d.masked_fill(~self.valid_flat[None], float('inf'))
+        idx = d.argmin(1)
+        traj, j = idx // self.T, idx % self.T
+        dx = x - self.S[traj, j]
+        a = self.A_hat[traj, j] - (self.Kg[traj, j] @ dx.unsqueeze(-1)).squeeze(-1)
+        v = (dx.unsqueeze(1) @ self.P[traj, j] @ dx.unsqueeze(-1)).squeeze(-1).squeeze(-1)
+        return a.clamp(-1, 1), v
+
+    def extend(self, *args, **kwargs):
+        raise ValueError('teacher.kind=tvlqr does not support the bootstrap library')
+
+    def advantage(self, policy):
+        raise ValueError('teacher.kind=tvlqr does not support gate.advantage')
+
+
 class RejoinTeacher:
     """K-step open-loop plan from a learner state back onto the demonstration manifold.
 
@@ -1027,6 +1119,13 @@ class MENTOR(Agent):
                 raise ValueError(f'full-state MENTOR has no observation-to-state map, so these need to be off: {bad}')
         else:
             TeacherCls = RejoinTeacher
+        kind = str(cfg.teacher.get('kind', 'rejoin'))
+        if kind == 'tvlqr':
+            if self.full_state:
+                raise ValueError('teacher.kind=tvlqr needs an observation-to-state map (DFlex bodies)')
+            TeacherCls = TVLQRTeacher
+        elif kind != 'rejoin':
+            raise ValueError(f'unknown teacher.kind {kind!r}')
         self.teacher = TeacherCls(
             self.spec,
             self.S,

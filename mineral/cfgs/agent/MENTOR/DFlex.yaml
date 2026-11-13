@@ -49,6 +49,9 @@ mentor:
 
   # Stage II: rejoin teacher
   teacher:
+    kind: rejoin  # rejoin: K-step plan back onto a demo window; tvlqr: time-varying LQR funnel around the demos
+    lqr_r: 10.0  # tvlqr: action cost R = lqr_r I (state cost Q = diag(1 / std(s)^2))
+    lqr_batch: 2000  # tvlqr: batch of the one-step simulator for the finite-difference Jacobians
     horizon: 8
     num_windows: 3
     screen: True  # rank windows by warm-start cost, optimise only the best one
