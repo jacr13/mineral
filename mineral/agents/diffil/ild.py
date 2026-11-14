@@ -12,6 +12,12 @@ from ..diffrl.utils import adaptive_scheduler, grad_norm, policy_kl
 from .chamfer_loss import ChamferImitationLoss
 
 
+def _chunks(obs, size):
+    n = next(iter(obs.values())).shape[0]
+    for c in range(0, n, size):
+        yield {k: v[c : c + size] for k, v in obs.items()}
+
+
 class ILD(SHAC):
     """Differentiable ILD that optimizes a Chamfer imitation loss directly."""
 
@@ -22,7 +28,18 @@ class ILD(SHAC):
         demos_config = self.ild_config.get("demos", {})
         self.demos = get_demos(self.device, **demos_config)
 
-        self.loss_fn = ChamferImitationLoss()
+        self.loss_fn = ChamferImitationLoss(alpha=float(self.ild_config.get("alpha", 1.0)))
+
+        # expert state set: only states up to each demo's first done, finite (padding after an early end is masked)
+        done = self.demos["done"].bool()
+        N, T = done.shape
+        t = torch.arange(T, device=self.device)[None].expand(N, T)
+        first_done = torch.where(done.any(1), done.float().argmax(1), torch.full((N,), T - 1, device=self.device))
+        valid = t <= first_done[:, None]
+        for v in self.demos["obs"].values():
+            valid &= torch.isfinite(v.reshape(N, T, -1)).all(-1)
+        self.expert_obs = {k: v[valid] for k, v in self.demos["obs"].items()}  # (M, ...)
+        print(f"[ILD] expert state set: {int(valid.sum())} states from {N} demos")
 
     def train(self):
         """Actor-only training loop (no critic/bootstrap)."""
@@ -259,15 +276,23 @@ class ILD(SHAC):
             else:
                 self.done_mask[i] = torch.ones_like(done, dtype=torch.float32)
 
-        obs_window = {k: torch.stack(v, dim=1) for k, v in obs_window.items()}
+        obs_window = {k: torch.stack(v, dim=1) for k, v in obs_window.items()}  # (B, H, ...)
         if obs_rms is not None:
             with torch.no_grad():
-                obs_exp = {k: obs_rms[k].normalize(v) for k, v in self.demos["obs"].items()}
+                obs_exp = {k: obs_rms[k].normalize(v) for k, v in self.expert_obs.items()}
         else:
-            obs_exp = self.demos["obs"]
+            obs_exp = self.expert_obs
 
-        obs_z = self.actor_encoder(obs_window)
-        exp_z = self.actor_encoder(obs_exp).detach()
+        # Chamfer distance in a FIXED feature space: the normalised flat observation, or (dict observations) a
+        # frozen copy of the actor encoder; a trainable encoder would let the loss collapse the features
+        if "obs" in obs_window and len(obs_window) == 1:
+            obs_z, exp_z = obs_window["obs"], obs_exp["obs"].unsqueeze(0)
+        else:
+            frozen = deepcopy(self.actor_encoder).requires_grad_(False)
+            B, H = next(iter(obs_window.values())).shape[:2]
+            obs_z = frozen({k: v.flatten(0, 1) for k, v in obs_window.items()})['z'].view(B, H, -1)
+            with torch.no_grad():
+                exp_z = torch.cat([frozen(tree)['z'] for tree in _chunks(obs_exp, 4096)]).unsqueeze(0)
         actor_loss, info = self.loss_fn(obs_z, exp_z)
         info["imitation_loss"] = actor_loss.detach()
         info["expert_return"] = self.demos["expert_return"]

@@ -1,0 +1,21 @@
+task:
+  name: DFlex
+  env:
+    env_name: ant
+agent:
+  name: DiffMimic/DFlex
+  network:
+    units: [256, 256]
+  diffmimic:
+    demos:
+      path: "experts/demos/DFlex_ant_demos128_return9318_len1000.pt"
+      n_trajs: 8
+logdir: "workdir/DFlexAnt-DiffMimic/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "6h"

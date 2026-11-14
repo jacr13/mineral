@@ -13,8 +13,6 @@ displacement, a_t = (q_{t+1} - q_t) / action_scale, which is read off the observ
 import torch
 from omegaconf import OmegaConf
 
-from .mentor_sim import OneStep
-
 
 class RewarpedSpec:
     """Observation vector, full-state save/restore and Stage I for a Rewarped env built as ``task=Rewarped`` does.
@@ -205,7 +203,7 @@ class AllegroHandAdapter(Adapter):
         qd = torch.cat([obs[:, 16:32] / vs, ang, obs[:, 39:42] + torch.cross(pos, ang, dim=-1)], 1)
         out = {'joint_q': q, 'joint_qd': qd}
         if 'joint_tau' in spec.state_names:
-            out['joint_tau'] = torch.zeros_like(getattr(env.state, 'joint_tau').view(env.num_envs, -1)[:n])
+            out['joint_tau'] = torch.zeros_like(env.state.joint_tau.view(env.num_envs, -1)[:n])
         goal = env.goal_states[:n].detach().clone()
         goal[:, 0:3] = obs[:, 45:48] + env.env_offsets.reshape(-1, 3)[:n]
         goal[:, 3:7] = obs[:, 48:52]
@@ -292,7 +290,7 @@ def make_state_teacher_class(base):
             return (1 - self.anchor_mix) * a_demo + self.anchor_mix * torch.stack(acts, 1)
 
         def label(self, x):
-            """x = (obs [n, D], states {name: [n, ...]}); returns labels and rejoin costs."""
+            """X = (obs [n, D], states {name: [n, ...]}); returns labels and rejoin costs."""
             obs, states = x
             obs = obs.detach()
             n, m = obs.shape[0], self.m

@@ -1,225 +1,193 @@
-import collections
-from copy import deepcopy
+"""DiffMimic (Ren et al., ICLR 2023): state matching with analytic gradients through the simulator, DFlex.
+
+Every iteration, each of ``batch`` simulator copies is reset to a demo state s^i_t (random demo and phase), the
+deterministic policy is rolled out ``horizon`` steps through the differentiable simulator, and the loss is the
+time-aligned state-tracking error sum_k ||W (x_k - s^i_{t+k})||^2 (W = 1 / per-coordinate demo spread).
+Demonstration replay: when a copy's tracking error exceeds ``replay_threshold`` its simulator state is replaced by
+the demo state (gradient cut there), so the rest of the window keeps learning from on-track states.
+State-only: only demo states are used. Evaluated like MENTOR (deterministic policy, early termination, stochastic init).
+"""
+
+import json
+import os
+import time
+
+import numpy as np
 import torch
 
 from ...common.demos import get_demos
-from ..diffrl.shac import SHAC
-from .ild import ILD
+from ..agent import Agent
+from .mentor import MentorPolicy
+from .mentor_sim import OneStep, SimCounter, get_spec
 
 
-class DiffMimic(ILD):
-    """DiffMimic (Ren et al., 2023) style state-matching with demonstration replay."""
-
+class DiffMimic(Agent):
     def __init__(self, full_cfg, **kwargs):
-        # Skip ILD.__init__ so we can configure our own loss/demos, but still
-        # reuse ILD's actor-only train/update loop.
-        SHAC.__init__(self, full_cfg, **kwargs)
-        self.diffmimic_config = full_cfg.agent.get("diffmimic", {})
+        self.network_config = full_cfg.agent.network
+        self.dm_config = cfg = full_cfg.agent.diffmimic
+        self.num_actors = int(cfg.num_actors)
+        super().__init__(full_cfg, **kwargs)
+        self.seed = int(full_cfg.seed)
+        self.spec = get_spec(full_cfg.task.env.env_name)
+        D = self.spec.obs_dim
 
-        demos_config = self.diffmimic_config.get("demos", {})
-        self.demos = get_demos(self.device, **demos_config)
-        self.expert_lengths = self._compute_expert_lengths()
+        demos = get_demos(self.device, **cfg.demos)
+        obs = demos['obs']['obs'][..., :D].float()
+        nxt = demos['next_obs']['obs'][..., :D].float()
+        done = demos['done'].bool()
+        N, T = done.shape
+        first_done = torch.where(done.any(1), done.float().argmax(1), torch.full((N,), T - 1, device=self.device))
+        finite = torch.isfinite(obs).all(-1) & torch.isfinite(nxt).all(-1)
+        bad = (~finite).float().cumsum(1) > 0  # cut a demo before its first non-finite transition
+        first_bad = torch.where(bad.any(1), bad.float().argmax(1) - 1, torch.full((N,), T - 1, device=self.device))
+        self.lengths = torch.minimum(first_done, first_bad) + 1  # usable transitions per demo
+        self.S = torch.cat([obs[:, :1], nxt], 1)  # states s_0 .. s_T, s_{t+1} = next_obs_t
+        self.expert_return = demos['expert_return']
+        valid = torch.arange(T, device=self.device)[None] < self.lengths[:, None]
+        flat = obs[valid]
+        self.w = 1.0 / flat.std(0).clamp_min(1e-3)
 
-        self.demo_replay_threshold = self.diffmimic_config.get("demo_replay_threshold", None)
-        self.demo_replay_prob = float(self.diffmimic_config.get("demo_replay_prob", 1.0))
-        self.normalize_demo = self.diffmimic_config.get("normalize_demo", True)
-        self.loss_weights = self.diffmimic_config.get("loss_weights", {})
+        self.policy = MentorPolicy(
+            D, self.spec.act_dim, flat.mean(0), flat.std(0).clamp_min(1e-3), units=tuple(self.network_config.units)
+        ).to(self.device)
+        self.optim = torch.optim.Adam(self.policy.parameters(), lr=float(cfg.lr))
+        self.counter = SimCounter()
+        self.batch = int(cfg.batch)
+        self.horizon = int(cfg.horizon)
+        self.step = OneStep(self.spec, self.batch, self.device, self.counter)
+        self.generator = torch.Generator(device=self.device)
+        self.generator.manual_seed(self.seed)
+        self.t0 = time.time()
 
-    # ---- Helpers ----
-    def _compute_expert_lengths(self):
-        """Return per-trajectory usable lengths from the loaded demonstrations."""
-        done = self.demos.get("done", None)
-        if done is None:
-            obs_any = next(iter(self.demos["obs"].values())) if isinstance(self.demos["obs"], dict) else self.demos["obs"]
-            traj_len = obs_any.shape[1]
-            return torch.full((obs_any.shape[0],), traj_len, device=self.device, dtype=torch.long)
+    def _sample_starts(self):
+        L = self.lengths
+        ok = torch.nonzero(L > self.horizon).flatten()
+        assert len(ok) > 0, f'no demo longer than horizon {self.horizon}'
+        n = ok[torch.randint(0, len(ok), (self.batch,), device=self.device, generator=self.generator)]
+        u = torch.rand(self.batch, device=self.device, generator=self.generator)
+        t = (u * (L[n] - self.horizon + 1).float()).long()
+        return n, t
 
-        lengths = torch.zeros(done.shape[0], device=self.device, dtype=torch.long)
-        for i in range(done.shape[0]):
-            idx = (done[i] == 1).nonzero(as_tuple=True)[0]
-            lengths[i] = idx[0].item() + 1 if len(idx) > 0 else done.shape[1]
-        return lengths
-
-    def _gather_expert_window(self, tensor, traj_ids, starts):
-        """Gather a [B, T, ...] slice from expert trajectories."""
-        B = traj_ids.shape[0]
-        time_idx = starts.unsqueeze(-1) + torch.arange(self.horizon_len, device=self.device).view(1, -1)
-        idx = traj_ids.view(B, 1).expand(B, self.horizon_len)
-        return tensor[idx, time_idx, ...]
-
-    def _sample_expert_batch(self, obs_rms=None):
-        """Sample a batch of expert windows aligned with the current horizon."""
-        valid_ids = torch.where(self.expert_lengths >= self.horizon_len)[0]
-        if len(valid_ids) == 0:
-            raise ValueError(f"No expert trajectory long enough for horizon={self.horizon_len}")
-
-        traj_ids = valid_ids[torch.randint(0, len(valid_ids), (self.num_envs,), device=self.device)]
-        max_starts = (self.expert_lengths[traj_ids] - self.horizon_len).clamp_min(0)
-        starts = torch.floor(torch.rand_like(max_starts, dtype=torch.float32) * (max_starts + 1).float()).long()
-
-        def _process(obs_dict):
-            if isinstance(obs_dict, dict):
-                gathered = {k: self._gather_expert_window(v, traj_ids, starts) for k, v in obs_dict.items()}
-                if obs_rms is not None and self.normalize_demo:
-                    gathered = {k: obs_rms[k].normalize(v) for k, v in gathered.items()}
-                return gathered
-            gathered = self._gather_expert_window(obs_dict, traj_ids, starts)
-            if obs_rms is not None and self.normalize_demo:
-                gathered = obs_rms.normalize(gathered)
-            return gathered
-
-        expert_windows = _process(self.demos["obs"])
-        return expert_windows
-
-    def _weighted_mse(self, sim_obs, exp_obs):
-        """Compute per-env weighted MSE and per-step costs."""
-        def _prepare(t):
-            return t if t.dim() >= 3 else t.unsqueeze(1)
-
-        if isinstance(sim_obs, dict):
-            per_step_terms = []
-            per_env_terms = None
-            for k, sim in sim_obs.items():
-                sim = _prepare(sim)
-                exp = _prepare(exp_obs[k])
-                diff = sim - exp
-                per_step = diff.view(diff.shape[0], diff.shape[1], -1).pow(2).mean(dim=-1)
-                weight = float(self.loss_weights.get(k, 1.0))
-                per_step_terms.append(weight * per_step)
-                per_env = per_step.mean(dim=1) * weight
-                per_env_terms = per_env if per_env_terms is None else per_env_terms + per_env
-            per_step_costs = torch.stack(per_step_terms, dim=0).sum(dim=0)
-            return per_env_terms, per_step_costs
-
-        sim_obs = _prepare(sim_obs)
-        exp_obs = _prepare(exp_obs)
-        diff = sim_obs - exp_obs
-        per_step_costs = diff.view(diff.shape[0], diff.shape[1], -1).pow(2).mean(dim=-1)
-        per_env_cost = per_step_costs.mean(dim=1)
-        return per_env_cost, per_step_costs
-
-    def _maybe_demo_replay(self, normalized_obs, expert_step):
-        """Optionally replace states for the imitation loss when too far from the demo."""
-        if self.demo_replay_threshold is None:
-            return normalized_obs, torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
-
-        _, per_step_costs = self._weighted_mse(normalized_obs, expert_step)
-        per_env_err = per_step_costs.mean(dim=1)
-        trigger = per_env_err > self.demo_replay_threshold
-        if self.demo_replay_prob < 1.0:
-            rand_mask = torch.rand_like(per_env_err) < self.demo_replay_prob
-            trigger = trigger & rand_mask
-
-        if isinstance(normalized_obs, dict):
-            replaced = {}
-            for k, v in normalized_obs.items():
-                exp = expert_step[k]
-                view_shape = (v.shape[0],) + (1,) * (v.dim() - 1)
-                mask = trigger.view(view_shape)
-                replaced[k] = torch.where(mask, exp, v)
-        else:
-            view_shape = (normalized_obs.shape[0],) + (1,) * (normalized_obs.dim() - 1)
-            mask = trigger.view(view_shape)
-            replaced = torch.where(mask, expert_step, normalized_obs)
-
-        return replaced, trigger.float()
-
-    # ---- Core (replaces ILD.compute_actor_loss) ----
-    def compute_actor_loss(self):
-        with torch.no_grad():
-            obs_rms = deepcopy(self.obs_rms) if self.obs_rms is not None else None
-
-        expert_windows = self._sample_expert_batch(obs_rms=obs_rms)
-        if not isinstance(expert_windows, dict):
-            expert_windows = {"obs": expert_windows}
-
-        obs = self.env.initialize_trajectory()
-        obs = self._convert_obs(obs)
-
-        obs_window = {k: [] for k in obs.keys()}
-        replay_events = torch.zeros(self.num_envs, device=self.device, dtype=torch.float32)
-
-        if obs_rms is not None:
-            with torch.no_grad():
-                for k, v in obs.items():
-                    self.obs_rms[k].update(v)
-            obs = {k: obs_rms[k].normalize(v) for k, v in obs.items()}
-
-        for i in range(self.horizon_len):
-            with torch.no_grad():
-                for k, v in obs.items():
-                    self.obs_buf[k][i] = v.clone()
-
-            z = self.actor_encoder(obs)
-            actions, mu, sigma, distr = self.get_actions(obs, z=z, sample=True, dist=True)
-
-            with torch.no_grad():
-                self.action_buf[i] = actions.clone()
-                self.mus[i, ...] = mu.clone()
-                self.sigmas[i, ...] = sigma.clone()
-
-            obs_next, rew, done, info = self.env.step(actions)
-            real_obs = info.get("obs_before_reset", obs_next)
-            real_obs = obs_next if real_obs is None else real_obs
-
-            obs_next = self._convert_obs(obs_next)
-            real_obs = self._convert_obs(real_obs)
-
-            with torch.no_grad():
-                self.episode_rewards += rew
-                self.episode_lengths += 1
-
-            if obs_rms is not None:
-                with torch.no_grad():
-                    for k, v in obs_next.items():
-                        self.obs_rms[k].update(v)
-                obs_next = {k: obs_rms[k].normalize(v) for k, v in obs_next.items()}
-            real_obs = {k: obs_rms[k].normalize(v) for k, v in real_obs.items()}
-
-            # demonstration replay anchors the sequence used for the loss
-            replayed_obs, replay_flags = self._maybe_demo_replay(
-                real_obs,
-                {k: v[:, i] for k, v in expert_windows.items()},
-            )
-            replay_events += replay_flags
-
-            for k, v in replayed_obs.items():
-                obs_window[k].append(v)
-
-            done_env_ids = done.nonzero(as_tuple=False).squeeze(-1)
-            if len(done_env_ids) > 0:
-                done_env_ids = done_env_ids.detach().cpu()
-                terminal_obs = info.get("obs_before_reset", None)
-                terminal_obs = obs_next if terminal_obs is None else terminal_obs
-                terminal_obs = self._convert_obs(terminal_obs)
-                if obs_rms is not None:
-                    terminal_obs = {k: obs_rms[k].normalize(v) for k, v in terminal_obs.items()}
-                self.episode_rewards_tracker.update(self.episode_rewards[done_env_ids])
-                self.episode_lengths_tracker.update(self.episode_lengths[done_env_ids])
-                self.num_episodes += len(done_env_ids)
-                for done_env_id in done_env_ids:
-                    self.episode_rewards_hist.append(self.episode_rewards[done_env_id].item())
-                    self.episode_lengths_hist.append(self.episode_lengths[done_env_id].item())
-                    self.episode_rewards[done_env_id] = 0.0
-                    self.episode_lengths[done_env_id] = 0
-
-            if i < self.horizon_len - 1:
-                self.done_mask[i] = done.to(dtype=torch.float32)
-            else:
-                self.done_mask[i] = torch.ones_like(done, dtype=torch.float32)
-
-            obs = obs_next
-
-        obs_window = {k: torch.stack(v, dim=1) for k, v in obs_window.items()}
-        per_env_cost, per_step_costs = self._weighted_mse(obs_window, expert_windows)
-        actor_loss = per_env_cost.mean()
-        info = {
-            "imitation_loss": actor_loss.detach(),
-            "per_step_costs": per_step_costs.detach(),
-            "per_step_cost_mean": per_step_costs.mean().detach(),
-            "replay_fraction": (replay_events / max(1, self.horizon_len)).mean().detach(),
-            "expert_return": self.demos.get("expert_return", 0.0),
+    def update(self):
+        n, t = self._sample_starts()
+        x = self.S[n, t]
+        loss, replays, err_sum = 0.0, 0.0, 0.0
+        thr = float(self.dm_config.replay_threshold)
+        for k in range(self.horizon):
+            x = self.step(x, self.policy(x))
+            ref = self.S[n, t + k + 1]
+            err = (((x - ref) * self.w) ** 2).mean(-1)  # per copy, normalised per coordinate
+            loss = loss + torch.nan_to_num(err, nan=0.0, posinf=0.0).mean()
+            err_sum += err.detach().mean().item()
+            if thr > 0:
+                off = (err.detach() > thr) | ~torch.isfinite(err.detach())
+                if off.any():
+                    x = torch.where(off[:, None], ref, x)  # demonstration replay: back onto the demo
+                    replays += off.float().mean().item()
+        loss = loss / self.horizon
+        self.optim.zero_grad()
+        loss.backward()  # always: the simulator tape must be consumed
+        gn = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), float(self.dm_config.max_grad_norm))
+        if torch.isfinite(gn):
+            self.optim.step()
+        self.agent_steps += self.batch * self.horizon
+        return {
+            'train/loss': float(loss.detach()),
+            'train/replay_rate': replays / self.horizon,
+            'train/tracking_error': err_sum / self.horizon,
+            'train/grad_norm': float(gn),
         }
 
-        self.agent_steps += self.horizon_len * self.num_envs
-        return actor_loss, info
+    def train(self):
+        cfg = self.dm_config
+        stats = []
+        for self.epoch in range(int(cfg.iters)):
+            if self.job_clock is not None:
+                _, safe_stop = self.job_clock.step(check_safe_stop=True)
+                if safe_stop:
+                    break
+            stats.append(self.update())
+            if (self.epoch + 1) % int(cfg.eval_every) == 0:
+                self._log({k: float(np.mean([s[k] for s in stats])) for k in stats[0]})
+                stats = []
+        self.save(os.path.join(self.ckpt_dir, 'final.pth'))
+
+    @torch.no_grad()
+    def evaluate(self, episodes_per_env=2):
+        if not hasattr(self, 'eval_env'):
+            env_cfg = self.full_cfg.task.env
+            self.eval_env = self.spec.make_env(
+                self.num_actors,
+                self.device,
+                seed=self.seed + 12345,
+                stochastic_init=bool(env_cfg.get('stochastic_init', True)),
+                early_termination=bool(env_cfg.get('early_termination', True)),
+            )
+        env, D, n = self.eval_env, self.spec.obs_dim, self.num_actors
+        self.policy.eval()
+        obs = self._convert_obs(env.reset())['obs'][:, :D]
+        ret = torch.zeros(n, device=self.device)
+        length = torch.zeros(n, dtype=torch.long, device=self.device)
+        count = torch.zeros(n, dtype=torch.long, device=self.device)
+        returns, lengths = [], []
+        for _ in range(episodes_per_env * env.episode_length + 10):
+            o, r, d, _ = env.step(self.policy(obs))
+            obs = self._convert_obs(o)['obs'][:, :D].clone()
+            ret += r
+            length += 1
+            for i in d.nonzero(as_tuple=False).flatten().tolist():
+                if count[i] < episodes_per_env:
+                    returns.append(ret[i].item())
+                    lengths.append(int(length[i].item()))
+                count[i] += 1
+                ret[i] = 0.0
+                length[i] = 0
+            if bool((count >= episodes_per_env).all()):
+                break
+        self.policy.train()
+        return returns, lengths
+
+    def _log(self, stats):
+        returns, lengths = self.evaluate(int(self.dm_config.get('eval_episodes_per_env', 2)))
+        mean_ret = float(np.mean(returns))
+        metrics = {
+            'iter': self.epoch + 1,
+            **stats,
+            'time/wall': time.time() - self.t0,
+            'sim_steps/total': int(self.counter.total),
+            'eval_scores/num_episodes': len(returns),
+            'eval_scores/episode_rewards': mean_ret,
+            'eval_scores/episode_lengths': float(np.mean(lengths)),
+            'eval_scores/normalized_return': mean_ret / self.expert_return,
+        }
+        self.writer.add(self.agent_steps, metrics)
+        self.writer.write()
+        print(
+            f'[DiffMimic] iter {self.epoch + 1}: return {mean_ret:.0f} ({mean_ret / self.expert_return:.3f}), '
+            f'loss {stats.get("train/loss", float("nan")):.3g}, replay {stats.get("train/replay_rate", 0):.2f}'
+        )
+        scores = {
+            'epoch': self.epoch,
+            'agent_steps': self.agent_steps,
+            'expert_return': self.expert_return,
+            'eval_scores/num_episodes': len(returns),
+            'eval_scores/episode_rewards': returns,
+            'eval_scores/episode_lengths': lengths,
+        }
+        json.dump(scores, open(os.path.join(self.logdir, 'scores.json'), 'w'), indent=4)
+        self._checkpoint_save(mean_ret)
+
+    def eval(self):
+        self._log({})
+
+    def set_train(self):
+        self.policy.train()
+
+    def set_eval(self):
+        self.policy.eval()
+
+    def save(self, f):
+        torch.save({'policy': self.policy.state_dict(), 'epoch': self.epoch, 'agent_steps': self.agent_steps}, f)
+
+    def load(self, f, ckpt_keys=''):
+        self.policy.load_state_dict(torch.load(f, map_location=self.device)['policy'])

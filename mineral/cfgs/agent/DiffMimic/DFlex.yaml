@@ -1,0 +1,24 @@
+# DiffMimic: time-aligned state tracking through the differentiable simulator, demonstration replay (DFlex).
+seed: ${..seed}
+algo: DiffMimic
+print_every: 1
+ckpt_every: -1
+
+network:
+  normalize_input: False  # the policy standardises inputs with the demo statistics
+  units: [256, 256]
+
+diffmimic:
+  num_actors: ${...task.env.numEnvs}  # evaluation envs
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+  batch: 256  # simulator copies reset to demo states each iteration
+  horizon: 32  # rollout (and back-propagation) length
+  replay_threshold: 1.0  # per-coordinate normalised squared error that triggers demonstration replay (0 = off)
+  lr: 3e-4
+  max_grad_norm: 1.0
+  iters: 20000
+  eval_every: 500
+  eval_episodes_per_env: 2

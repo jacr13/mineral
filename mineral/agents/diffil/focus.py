@@ -12,10 +12,10 @@ from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
 from .best_of_k import (
     BestOfK,
+    ORCACriterion,
     OTSinkhornCriterion,
     SequenceCosineCriterion,
     SequenceRegressionCriterion,
-    ORCACriterion,
     SoftDTWCriterion,
 )
 
