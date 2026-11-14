@@ -197,6 +197,48 @@ def lm_invert(
     return best_a, best_c
 
 
+def adam_invert(step, s, s1, w, iters=200, lr=0.05, reg=0.0, param='box', target=None, x0=None):
+    """Stage I by Adam on the actions of each transition, through one simulator step.
+
+    min ||w * (step(s, a) - s1)||^2 + reg ||a - target||^2, one forward + backward simulator step per iteration.
+    Same parametrisation as lm_invert (box: projected on [-1, 1]; tanh: a = tanh(u)); the best iterate per sample is
+    kept. Returns actions (n, act_dim) and the residual part (n,).
+    """
+    tanh = param == 'tanh'
+    n, act_dim = s.shape[0], step.spec.act_dim
+    tgt = 0.0 if target is None else target
+    if x0 is None:
+        x = torch.zeros(n, act_dim, device=s.device)
+    else:
+        x = torch.atanh(x0.clamp(-0.999, 0.999)) if tanh else x0.clamp(-1, 1).clone()
+    x.requires_grad_(True)
+    opt = torch.optim.Adam([x], lr=lr)
+    best_a = (torch.tanh(x) if tanh else x).detach().clone()
+    best_c = torch.full((n,), float('inf'), device=s.device)
+    best_t = torch.full((n,), float('inf'), device=s.device)
+    for it in range(iters + 1):
+        last = it == iters
+        with torch.set_grad_enabled(not last):
+            a = torch.tanh(x) if tanh else x
+            r = (step(s, a, grad=not last) - s1) * w
+            c = (r**2).sum(-1)
+            total = c + reg * ((a - tgt) ** 2).sum(-1)
+        with torch.no_grad():
+            better = total < best_t
+            best_t = torch.where(better, total.detach(), best_t)
+            best_c = torch.where(better, c.detach(), best_c)
+            best_a[better] = a.detach()[better]
+        if last:
+            break
+        opt.zero_grad()
+        total.sum().backward()  # a DFlex step recorded with grad must be back-propagated
+        opt.step()
+        if not tanh:
+            with torch.no_grad():
+                x.clamp_(-1, 1)
+    return best_a, best_c
+
+
 class ILQRTeacher:
     """Local corrections around the learner's own rollout, by iLQR with finite-difference Jacobians.
 
@@ -986,6 +1028,22 @@ class MENTOR(Agent):
             if k < batch:  # OneStep has a fixed batch: pad with copies of the first row
                 parts = [None if v is None else torch.cat([v, v[:1].expand(batch - k, -1)]) for v in parts]
             x, y, tg, w0 = parts
+            if str(cfg.get('method', 'lm')) == 'adam':
+                a, c = adam_invert(
+                    step,
+                    x,
+                    y,
+                    self.w_step,
+                    iters=iters,
+                    lr=float(cfg.get('adam_lr', 0.05)),
+                    reg=float(cfg.get('reg', 0.0)) if reg is None else reg,
+                    param=str(cfg.get('param', 'box')),
+                    target=tg,
+                    x0=w0,
+                )
+                acts.append(a[:k])
+                costs.append(c[:k])
+                continue
             a, c = lm_invert(
                 step,
                 x,

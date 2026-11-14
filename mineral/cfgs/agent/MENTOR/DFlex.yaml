@@ -27,6 +27,8 @@ mentor:
 
   # Stage I: Levenberg-Marquardt action inversion of every demo transition
   invert:
+    method: lm  # lm: Levenberg-Marquardt (Jacobian from fd / broyden / autodiff); adam: Adam through one simulator step
+    adam_lr: 0.05  # method adam (iters = Adam iterations)
     batch: 2000
     iters: 5
     starts: 1
