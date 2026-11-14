@@ -261,9 +261,11 @@ class Agent:
                 out[k] = v
         return out
 
+    blowup_threshold = 1e4  # |observation| above this = a simulation that blew up (DFlex)
+
     @torch.no_grad()
     def _reset_nonfinite(self, obs, next_obs, real_next_obs, dones):
-        """Reset envs whose new observation is not finite and treat the step as a termination.
+        """Reset envs whose new observation is not finite (or beyond blowup_threshold) and treat the step as a termination.
 
         A DFlex simulation that blows up never terminates on its own (comparisons with NaN are false), so its NaN
         observation would reach the policy and the normalisers. The transition is stored as (s, s, done).
@@ -271,7 +273,8 @@ class Agent:
         """
         bad = None
         for v in next_obs.values():
-            b = ~torch.isfinite(v.reshape(v.shape[0], -1)).all(-1)
+            f = v.reshape(v.shape[0], -1)
+            b = ~torch.isfinite(f).all(-1) | (f.abs() > self.blowup_threshold).any(-1)
             bad = b if bad is None else bad | b
         if bad is None or not bad.any() or not hasattr(self.env, 'reset'):
             return next_obs, real_next_obs, dones, 0
@@ -284,7 +287,7 @@ class Agent:
             real_next_obs[k][ids] = obs[k][ids].to(real_next_obs[k].dtype)
         dones = torch.as_tensor(dones).clone()
         dones[ids.to(dones.device)] = True
-        print(f'Warning: {len(ids)} env(s) with non-finite observations reset')
+        print(f'Warning: {len(ids)} env(s) with non-finite or exploding observations reset')
         return next_obs, real_next_obs, dones, len(ids)
 
     @staticmethod

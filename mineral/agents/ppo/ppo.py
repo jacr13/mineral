@@ -300,6 +300,9 @@ class PPO(DAPGMixin, Agent):
                     loss = loss + aux_loss
 
                 self.optim.zero_grad()
+                if not torch.isfinite(loss):  # e.g. a minibatch from a simulation that blew up: skip the step
+                    results['skipped_nonfinite'].append(torch.tensor(1.0))
+                    continue
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
 
                 if self.truncate_grads:
@@ -342,7 +345,7 @@ class PPO(DAPGMixin, Agent):
                     results['dapg/lambda'].append(torch.tensor(self.dapg_lambda))
                     self.update_dapg_lambda()
 
-            avg_kl = torch.mean(torch.stack(ep_kls))
+            avg_kl = torch.mean(torch.stack(ep_kls)) if ep_kls else torch.tensor(0.0, device=self.device)
             results['avg_kl'].append(avg_kl)
 
             if self.lr_schedule == 'kl':
