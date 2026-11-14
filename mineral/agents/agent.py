@@ -265,29 +265,38 @@ class Agent:
 
     @torch.no_grad()
     def _reset_nonfinite(self, obs, next_obs, real_next_obs, dones):
-        """Reset envs whose new observation is not finite (or beyond blowup_threshold) and treat the step as a termination.
+        """Handle simulations that blew up (non-finite or |obs| > blowup_threshold).
 
-        A DFlex simulation that blows up never terminates on its own (comparisons with NaN are false), so its NaN
-        observation would reach the policy and the normalisers. The transition is stored as (s, s, done).
-        Returns (next_obs, real_next_obs, dones, number of envs reset).
+        A DFlex simulation that blows up never terminates on its own (comparisons with NaN are false), so its
+        observation would reach the policy and the normalisers: such envs are reset. The env's true next
+        observation (``real_next_obs``, the pre-reset one at episode ends) is checked too. Every affected step is
+        stored as (s, s, done). Returns (next_obs, real_next_obs, dones, number of envs affected).
         """
-        bad = None
-        for v in next_obs.values():
-            f = v.reshape(v.shape[0], -1)
-            b = ~torch.isfinite(f).all(-1) | (f.abs() > self.blowup_threshold).any(-1)
-            bad = b if bad is None else bad | b
-        if bad is None or not bad.any() or not hasattr(self.env, 'reset'):
+
+        def bad_rows(o):
+            bad = None
+            for v in o.values():
+                f = v.reshape(v.shape[0], -1)
+                b = ~torch.isfinite(f).all(-1) | (f.abs() > self.blowup_threshold).any(-1)
+                bad = b if bad is None else bad | b
+            return bad
+
+        bad_next, bad_real = bad_rows(next_obs), bad_rows(real_next_obs)
+        if bad_next is None or not (bad_next.any() or bad_real.any()):
             return next_obs, real_next_obs, dones, 0
-        ids = torch.nonzero(bad).flatten()
-        reset = self._convert_obs(self.env.reset(env_ids=ids))
         next_obs = {k: v.clone() for k, v in next_obs.items()}
         real_next_obs = {k: v.clone() for k, v in real_next_obs.items()}
-        for k in next_obs:
-            next_obs[k][ids] = reset[k][ids].to(next_obs[k].dtype)
+        if bad_next.any() and hasattr(self.env, 'reset'):
+            ids = torch.nonzero(bad_next).flatten()
+            reset = self._convert_obs(self.env.reset(env_ids=ids))
+            for k in next_obs:
+                next_obs[k][ids] = reset[k][ids].to(next_obs[k].dtype)
+        ids = torch.nonzero(bad_next | bad_real).flatten()
+        for k in real_next_obs:
             real_next_obs[k][ids] = obs[k][ids].to(real_next_obs[k].dtype)
         dones = torch.as_tensor(dones).clone()
         dones[ids.to(dones.device)] = True
-        print(f'Warning: {len(ids)} env(s) with non-finite or exploding observations reset')
+        print(f'Warning: {len(ids)} env(s) with non-finite or exploding observations (reset / stored as terminal)')
         return next_obs, real_next_obs, dones, len(ids)
 
     @staticmethod
