@@ -15,7 +15,17 @@ import torch
 
 from ..ddpg.utils import soft_update
 from ..sac.sac import SAC
-from .common import ExpertTransitions, adversarial_reward, discriminator_loss, tree_cat, tree_index
+from .common import (
+    ExpertTransitions,
+    adversarial_reward,
+    discriminator_loss,
+    finite_rows,
+    slice_obs,
+    sliced_space,
+    state_dims,
+    tree_cat,
+    tree_index,
+)
 from .models import TransitionDiscriminator, gradient_penalty
 
 
@@ -27,9 +37,10 @@ class DAC(SAC):
         self.il_config = il = full_cfg.agent.il
         self.expert = ExpertTransitions(self.device, il.demos)
 
+        self.state_d = state_dims(full_cfg, self.obs_space, il.get('state_obs', True))
         dcfg = il.discriminator
         self.discriminator = TransitionDiscriminator(
-            self.obs_space,
+            sliced_space(self.obs_space, self.state_d),
             self.action_dim,
             use_actions=False,
             absorbing=True,
@@ -47,9 +58,14 @@ class DAC(SAC):
         self.disc_metrics = {}
 
     def _norm(self, obs):
+        """Policy / critic input: the whole observation, normalised."""
         if self.normalize_input:
             return {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
         return obs
+
+    def _dnorm(self, obs):
+        """Discriminator / inverse-model input: the state part of the normalised observation."""
+        return slice_obs(self._norm(obs), self.state_d)
 
     def _pairs(self, obs, next_obs, done):
         """(s, s') pairs of a batch plus, for its terminated rows, (s'_T, abs) and (abs, abs)."""
@@ -65,13 +81,15 @@ class DAC(SAC):
             o2 = tree_cat(next_obs, term, term)
             a1 = torch.cat([zeros, z, one])
             a2 = torch.cat([zeros, one, one])
-        return self._norm(o1), self._norm(o2), a1, a2
+        return self._dnorm(o1), self._dnorm(o2), a1, a2
 
     def train_discriminator(self, memory):
         self.discriminator.train()
         logs = []
         for _ in range(self.disc_iters):
             p_obs, _, _, p_next, p_done = memory.sample_batch(self.disc_batch, device=self.device)
+            ok = finite_rows(p_obs, p_next)
+            p_obs, p_next, p_done = tree_index(p_obs, ok), tree_index(p_next, ok), p_done[ok]
             e_obs, _, e_next, e_term = self.expert.sample(self.disc_batch)
             x_p = self.discriminator.features(*self._pairs(p_obs, p_next, p_done))
             x_e = self.discriminator.features(*self._pairs(e_obs, e_next, e_term))
@@ -93,7 +111,7 @@ class DAC(SAC):
     def relabel(self, obs, next_obs, done):
         """Imitation reward of a replay batch, absorbing-state value folded in for terminated rows."""
         d = self.discriminator
-        o, no = self._norm(obs), self._norm(next_obs)
+        o, no = self._dnorm(obs), self._dnorm(next_obs)
         r = adversarial_reward(d(o, no), self.reward_kind)
         n = r.shape[0]
         zeros, ones = torch.zeros(n, device=self.device), torch.ones(n, device=self.device)
@@ -103,6 +121,7 @@ class DAC(SAC):
         v_abs = r_abs / (1 - self.gamma)
         done = done.view(-1).float()
         r = r + done * self.gamma * (r_term + self.gamma * v_abs)
+        r = torch.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0)
         return (self.reward_scale * r).unsqueeze(-1), r_abs
 
     def update_net(self, memory):

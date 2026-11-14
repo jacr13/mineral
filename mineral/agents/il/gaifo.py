@@ -9,7 +9,7 @@ Subclasses: GAIL (D(s, a), uses expert actions), MAAD (adds an inverse-dynamics 
 import torch
 
 from ..ppo.ppo import PPO
-from .common import ExpertTransitions, adversarial_reward, discriminator_loss, to_device
+from .common import ExpertTransitions, adversarial_reward, discriminator_loss, slice_obs, sliced_space, state_dims, to_device
 from .models import TransitionDiscriminator, gradient_penalty
 
 
@@ -21,9 +21,10 @@ class GAIfO(PPO):
         self.il_config = il = full_cfg.agent.il
         self.expert = ExpertTransitions(self.device, il.demos)
 
+        self.state_d = state_dims(full_cfg, self.obs_space, il.get('state_obs', True))
         dcfg = il.discriminator
         self.discriminator = TransitionDiscriminator(
-            self.obs_space,
+            sliced_space(self.obs_space, self.state_d),
             self.action_dim,
             use_actions=self.USE_ACTIONS,
             mlp_kwargs=dcfg.get('mlp_kwargs', None),
@@ -45,11 +46,16 @@ class GAIfO(PPO):
         self.disc_metrics = {}
 
     # ---- helpers ----
-    def _norm(self, obs):
+    def _norm_full(self, obs):
+        """Policy input: the whole observation, normalised."""
         obs = to_device(obs, self.device)
         if self.normalize_input:
             return {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
         return obs
+
+    def _norm(self, obs):
+        """Discriminator / inverse-model input: the state part of the normalised observation."""
+        return slice_obs(self._norm_full(obs), self.state_d)
 
     def _second(self, actions, next_obs):
         return actions.clamp(-1, 1) if self.USE_ACTIONS else self._norm(next_obs)
@@ -61,14 +67,16 @@ class GAIfO(PPO):
         next_obs = {k: v[n, e] for k, v in self.next_obs_buf.items()}
         return obs, self.storage.storage_dict['actions'][n, e], next_obs
 
+    def sample_valid(self, n):
+        return self.valid_idx[torch.randint(0, len(self.valid_idx), (n,), device=self.device)]
+
     # ---- discriminator ----
     @torch.enable_grad()
     def train_discriminator(self):
-        total = self.horizon_len * self.num_actors
         self.discriminator.train()
         logs = []
         for _ in range(self.disc_iters):
-            p_obs, p_act, p_next = self._policy_pairs(torch.randint(0, total, (self.disc_batch,), device=self.device))
+            p_obs, p_act, p_next = self._policy_pairs(self.sample_valid(self.disc_batch))
             e_obs, e_act, e_next, _ = self.expert.sample(self.disc_batch)
             x_p = self.discriminator.features(self._norm(p_obs), self._second(p_act, p_next))
             x_e = self.discriminator.features(self._norm(e_obs), self._second(e_act, e_next))
@@ -96,6 +104,7 @@ class GAIfO(PPO):
     @torch.no_grad()
     def play_steps(self):
         timeouts = torch.zeros(self.horizon_len, self.num_actors, device=self.device)
+        finite = torch.ones(self.horizon_len, self.num_actors, dtype=torch.bool, device=self.device)
         boot_values = torch.zeros(self.horizon_len, self.num_actors, 1, device=self.device)
         for n in range(self.horizon_len):
             if not self.env_autoresets:
@@ -116,6 +125,9 @@ class GAIfO(PPO):
             real_next = self._real_next_obs(next_obs, dones, infos)
             for k, v in real_next.items():
                 self.next_obs_buf[k][n] = v.to(self.device)
+            for o in (self.obs, real_next):
+                for v in o.values():
+                    finite[n] &= torch.isfinite(v.reshape(v.shape[0], -1)).all(-1).to(self.device)
             self.obs, self.dones = next_obs, dones
             self.storage.update_data('dones', n, self.dones)
             if self.value_bootstrap and 'time_outs' in infos:
@@ -129,6 +141,9 @@ class GAIfO(PPO):
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
         self.metrics.flush_video(self.epoch)
 
+        self.valid_idx = torch.nonzero(finite.flatten()).flatten()  # agent pairs used to train D / inverse models
+        if len(self.valid_idx) == 0:
+            self.valid_idx = torch.arange(finite.numel(), device=self.device)
         if self.epoch % self.disc_update_freq == 0 or not self.disc_metrics:
             self.disc_metrics = self.train_discriminator()
 
@@ -139,7 +154,7 @@ class GAIfO(PPO):
         for c in range(0, H * E, 8192):
             o, a, no = self._policy_pairs(flat[c : c + 8192])
             rew[c : c + 8192] = self.imitation_reward(o, a, no)
-        rew = rew.view(H, E, 1)
+        rew = torch.nan_to_num(rew, nan=0.0, posinf=0.0, neginf=0.0).view(H, E, 1)
         self.disc_metrics['imitation/reward_mean'] = rew.mean().item()
         rew = rew + self.gamma * boot_values * timeouts.unsqueeze(-1)
         self.storage.storage_dict['rewards'][:] = rew

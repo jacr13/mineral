@@ -295,7 +295,7 @@ def collect_random_rollout(env, num_steps, device):
     return traj
 
 
-def load_or_pretrain_icvf(env, obs_dim, hidden_dims, icvf_path, device, pretrain_kwargs=None):
+def load_or_pretrain_icvf(env, obs_dim, hidden_dims, icvf_path, device, pretrain_kwargs=None, state_dims=None):
     """Loads a pretrained ICVF `phi_net` from `icvf_path`.
 
     Or trains one on a fresh random rollout from `env` and caches it to
@@ -322,6 +322,8 @@ def load_or_pretrain_icvf(env, obs_dim, hidden_dims, icvf_path, device, pretrain
             f"{env.num_envs}x{rollout_len} (~{env.num_envs * rollout_len}) random rollout..."
         )
         observations = collect_random_rollout(env, rollout_len, device)
+        if state_dims is not None:
+            observations = observations[..., :state_dims]
         value_net = train_icvf(observations, hidden_dims=hidden_dims, **pretrain_kwargs)
         phi_net = value_net.nets[0].phi_net
         if icvf_path:

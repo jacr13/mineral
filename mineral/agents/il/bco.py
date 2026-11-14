@@ -11,24 +11,28 @@ import os
 import torch
 
 from .bc import BC
-from .common import InverseActionModel
+from .common import InverseActionModel, state_dims
 
 
 class BCO(BC):
     def __init__(self, full_cfg, **kwargs):
         super().__init__(full_cfg, **kwargs)
         inv = self.bc_config.inverse
-        self.inverse = InverseActionModel(self.obs_space, self.action_dim, self.device, dict(inv))
+        # the inverse model reads the state part only (DFlex obs end with the previous action, i.e. a_t is in s')
+        self.inv_d = state_dims(full_cfg, self.obs_space) if self.obs_keys == ['obs'] else None
+        d = self.inv_d or self.expert_s.shape[-1]
+        self.inverse = InverseActionModel({'obs': (d,)}, self.action_dim, self.device, dict(inv))
         self.data = {'obs': [], 'act': [], 'next': []}
         self.obs = None
 
     def _norm(self, x):
-        return {'obs': (x - self.policy.mean) / self.policy.std}
+        x = (x - self.policy.mean) / self.policy.std
+        return {'obs': x if self.inv_d is None else x[..., : self.inv_d]}
 
     @torch.no_grad()
     def collect(self, steps, random):
         if self.obs is None:
-            self.obs = self._convert_obs(self.env.reset())['obs']
+            self.obs = self.vec(self._convert_obs(self.env.reset()))
         noise = float(self.bc_config.get('explore_noise', 0.1))
         for _ in range(int(steps)):
             if random:
@@ -38,11 +42,11 @@ class BCO(BC):
                 a = a.clamp(-1, 1)
             o, _, d, infos = self.env.step(a)
             nxt = self._convert_obs(o)
-            real = self._real_next_obs(nxt, torch.as_tensor(d), infos)['obs']
+            real = self.vec(self._real_next_obs(nxt, torch.as_tensor(d), infos))
             self.data['obs'].append(self.obs.clone())
             self.data['act'].append(a)
             self.data['next'].append(real.clone())
-            self.obs = nxt['obs'].clone()
+            self.obs = self.vec(nxt).clone()
             self.agent_steps += self.num_actors
 
     def fit_inverse(self):
@@ -57,7 +61,7 @@ class BCO(BC):
 
     @torch.no_grad()
     def label_expert(self):
-        s, s1 = self.expert.obs['obs'], self.expert.next_obs['obs']
+        s, s1 = self.expert_s, self.expert_s1
         return torch.cat(
             [self.inverse(self._norm(s[c : c + 65536]), self._norm(s1[c : c + 65536])) for c in range(0, s.shape[0], 65536)]
         )
@@ -73,7 +77,7 @@ class BCO(BC):
                 labels = self.label_expert()
             with torch.no_grad():
                 label_err = (labels - self.expert.act).pow(2).mean().item()  # diagnostic only (never trained on)
-            loss = self.fit(self.expert.obs['obs'], labels, cfg.steps_per_round)
+            loss = self.fit(self.expert_s, labels, cfg.steps_per_round)
             self._log_round({'train/bc_loss': loss, 'train/inverse_loss': inv_loss, 'audit/label_mse_vs_expert': label_err})
             self.obs = None  # evaluation reset the env
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))

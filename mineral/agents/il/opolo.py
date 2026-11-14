@@ -9,7 +9,7 @@ Adds to DAC (official code: illidanlab/opolo-code, td3opolo.py):
 import torch
 import torch.nn.functional as F
 
-from .common import InverseActionModel
+from .common import InverseActionModel, finite_rows, sliced_space, tree_index
 from .dac import DAC
 
 
@@ -20,7 +20,8 @@ class OPOLO(DAC):
         self.opolo_alpha = float(cfg.get('alpha', 0.1))
         inv = cfg.inverse
         enc = self.network_config.get('encoder_kwargs', None)
-        self.inverse = InverseActionModel(self.obs_space, self.action_dim, self.device, {'encoder_kwargs': enc, **inv})
+        space = sliced_space(self.obs_space, self.state_d)
+        self.inverse = InverseActionModel(space, self.action_dim, self.device, {'encoder_kwargs': enc, **inv})
         self.inv_reg_coef = float(inv.reg_coef)
         self.inv_batch = int(inv.batch_size)
         self.inv_iters = int(inv.iters)
@@ -29,7 +30,9 @@ class OPOLO(DAC):
         losses = []
         for _ in range(self.inv_iters):
             obs, act, _, next_obs, _ = memory.sample_batch(self.inv_batch, device=self.device)
-            losses.append(self.inverse.train_step(self._norm(obs), act, self._norm(next_obs)))
+            ok = finite_rows(obs, next_obs)
+            obs, act, next_obs = tree_index(obs, ok), act[ok], tree_index(next_obs, ok)
+            losses.append(self.inverse.train_step(self._dnorm(obs), act, self._dnorm(next_obs)))
         results = super().update_net(memory)
         if losses:
             results['loss/inverse_model'].append(torch.stack(losses).mean())
@@ -70,9 +73,8 @@ class OPOLO(DAC):
         actor_loss = (self.get_alpha() * log_prob - Q).mean()
 
         e_obs, _, e_next, _ = self.expert.sample(self.inv_batch)
-        e_obs, e_next = self._norm(e_obs), self._norm(e_next)
-        target = self.inverse(e_obs, e_next)
-        e_actions = self.get_actions(z=self.encoder(e_obs), sample=False)  # squashed mean, in [-1, 1]
+        target = self.inverse(self._dnorm(e_obs), self._dnorm(e_next))
+        e_actions = self.get_actions(z=self.encoder(self._norm(e_obs)), sample=False)  # squashed mean, in [-1, 1]
         inv_reg = F.mse_loss(e_actions, target)
         actor_loss = actor_loss + self.inv_reg_coef * inv_reg
         self.last_inv_reg = inv_reg.detach()

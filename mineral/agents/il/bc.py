@@ -6,6 +6,7 @@ on the env (deterministic, episodes_per_env episodes per env, as SHAC/FOCUS/MENT
 
 import json
 import os
+import re
 import time
 
 import numpy as np
@@ -35,15 +36,22 @@ class BC(Agent):
         self.bc_config = cfg = full_cfg.agent.bc
         self.num_actors = int(cfg.num_actors)
         super().__init__(full_cfg, **kwargs)
-        assert 'obs' in self.obs_space, f'{type(self).__name__} supports flat observations only'
+        # policy input: the 'obs' vector, or the dict keys matching bc.obs_keys, flattened and concatenated
+        self.obs_keys = sorted(k for k in self.obs_space if re.match(cfg.get('obs_keys', '^obs$'), k))
+        assert self.obs_keys, f'no observation key matches {cfg.get("obs_keys")!r} in {list(self.obs_space)}'
         self.expert = ExpertTransitions(self.device, cfg.demos)
         self.expert_return = self.expert.expert_return
-        s = self.expert.obs['obs'].float()
+        self.expert_s = self.vec(self.expert.obs)
+        self.expert_s1 = self.vec(self.expert.next_obs)
+        s = self.expert_s
         self.policy = ClonedPolicy(
             s.shape[-1], self.action_dim, s.mean(0), s.std(0).clamp_min(1e-3), self.network_config.get('units', [256, 256])
         ).to(self.device)
         self.optim = torch.optim.Adam(self.policy.parameters(), lr=float(cfg.lr))
         self.t0 = time.time()
+
+    def vec(self, obs):
+        return torch.cat([obs[k].float().flatten(1) for k in self.obs_keys], -1)
 
     def fit(self, obs, actions, steps):
         self.policy.train()
@@ -62,7 +70,7 @@ class BC(Agent):
     def train(self):
         cfg = self.bc_config
         for self.epoch in range(int(cfg.rounds)):
-            loss = self.fit(self.expert.obs['obs'], self.expert.act, cfg.steps_per_round)
+            loss = self.fit(self.expert_s, self.expert.act, cfg.steps_per_round)
             self._log_round({'train/bc_loss': loss})
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
@@ -70,7 +78,7 @@ class BC(Agent):
     @torch.no_grad()
     def evaluate(self, episodes_per_env=2):
         env = self.env
-        obs = self._convert_obs(env.reset())['obs']
+        obs = self.vec(self._convert_obs(env.reset()))
         n = self.num_actors
         ret = torch.zeros(n, device=self.device)
         length = torch.zeros(n, dtype=torch.long, device=self.device)
@@ -79,7 +87,7 @@ class BC(Agent):
         T = int(getattr(env, 'episode_length', getattr(env, 'max_episode_length', 1000)))
         for _ in range(episodes_per_env * T + 10):
             o, r, d, _ = env.step(self.policy(obs))
-            obs = self._convert_obs(o)['obs'].clone()
+            obs = self.vec(self._convert_obs(o)).clone()
             ret += r
             length += 1
             for i in torch.as_tensor(d).nonzero(as_tuple=False).flatten().tolist():

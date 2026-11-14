@@ -1,0 +1,25 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Flip
+    env_suite: dexdeform
+    no_grad: true
+agent:
+  name: BCO/DFlex
+  network:
+    units: [512, 256]
+  bc:
+    obs_keys: "com_q|joint_q"
+    demos:
+      path: "experts/demos/Rewarped_Flip_demos64_return83_len300.pt"
+      n_trajs: 8
+logdir: "workdir/Rewarpedhand_flip-BCO/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "4h"

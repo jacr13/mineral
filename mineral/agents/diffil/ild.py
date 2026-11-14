@@ -39,6 +39,9 @@ class ILD(SHAC):
         for v in self.demos["obs"].values():
             valid &= torch.isfinite(v.reshape(N, T, -1)).all(-1)
         self.expert_obs = {k: v[valid] for k, v in self.demos["obs"].items()}  # (M, ...)
+        from ..il.common import state_dims
+
+        self.state_d = state_dims(full_cfg, self.obs_space, self.ild_config.get("state_obs", True))
         print(f"[ILD] expert state set: {int(valid.sum())} states from {N} demos")
 
     def train(self):
@@ -285,8 +288,9 @@ class ILD(SHAC):
 
         # Chamfer distance in a FIXED feature space: the normalised flat observation, or (dict observations) a
         # frozen copy of the actor encoder; a trainable encoder would let the loss collapse the features
-        if "obs" in obs_window and len(obs_window) == 1:
-            obs_z, exp_z = obs_window["obs"], obs_exp["obs"].unsqueeze(0)
+        if "obs" in obs_window and len(obs_window) == 1:  # state part (DFlex obs end with the previous action)
+            d = self.state_d or obs_window["obs"].shape[-1]
+            obs_z, exp_z = obs_window["obs"][..., :d], obs_exp["obs"][..., :d].unsqueeze(0)
         else:
             frozen = deepcopy(self.actor_encoder).requires_grad_(False)
             B, H = next(iter(obs_window.values())).shape[:2]

@@ -1,0 +1,24 @@
+task:
+  name: Rewarped
+  env:
+    env_name: AllegroHand
+    env_suite: isaacgymenvs
+    no_grad: true
+agent:
+  name: BCO/DFlex
+  network:
+    units: [512, 256]
+  bc:
+    obs_keys: "^obs$"
+    demos:
+      path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
+      n_trajs: 8
+logdir: "workdir/Rewarpedhand_reorient-BCO/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "4h"

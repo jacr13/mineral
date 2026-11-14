@@ -5,7 +5,7 @@ import re
 import torch
 
 from ..ddpg.ddpg import DDPG
-from .common import ExpertTransitions
+from .common import ExpertTransitions, slice_obs, sliced_space, state_dims
 from .icvf import load_or_pretrain_icvf
 from .models import Discriminator
 
@@ -93,8 +93,9 @@ class LWAIL(DDPG):
         if encoder_kwargs is None:
             encoder_kwargs = self.network_config.get("encoder_kwargs", {})
 
+        self.state_d = state_dims(full_cfg, self.obs_space, self.lwail_config.get("state_obs", True))
         self.discriminator = Discriminator(
-            self.obs_space,
+            sliced_space(self.obs_space, self.state_d),
             self.action_dim,
             input_type=self.input_type,
             discriminator_kwargs=discriminator_config,
@@ -119,12 +120,19 @@ class LWAIL(DDPG):
         if self.using_icvf:
             icvf_hidden_dims = list(self.lwail_config.get("icvf_hidden_dims", [256, 256]))
             env_name = full_cfg.task.env.get("env_name", full_cfg.task.name)
-            icvf_path = self.lwail_config.get("icvf_path", None) or f"icvf_model/dflex_{env_name}.pt"
+            suffix = f"_s{self.state_d}" if self.state_d else ""
+            icvf_path = self.lwail_config.get("icvf_path", None) or f"icvf_model/dflex_{env_name}{suffix}.pt"
 
-            obs_dim = self.obs_space["obs"][0]
+            obs_dim = self.state_d or self.obs_space["obs"][0]
             icvf_pretrain_config = dict(self.lwail_config.get("icvf_pretrain", {}))
             self.phi_net = load_or_pretrain_icvf(
-                self.env, obs_dim, icvf_hidden_dims, icvf_path, self.device, pretrain_kwargs=icvf_pretrain_config
+                self.env,
+                obs_dim,
+                icvf_hidden_dims,
+                icvf_path,
+                self.device,
+                pretrain_kwargs=icvf_pretrain_config,
+                state_dims=self.state_d,
             )
 
             # Rebuild the discriminator (constructed above against the raw obs
@@ -153,12 +161,12 @@ class LWAIL(DDPG):
         The frozen ICVF encoder (trained on raw states) when enabled, otherwise the agent's observation normaliser;
         the same transform for expert and agent data.
         """
-        if self.using_icvf:
-            obs = {"obs": self.phi_net(obs["obs"])}
-            next_obs = {"obs": self.phi_net(next_obs["obs"])}
-        else:
-            obs = self._normalize_obs_dict(obs)
-            next_obs = self._normalize_obs_dict(next_obs)
+        if self.using_icvf:  # ICVF trained on the raw state part
+            obs = {"obs": self.phi_net(slice_obs(obs, self.state_d)["obs"])}
+            next_obs = {"obs": self.phi_net(slice_obs(next_obs, self.state_d)["obs"])}
+        else:  # normalise the whole vector, keep its state part
+            obs = slice_obs(self._normalize_obs_dict(obs), self.state_d)
+            next_obs = slice_obs(self._normalize_obs_dict(next_obs), self.state_d)
 
         if self.input_type == "state":
             return obs, None

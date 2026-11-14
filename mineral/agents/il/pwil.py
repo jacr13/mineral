@@ -2,6 +2,7 @@ import torch
 
 from ...common.demos import get_demos
 from ..sac.sac import SAC
+from .common import slice_obs, state_dims
 from .pwil_rewarder import PWILRewarder
 
 
@@ -47,8 +48,11 @@ class PWIL(SAC):
         if self.reward_on_next_obs and not self.observation_only:
             raise ValueError("pwil.reward_on_next_obs requires pwil.observation_only=true")
 
+        # state-only atoms use the state part of the observation (DFlex obs end with the previous action)
+        self.state_d = state_dims(full_cfg, self.obs_space, self.observation_only)
+        atoms = {**self.demos, "obs": slice_obs(self.demos["obs"], self.state_d)}
         self.pwil_rewarder = PWILRewarder(
-            self.demos,
+            atoms,
             num_envs=self.num_actors,
             device=self.device,
             time_horizon=time_horizon,
@@ -91,7 +95,7 @@ class PWIL(SAC):
 
             if not self.reward_on_next_obs:
                 # PWIL reward from the pre-step observation and the executed action.
-                shaped_rewards = self.pwil_rewarder.compute_reward(self.obs, actions)
+                shaped_rewards = self.pwil_rewarder.compute_reward(slice_obs(self.obs, self.state_d), actions)
 
             next_obs_raw, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs_raw)
@@ -100,7 +104,7 @@ class PWIL(SAC):
             if self.reward_on_next_obs:
                 # Reward the state reached by `actions`. `obs_before_reset` is the true s_{t+1} for envs that
                 # just auto-reset (`next_obs` is then the first observation of the new episode).
-                shaped_rewards = self.pwil_rewarder.compute_reward(real_next_obs, actions)
+                shaped_rewards = self.pwil_rewarder.compute_reward(slice_obs(real_next_obs, self.state_d), actions)
 
             done_indices = torch.where(dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)

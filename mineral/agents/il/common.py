@@ -19,6 +19,40 @@ def to_device(obs, device):
     return {k: v.to(device) for k, v in obs.items()}
 
 
+def state_dims(full_cfg, obs_space, enabled=True):
+    """Leading coordinates of the flat 'obs' vector that describe the state, or None for the whole vector.
+
+    DFlex Ant / Humanoid / SNU observations end with the previous action, so s' contains a_t; state-only
+    components (discriminators, inverse models, matching costs) read only the state part, as MENTOR does.
+    """
+    if not enabled or 'obs' not in obs_space or full_cfg.task.name != 'DFlex':
+        return None
+    from ..diffil.mentor_sim import SPECS
+
+    spec = SPECS.get(full_cfg.task.env.env_name)
+    if spec is None or spec.obs_dim >= obs_space['obs'][0]:
+        return None
+    return spec.obs_dim
+
+
+def slice_obs(obs, d):
+    return obs if d is None else {**obs, 'obs': obs['obs'][..., :d]}
+
+
+def sliced_space(obs_space, d):
+    return obs_space if d is None else {**obs_space, 'obs': (d,)}
+
+
+def finite_rows(*obs):
+    """Rows where every tensor of every observation dict is finite."""
+    ok = None
+    for o in obs:
+        for v in o.values():
+            f = torch.isfinite(v.reshape(v.shape[0], -1)).all(-1).to(next(iter(obs[0].values())).device)
+            ok = f if ok is None else ok & f
+    return ok
+
+
 class ExpertTransitions:
     """Expert (s, a, s') transitions of the demos, with correct episode boundaries.
 

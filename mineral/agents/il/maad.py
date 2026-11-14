@@ -7,7 +7,7 @@ and the policy mean is pulled towards them: loss += reg_coef * ||mu(s_E) - g(s_E
 import torch
 import torch.nn.functional as F
 
-from .common import InverseActionModel
+from .common import InverseActionModel, sliced_space
 from .gaifo import GAIfO
 
 
@@ -16,7 +16,8 @@ class MAAD(GAIfO):
         super().__init__(full_cfg, **kwargs)
         cfg = full_cfg.agent.maad
         enc = full_cfg.agent.network.get('encoder_kwargs', None)
-        self.inverse = InverseActionModel(self.obs_space, self.action_dim, self.device, {'encoder_kwargs': enc, **cfg})
+        space = sliced_space(self.obs_space, self.state_d)
+        self.inverse = InverseActionModel(space, self.action_dim, self.device, {'encoder_kwargs': enc, **cfg})
         self.inv_reg_coef = float(cfg.reg_coef)
         self.inv_batch = int(cfg.batch_size)
         self.inv_iters = int(cfg.iters)
@@ -25,18 +26,16 @@ class MAAD(GAIfO):
     def _before_mini_epoch(self, results):
         if self.mini_epoch % self.inv_update_freq != 0:
             return
-        total = self.horizon_len * self.num_actors
         losses = []
         for _ in range(self.inv_iters):
-            obs, act, next_obs = self._policy_pairs(torch.randint(0, total, (self.inv_batch,), device=self.device))
+            obs, act, next_obs = self._policy_pairs(self.sample_valid(self.inv_batch))
             losses.append(self.inverse.train_step(self._norm(obs), act, self._norm(next_obs)))
         results['loss/inverse_model'].append(torch.stack(losses).mean())
 
     def _aux_loss(self, results):
         e_obs, _, e_next, _ = self.expert.sample(self.inv_batch)
-        e_obs, e_next = self._norm(e_obs), self._norm(e_next)
-        target = self.inverse(e_obs, e_next)
-        mu = self.model(e_obs)['mu']
+        target = self.inverse(self._norm(e_obs), self._norm(e_next))
+        mu = self.model(self._norm_full(e_obs))['mu']
         reg = F.mse_loss(mu, target)
         results['loss/inv_reg'].append(reg.detach())
         return self.inv_reg_coef * reg

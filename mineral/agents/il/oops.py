@@ -208,7 +208,9 @@ class OOPS(Agent):
     def _target_policy_actions(self, next_obs, next_t_to_horizon):
         x = self._augmented_state(next_obs, next_t_to_horizon)
         mu, _, _ = self.actor_target(x)
-        return add_normal_noise(mu, std=self.policy_noise, noise_bounds=[-self.noise_clip, self.noise_clip], out_bounds=[-1.0, 1.0])
+        return add_normal_noise(
+            mu, std=self.policy_noise, noise_bounds=[-self.noise_clip, self.noise_clip], out_bounds=[-1.0, 1.0]
+        )
 
     # ------------------------------------------------------------------
     # Rollout collection: one full episode per call, reward assigned once

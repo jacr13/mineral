@@ -1,0 +1,25 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Jumper
+    env_suite: gradsim
+    no_grad: true
+agent:
+  name: BC/DFlex
+  network:
+    units: [512, 256]
+  bc:
+    obs_keys: "com_q|com_qd"
+    demos:
+      path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
+      n_trajs: 8
+logdir: "workdir/Rewarpedsoft_jumper-BC/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "4h"
