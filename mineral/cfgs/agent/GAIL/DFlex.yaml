@@ -1,0 +1,5 @@
+# GAIL: D(s, a), uses the expert actions (not state-only; reference).
+defaults:
+  - /agent/GAIfO/DFlex@_here_
+
+algo: GAIL

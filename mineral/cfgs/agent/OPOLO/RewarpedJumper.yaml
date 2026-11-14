@@ -1,0 +1,9 @@
+# OPOLO on the Rewarped tasks with dict observations (SAC/RewarpedJumper backbone).
+defaults:
+  - /agent/OPOLO/DFlex@_here_
+  - /agent/SAC/RewarpedJumper@_here_
+  - _self_
+
+algo: OPOLO
+sac:
+  nstep: 1

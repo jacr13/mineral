@@ -1,0 +1,31 @@
+task:
+  name: DFlex
+  env:
+    env_name: snu_humanoid
+    no_grad: true
+agent:
+  name: GAIfO/DFlex
+  ppo:
+    max_agent_steps: 10000000
+  network:
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+      +critic_mlp_kwargs:
+        units: [256, 256]
+  il:
+    demos:
+      path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+      n_trajs: 8
+    discriminator:
+      mlp_kwargs:
+        units: [256, 256]
+logdir: "workdir/DFlexSNUHumanoid-GAIfO/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "8h"

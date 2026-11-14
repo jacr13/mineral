@@ -14,7 +14,7 @@ from ..agent import Agent
 from ..ddpg import models
 from ..ddpg.noise import add_normal_noise
 from ..ddpg.utils import soft_update
-from .rewarder import OOPSRewarder
+from .oops_rewarder import OOPSRewarder
 
 
 class OOPS(Agent):

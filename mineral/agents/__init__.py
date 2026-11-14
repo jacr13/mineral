@@ -1,37 +1,50 @@
-from .bc.bc import BC
-from .dac.dac import DAC
+# reinforcement learning
 from .ddpg.ddpg import DDPG
-from .diffrl.bptt import BPTT
-from .diffrl.shac import SHAC
-from .gail.gail import GAIL
-from .lwail.lwail import LWAIL
-from .oops.oops import OOPS
-from .opolo.opolo import OPOLO
+
+# imitation through the differentiable simulator (diffil/)
 from .diffil.diffmimic import DiffMimic
-from .diffil.ild import ILD
-from .diffil.mentor import MENTOR
 from .diffil.focus import FOCUS
 from .diffil.focus_ppo import FOCUSPPO
 from .diffil.focus_sac import FOCUSSAC
+from .diffil.ild import ILD
+from .diffil.mentor import MENTOR
+from .diffrl.bptt import BPTT
+from .diffrl.shac import SHAC
+
+# imitation without simulator gradients (il/)
+from .il.bc import BC
+from .il.bco import BCO
+from .il.dac import DAC
+from .il.gaifo import GAIfO
+from .il.gail import GAIL
+from .il.lwail import LWAIL
+from .il.maad import MAAD
+from .il.oops import OOPS
+from .il.opolo import OPOLO
+from .il.pwil import PWIL
 from .ppo.ppo import PPO
-from .pwil.pwil import PWIL
 from .sac.sac import SAC
 
 __all__ = [
-    'BC',
-    'DAC',
     'DDPG',
     'BPTT',
     'SHAC',
-    'FOCUS',
-    'ILD',
-    'DiffMimic',
-    'MENTOR',
     'PPO',
     'SAC',
+    'DiffMimic',
+    'FOCUS',
+    'FOCUSPPO',
+    'FOCUSSAC',
+    'ILD',
+    'MENTOR',
+    'BC',
+    'BCO',
+    'DAC',
+    'GAIfO',
     'GAIL',
-    'PWIL',
-    'OPOLO',
-    'OOPS',
     'LWAIL',
+    'MAAD',
+    'OOPS',
+    'OPOLO',
+    'PWIL',
 ]

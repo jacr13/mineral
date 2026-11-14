@@ -1,0 +1,21 @@
+# BC on the expert (s, a) pairs (uses the expert actions: not state-only; reference).
+seed: ${..seed}
+algo: BC
+print_every: 1
+ckpt_every: -1
+
+network:
+  normalize_input: False  # the policy standardises inputs with the demo statistics
+  units: [256, 256]
+
+bc:
+  num_actors: ${...task.env.numEnvs}
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+  rounds: 20
+  steps_per_round: 2000
+  batch_size: 1024
+  lr: 1e-3
+  eval_episodes_per_env: 2

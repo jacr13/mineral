@@ -1,0 +1,25 @@
+# GAIfO (state-only adversarial imitation, D(s, s')) on PPO; MAAD and GAIL extend this file.
+defaults:
+  - /agent/PPO/DFlexAnt@_here_
+
+seed: ${..seed}
+algo: GAIfO
+
+il:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+  reward: gail  # gail: -log(1 - D); airl: log D - log(1 - D); neg: log D
+  reward_scale: 1.0
+  discriminator:
+    mlp_kwargs:
+      units: [128, 128]
+      norm_type: LayerNorm
+      act_type: SiLU
+    lr: 3e-4
+    iters: 5  # discriminator steps per rollout (on that rollout), before scoring it
+    batch_size: 1024
+    update_freq: 1  # in PPO epochs
+    grad_penalty: 1.0  # gradient penalty on interpolated (expert, agent) inputs
+    label_smooth: 0.0

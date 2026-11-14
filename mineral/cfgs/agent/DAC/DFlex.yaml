@@ -1,0 +1,27 @@
+# DAC, state-only D(s, s'), on SAC: 1-step replay, per-batch reward relabelling, absorbing states, gradient penalty.
+defaults:
+  - /agent/SAC/DFlexAnt@_here_
+
+seed: ${..seed}
+algo: DAC
+
+sac:
+  nstep: 1
+
+il:
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+  reward: airl  # log D - log(1 - D) (DAC); gail: -log(1 - D)
+  reward_scale: 1.0
+  discriminator:
+    mlp_kwargs:
+      units: [128, 128]
+      norm_type: LayerNorm
+      act_type: SiLU
+    lr: 3e-4
+    iters: 8  # per SAC epoch (= sac.mini_epochs critic updates)
+    batch_size: 512
+    grad_penalty: 10.0
+    label_smooth: 0.0

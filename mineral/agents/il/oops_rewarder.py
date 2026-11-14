@@ -1,7 +1,7 @@
 import torch
 
 from ..diffil.best_of_k import log_sinkhorn
-from ..pwil.rewarder import PWILRewarder
+from .pwil_rewarder import PWILRewarder
 
 
 class OOPSRewarder:

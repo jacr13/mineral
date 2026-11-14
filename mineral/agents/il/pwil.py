@@ -2,7 +2,7 @@ import torch
 
 from ...common.demos import get_demos
 from ..sac.sac import SAC
-from .rewarder import PWILRewarder
+from .pwil_rewarder import PWILRewarder
 
 
 class PWIL(SAC):
@@ -95,14 +95,12 @@ class PWIL(SAC):
 
             next_obs_raw, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs_raw)
+            real_next_obs = self._real_next_obs(next_obs, dones, infos)  # true s_{t+1} for envs that reset
 
             if self.reward_on_next_obs:
                 # Reward the state reached by `actions`. `obs_before_reset` is the true s_{t+1} for envs that
                 # just auto-reset (`next_obs` is then the first observation of the new episode).
-                real_next_obs_raw = infos.get("obs_before_reset", None)
-                if real_next_obs_raw is None:
-                    real_next_obs_raw = next_obs_raw
-                shaped_rewards = self.pwil_rewarder.compute_reward(self._convert_obs(real_next_obs_raw), actions)
+                shaped_rewards = self.pwil_rewarder.compute_reward(real_next_obs, actions)
 
             done_indices = torch.where(dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
@@ -118,7 +116,7 @@ class PWIL(SAC):
             traj_actions[:, i] = actions
             traj_dones[:, i] = dones
             traj_rewards[:, i] = shaped_rewards
-            for k, v in next_obs.items():
+            for k, v in real_next_obs.items():
                 traj_next_obs[k][:, i] = v
             self.obs = next_obs  # update obs
 

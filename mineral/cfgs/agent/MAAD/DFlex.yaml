@@ -1,0 +1,16 @@
+# MAAD: GAIfO + inverse-dynamics regulariser on the policy mean (on-policy, PPO).
+defaults:
+  - /agent/GAIfO/DFlex@_here_
+
+algo: MAAD
+
+maad:
+  reg_coef: 10.0
+  batch_size: 512
+  iters: 50  # inverse-model steps per PPO mini-epoch (on the current rollout)
+  update_freq: 1
+  mlp_kwargs:
+    units: [256, 256]
+    norm_type: LayerNorm
+    act_type: SiLU
+  optim: {type: Adam, kwargs: {lr: 3e-4}}

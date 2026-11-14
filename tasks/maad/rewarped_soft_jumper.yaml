@@ -1,0 +1,38 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Jumper
+    env_suite: gradsim
+    no_grad: true
+agent:
+  name: MAAD/RewarpedJumper
+  ppo:
+    max_agent_steps: 6200000
+  network:
+    encoder_kwargs:
+      mlp_keys: "com_q|com_qd|actions"
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+      +critic_mlp_kwargs:
+        units: [256, 256]
+  il:
+    demos:
+      path: "experts/demos/Rewarped_Jumper_demos64_return2046_len300.pt"
+      n_trajs: 8
+    discriminator:
+      mlp_kwargs:
+        units: [256, 256]
+      encoder_kwargs:
+        mlp_keys: "com_q|com_qd"
+        mlp_kwargs: null
+logdir: "workdir/Rewarpedsoft_jumper-MAAD/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"

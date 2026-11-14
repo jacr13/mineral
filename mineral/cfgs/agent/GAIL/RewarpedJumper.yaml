@@ -1,0 +1,7 @@
+# GAIL on the Rewarped tasks with dict observations (PPO/RewarpedJumper backbone).
+defaults:
+  - /agent/GAIL/DFlex@_here_
+  - /agent/PPO/RewarpedJumper@_here_
+  - _self_
+
+algo: GAIL

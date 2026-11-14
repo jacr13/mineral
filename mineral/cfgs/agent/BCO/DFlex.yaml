@@ -1,0 +1,18 @@
+# BCO(alpha): inverse model on the agent's own transitions labels the expert (s, s') pairs, then BC (state-only).
+defaults:
+  - /agent/BC/DFlex@_here_
+
+algo: BCO
+
+bc:
+  pre_steps: 1000  # random-action steps per env before the first round
+  alpha_steps: 250  # policy steps per env per round (0 = BCO(0))
+  explore_noise: 0.1
+  inverse:
+    steps: 3000  # inverse-model steps per round
+    batch_size: 1024
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    optim: {type: Adam, kwargs: {lr: 1e-3}}

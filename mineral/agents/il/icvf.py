@@ -16,7 +16,7 @@ state-only trajectories via hindsight goal relabeling (as in goal-conditioned
 RL / HER) and an IQL-style expectile regression. It factorizes as a bilinear
 form over per-state features phi(s) and per-goal features psi(g), gated by an
 intention-dependent transform T(z); phi(s) is what downstream code (here,
-:class:`~mineral.agents.lwail.lwail.LWAIL`) uses as the "dynamics-aware
+:class:`~mineral.agents.il.lwail.LWAIL`) uses as the "dynamics-aware
 latent space." See ``load_or_pretrain_icvf`` for the end-to-end path
 ``LWAIL`` uses: load a cached checkpoint if one exists at ``lwail.icvf_path``,
 otherwise pretrain one from a random rollout and cache it there.
@@ -29,7 +29,7 @@ import torch
 import torch.nn as nn
 
 from ..ddpg.utils import soft_update
-from .models import PhiNet
+from .icvf_models import PhiNet
 
 
 class MultilinearVF(nn.Module):
@@ -326,7 +326,9 @@ def load_or_pretrain_icvf(env, obs_dim, hidden_dims, icvf_path, device, pretrain
         phi_net = value_net.nets[0].phi_net
         if icvf_path:
             os.makedirs(os.path.dirname(icvf_path) or ".", exist_ok=True)
-            torch.save(phi_net.state_dict(), icvf_path)
+            tmp = f"{icvf_path}.tmp{os.getpid()}"  # atomic: concurrent seeds never read a partial file
+            torch.save(phi_net.state_dict(), tmp)
+            os.replace(tmp, icvf_path)
             print(f"[LWAIL] Saved pretrained ICVF encoder to {icvf_path}")
 
     phi_net.eval()

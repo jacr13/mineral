@@ -1,0 +1,9 @@
+# DAC on the Rewarped tasks with dict observations (SAC/RewarpedJumper backbone).
+defaults:
+  - /agent/DAC/DFlex@_here_
+  - /agent/SAC/RewarpedJumper@_here_
+  - _self_
+
+algo: DAC
+sac:
+  nstep: 1

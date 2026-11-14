@@ -1,0 +1,17 @@
+# OPOLO: DAC + AlgaeDICE initial-state term + inverse-action regulariser (off-policy, SAC).
+defaults:
+  - /agent/DAC/DFlex@_here_
+
+algo: OPOLO
+
+opolo:
+  alpha: 0.1
+  inverse:
+    reg_coef: 10.0
+    batch_size: 512
+    iters: 8  # inverse-model steps per SAC epoch (on the replay)
+    mlp_kwargs:
+      units: [256, 256]
+      norm_type: LayerNorm
+      act_type: SiLU
+    optim: {type: Adam, kwargs: {lr: 3e-4}}

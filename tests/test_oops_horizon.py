@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import torch
 
-from mineral.agents.oops.oops import OOPS
+from mineral.agents.il.oops import OOPS
 from mineral.common import normalizers
 
 

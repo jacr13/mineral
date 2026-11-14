@@ -1,0 +1,38 @@
+task:
+  name: Rewarped
+  env:
+    env_name: Flip
+    env_suite: dexdeform
+    no_grad: true
+agent:
+  name: GAIfO/RewarpedJumper
+  ppo:
+    max_agent_steps: 6200000
+  network:
+    encoder_kwargs:
+      mlp_keys: "com_q|joint_q"
+    actor_critic_kwargs:
+      mlp_kwargs:
+        units: [512, 256]
+      +critic_mlp_kwargs:
+        units: [256, 256]
+  il:
+    demos:
+      path: "experts/demos/Rewarped_Flip_demos64_return83_len300.pt"
+      n_trajs: 8
+    discriminator:
+      mlp_kwargs:
+        units: [256, 256]
+      encoder_kwargs:
+        mlp_keys: "com_q|joint_q"
+        mlp_kwargs: null
+logdir: "workdir/Rewarpedhand_flip-GAIfO/$(date +%Y%m%d-%H%M%S.%2N)"
+num_envs: 32
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "12h"

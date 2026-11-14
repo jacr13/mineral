@@ -5,7 +5,7 @@ class PhiNet(nn.Module):
     """Intention-Conditioned Value Function (ICVF) state encoder.
 
     Ported from LWAIL's ``network.py::PhiNet``. Provides the "dynamics-aware
-    latent space" that :class:`~mineral.agents.lwail.lwail.LWAIL` embeds states
+    latent space" that :class:`~mineral.agents.il.lwail.LWAIL` embeds states
     into (via ``lwail.using_icvf: true``) before computing its Wasserstein
     critic. Upstream only ships pretrained checkpoints for a handful of D4RL
     Mujoco tasks (dimension-incompatible with this repo's dflex tasks) and
@@ -14,7 +14,7 @@ class PhiNet(nn.Module):
     time it's a fixed feature extractor loaded from (or, on first use,
     pretrained and cached to) ``lwail.icvf_path`` -- see
     ``icvf.py::load_or_pretrain_icvf``. That checkpoint's ``phi_net`` is
-    produced by training an :class:`~mineral.agents.lwail.icvf.MultilinearVF`,
+    produced by training an :class:`~mineral.agents.il.icvf.MultilinearVF`,
     whose own ``phi_net`` is itself a `PhiNet`.
 
     Note: upstream's layer-activation condition (``i + 1 < len(hidden_dims) or

@@ -4,10 +4,24 @@ import re
 
 import torch
 
-from ...common.demos import get_demos
 from ..ddpg.ddpg import DDPG
-from ..gail.models import Discriminator
+from .common import ExpertTransitions
 from .icvf import load_or_pretrain_icvf
+from .models import Discriminator
+
+
+class _Relabelled:
+    """Replay view whose sampled rewards are recomputed by ``reward_fn(obs, actions, next_obs)``."""
+
+    def __init__(self, memory, reward_fn):
+        self.memory, self.reward_fn = memory, reward_fn
+
+    def sample_batch(self, batch_size, device='cuda'):
+        obs, action, _, next_obs, done = self.memory.sample_batch(batch_size, device=device)
+        return obs, action, self.reward_fn(obs, action, next_obs), next_obs, done
+
+    def __getattr__(self, name):
+        return getattr(self.memory, name)
 
 
 class LWAIL(DDPG):
@@ -35,14 +49,14 @@ class LWAIL(DDPG):
     instead of BCE, and it shapes reward as ``sigmoid(-f_net(...))`` instead of
     ``-log(1 - sigmoid(f_net(...)))``. The discriminator network itself and its
     ``state``/``state_action``/``state_state`` input modes reuse
-    :class:`~mineral.agents.gail.models.Discriminator`, the same class GAIL/DAC/
+    :class:`~mineral.agents.il.models.Discriminator`, the same class GAIL/DAC/
     OPOLO use.
 
     Two more upstream options are ported as-is:
       - ``lwail.minus``: for ``input_type: state_state``, feed the critic
         ``next_obs - obs`` instead of raw ``next_obs`` (upstream ``--minus``).
       - ``lwail.using_icvf``: embed states through a frozen ICVF encoder
-        (:class:`~mineral.agents.lwail.models.PhiNet`) before feeding the
+        (:class:`~mineral.agents.il.icvf_models.PhiNet`) before feeding the
         critic (upstream ``--using_icvf``). Upstream only ships ICVF
         checkpoints for a few D4RL Mujoco tasks (dimension-incompatible with
         this repo's dflex tasks) and points to a separate, unfinished
@@ -70,8 +84,9 @@ class LWAIL(DDPG):
         self.lwail_config = full_cfg.agent.get("lwail", {})
         self.input_type = self.lwail_config.get("input_type", "state_state")
 
-        demos_config = self.lwail_config.get("demos", {})
-        self.demos = get_demos(self.device, **demos_config)
+        assert int(self.ddpg_config.nstep) == 1, "LWAIL scores 1-step (s, s') pairs: set agent.ddpg.nstep=1"
+        self.expert = ExpertTransitions(self.device, self.lwail_config.demos)
+        self.demos = {"expert_return": self.expert.expert_return}
 
         discriminator_config = self.lwail_config.get("discriminator", {})
         encoder_kwargs = discriminator_config.get("encoder_kwargs", None)
@@ -133,23 +148,26 @@ class LWAIL(DDPG):
         return obs
 
     def get_discriminator_inputs(self, obs, actions, next_obs):
+        """Critic inputs from RAW observations.
+
+        The frozen ICVF encoder (trained on raw states) when enabled, otherwise the agent's observation normaliser;
+        the same transform for expert and agent data.
+        """
         if self.using_icvf:
             obs = {"obs": self.phi_net(obs["obs"])}
             next_obs = {"obs": self.phi_net(next_obs["obs"])}
+        else:
+            obs = self._normalize_obs_dict(obs)
+            next_obs = self._normalize_obs_dict(next_obs)
 
         if self.input_type == "state":
-            input_1, input_2 = obs, None
-        elif self.input_type == "state_action":
-            input_1, input_2 = obs, actions
-        elif self.input_type == "state_state":
-            next_obs_in = next_obs
-            if self.minus:
-                next_obs_in = {"obs": next_obs["obs"] - obs["obs"]}
-            input_1, input_2 = obs, next_obs_in
-        else:
-            raise NotImplementedError
-
-        return input_1, input_2
+            return obs, None
+        if self.input_type == "state_action":
+            return obs, actions.clamp(-1, 1)
+        if self.input_type == "state_state":
+            next_obs_in = {"obs": next_obs["obs"] - obs["obs"]} if self.minus else next_obs
+            return obs, next_obs_in
+        raise NotImplementedError
 
     @torch.no_grad()
     def lwail_reward(self, obs, actions, next_obs):
@@ -223,8 +241,6 @@ class LWAIL(DDPG):
         return loss.detach(), ipm.detach(), gp.detach()
 
     def train_discriminator(self, memory):
-        if memory.cur_capacity < self.policy_batch_size:
-            return {"discriminator/total": 0.0, "discriminator/ipm": 0.0, "discriminator/gp": 0.0}
 
         self.discriminator.train()
 
@@ -233,15 +249,7 @@ class LWAIL(DDPG):
         # taken against that same fixed pair (only the GP interpolation is
         # re-randomized every step).
         pol_obs, pol_act, _, pol_next_obs, _ = memory.sample_batch(self.policy_batch_size, device=self.device)
-        pol_obs = self._normalize_obs_dict(pol_obs)
-        pol_next_obs = self._normalize_obs_dict(pol_next_obs)
-        exp_obs, exp_act, exp_next_obs = self._sample_batch(
-            self.demos["obs"],
-            self.demos["act"],
-            self.expert_batch_size,
-            dones=self.demos["done"],
-            next_obs_rollout=self.demos["next_obs"],
-        )
+        exp_obs, exp_act, exp_next_obs, _ = self.expert.sample(self.expert_batch_size)
 
         pol_input_1, pol_input_2 = self.get_discriminator_inputs(pol_obs, pol_act, pol_next_obs)
         exp_input_1, exp_input_2 = self.get_discriminator_inputs(exp_obs, exp_act, exp_next_obs)
@@ -260,72 +268,24 @@ class LWAIL(DDPG):
             "discriminator/gp": torch.stack(gps).mean().item(),
         }
 
-    def _sample_batch(self, obs_rollout, actions, batch_size, next_obs_rollout=None, dones=None):
-        # Same trajectory-batch sampler GAIL/DAC use for expert demos: pick
-        # random (traj, step) pairs, respecting `dones` so `next_obs` never
-        # crosses an episode boundary.
-        if len(actions.shape) == 2:
-            actions = actions.unsqueeze(0)
-            obs_rollout = {k: v.unsqueeze(0) for k, v in obs_rollout.items()}
-        num_trajs, length, _ = actions.shape
-
-        if length < 2:
-            raise ValueError("Rollout length must be >= 2 to sample next_obs")
-
-        if dones is not None:
-            if len(dones.shape) == 1:
-                dones = dones.unsqueeze(0)
-            assert dones.shape[:2] == (num_trajs, length), f"dones must have shape ({num_trajs}, {length}), got {dones.shape}"
-
-            valid_mask = ~dones[:, :-1]
-            valid_indices = valid_mask.nonzero(as_tuple=False)
-            if len(valid_indices) == 0:
-                raise ValueError("No valid (obs, next_obs) pairs found before dones.")
-
-            sample_idx = torch.randint(0, len(valid_indices), (batch_size,), device=self.device)
-            trajs_idx = valid_indices[sample_idx, 0]
-            steps_idx = valid_indices[sample_idx, 1]
-        else:
-            trajs_idx = torch.randint(0, num_trajs, (batch_size,), device=self.device)
-            steps_idx = torch.randint(0, length - 1, (batch_size,), device=self.device)
-
-        obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in obs_rollout.items()}
-        act = actions[trajs_idx, steps_idx, :].detach()
-        if next_obs_rollout is None:
-            next_obs = {k: v[trajs_idx, steps_idx + 1, ...].detach() for k, v in obs_rollout.items()}
-        else:
-            next_obs = {k: v[trajs_idx, steps_idx, ...].detach() for k, v in next_obs_rollout.items()}
-
-        obs = self._normalize_obs_dict(obs)
-        next_obs = self._normalize_obs_dict(next_obs)
-        return obs, act, next_obs
-
     def _pretrain_discriminator(self):
         # Ported from upstream `core.py::Agent.pretrain`: warm-start the critic
         # against the warm-up random rollout before online training starts. The
         # policy-side batch is sampled once and held fixed (as upstream does),
         # while the expert batch is refreshed every iteration (also as upstream
         # does, unlike the periodic `train_discriminator` updates above).
-        if self.pretrain_iters <= 0 or self.memory.cur_capacity < self.policy_batch_size:
+        if self.pretrain_iters <= 0:
             return
 
         print(f"[LWAIL] Pretraining discriminator for {self.pretrain_iters} iters on warm-up rollout vs. expert demos...")
         self.discriminator.train()
 
         pol_obs, pol_act, _, pol_next_obs, _ = self.memory.sample_batch(self.policy_batch_size, device=self.device)
-        pol_obs = self._normalize_obs_dict(pol_obs)
-        pol_next_obs = self._normalize_obs_dict(pol_next_obs)
         pol_input_1, pol_input_2 = self.get_discriminator_inputs(pol_obs, pol_act, pol_next_obs)
 
         losses = []
         for _ in range(self.pretrain_iters):
-            exp_obs, exp_act, exp_next_obs = self._sample_batch(
-                self.demos["obs"],
-                self.demos["act"],
-                self.expert_batch_size,
-                dones=self.demos["done"],
-                next_obs_rollout=self.demos["next_obs"],
-            )
+            exp_obs, exp_act, exp_next_obs, _ = self.expert.sample(self.expert_batch_size)
             exp_input_1, exp_input_2 = self.get_discriminator_inputs(exp_obs, exp_act, exp_next_obs)
             loss, _, _ = self._disc_step(exp_input_1, exp_input_2, pol_input_1, pol_input_2)
             losses.append(loss)
@@ -335,62 +295,10 @@ class LWAIL(DDPG):
         self.writer.add(self.agent_steps, metrics)
         self.writer.write()
 
-    @torch.no_grad()
-    def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
-        # Identical to DDPG.explore_env except the buffered reward comes from
-        # the discriminator (`lwail_reward`) instead of the raw env reward.
+    def update_net(self, memory):
+        """DDPG/TD3 update with the reward of every sampled batch relabelled by the current critic f."""
         self.discriminator.eval()
-        traj_obs = {
-            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
-            for k, v in self.obs_space.items()
-        }
-        traj_actions = torch.empty((self.num_actors, timesteps) + (self.action_dim,), device=self.device)
-        traj_rewards = torch.empty((self.num_actors, timesteps), device=self.device)
-        traj_next_obs = {
-            k: torch.empty((self.num_actors, timesteps) + v, dtype=torch.float32, device=self.device)
-            for k, v in self.obs_space.items()
-        }
-        traj_dones = torch.empty((self.num_actors, timesteps), device=self.device)
-
-        for i in range(timesteps):
-            if not self.env_autoresets:
-                raise NotImplementedError
-
-            if self.normalize_input:
-                for k, v in self.obs.items():
-                    self.obs_rms[k].update(v)
-            if random:
-                actions = torch.rand((self.num_actors, self.action_dim), device=self.device) * 2.0 - 1.0
-            else:
-                actions = self.get_actions(self.obs, sample=sample)
-
-            next_obs, rewards, dones, infos = env.step(actions)
-            next_obs = self._convert_obs(next_obs)
-
-            done_indices = torch.where(dones)[0].tolist()
-            self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
-
-            if self.ddpg_config.handle_timeout:
-                dones = self._handle_timeout(dones, infos)
-
-            shaped_rewards = self.lwail_reward(self.obs, actions, next_obs).squeeze(-1)
-
-            for k, v in self.obs.items():
-                traj_obs[k][:, i] = v
-            traj_actions[:, i] = actions
-            traj_dones[:, i] = dones
-            traj_rewards[:, i] = shaped_rewards
-            for k, v in next_obs.items():
-                traj_next_obs[k][:, i] = v
-            self.obs = next_obs
-
-        self.metrics.flush_video(self.epoch)
-
-        traj_rewards = self.reward_shaper(traj_rewards.reshape(self.num_actors, timesteps, 1))
-        traj_dones = traj_dones.reshape(self.num_actors, timesteps, 1)
-        data = self.n_step_buffer.add_to_buffer(traj_obs, traj_actions, traj_rewards, traj_next_obs, traj_dones)
-
-        return data, timesteps * self.num_actors
+        return super().update_net(_Relabelled(memory, self.lwail_reward))
 
     def train(self):
         # Identical to DDPG.train() except for: the discriminator pretrain

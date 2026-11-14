@@ -1,0 +1,7 @@
+# MAAD on the Rewarped tasks with dict observations (PPO/RewarpedJumper backbone).
+defaults:
+  - /agent/MAAD/DFlex@_here_
+  - /agent/PPO/RewarpedJumper@_here_
+  - _self_
+
+algo: MAAD
