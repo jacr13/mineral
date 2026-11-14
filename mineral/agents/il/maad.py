@@ -30,13 +30,16 @@ class MAAD(GAIfO):
         for _ in range(self.inv_iters):
             obs, act, next_obs = self._policy_pairs(self.sample_valid(self.inv_batch))
             losses.append(self.inverse.train_step(self._norm(obs), act, self._norm(next_obs)))
-        results['loss/inverse_model'].append(torch.stack(losses).mean())
+        results['loss/inverse_model'].append(torch.nan_to_num(torch.stack(losses).mean(), nan=-1.0))
 
     def _aux_loss(self, results):
         e_obs, _, e_next, _ = self.expert.sample(self.inv_batch)
         target = self.inverse(self._norm(e_obs), self._norm(e_next))
+        ok = torch.isfinite(target).all(-1)
+        if not ok.any():
+            return None
         mu = self.model(self._norm_full(e_obs))['mu']
-        reg = F.mse_loss(mu, target)
+        reg = F.mse_loss(mu[ok], target[ok])
         results['loss/inv_reg'].append(reg.detach())
         return self.inv_reg_coef * reg
 

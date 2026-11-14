@@ -132,8 +132,10 @@ class InverseActionModel:
         self.net.train()
         loss = F.mse_loss(self.net(obs, next_obs), actions.clamp(-1, 1))
         self.optim.zero_grad()
-        loss.backward()
-        self.optim.step()
+        if torch.isfinite(loss):  # never let one bad batch poison the model
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10.0)
+            self.optim.step()
         self.net.eval()
         return loss.detach()
 
