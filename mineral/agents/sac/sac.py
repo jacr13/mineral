@@ -270,7 +270,8 @@ class SAC(Agent):
 
             critic_loss, critic_grad_norm, target_values = self.update_critic(obs, action, reward, next_obs, done)
             results["loss/critic"].append(critic_loss)
-            results["grad_norm/critic"].append(critic_grad_norm)
+            if critic_grad_norm is not None:
+                results["grad_norm/critic"].append(critic_grad_norm)
             for k, v in target_values.items():
                 results[k].append(v)
 
@@ -279,7 +280,8 @@ class SAC(Agent):
                 results["loss/actor"].append(actor_loss)
                 results["loss/alpha"].append(alpha_loss)
                 results["entropy"].append(entropy)
-                results["grad_norm/actor"].append(actor_grad_norm)
+                if actor_grad_norm is not None:
+                    results["grad_norm/actor"].append(actor_grad_norm)
 
             if self.mini_epoch % self.sac_config.update_targets_interval == 0:
                 soft_update(self.critic_target, self.critic, self.sac_config.tau)
@@ -351,6 +353,8 @@ class SAC(Agent):
 
     def optimizer_update(self, optimizer, objective):
         optimizer.zero_grad(set_to_none=True)
+        if not torch.isfinite(objective):  # e.g. a batch from a simulation that blew up: skip the step
+            return None
         objective.backward()
         if self.sac_config.max_grad_norm is not None:
             grad_norm = nn.utils.clip_grad_norm_(
