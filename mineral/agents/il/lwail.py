@@ -390,7 +390,8 @@ class LWAIL(DDPG):
         total_eval_episodes = self.num_actors * 2
         eval_metrics = self._create_metrics(total_eval_episodes, self.metrics_kwargs)
         with self._as_metrics(eval_metrics), torch.no_grad():
-            while self.metrics.num_episodes < total_eval_episodes:
+            eval_counts = [0] * self.num_actors
+            while min(eval_counts) < 2:
                 if not self.env_autoresets:
                     raise NotImplementedError
 
@@ -403,6 +404,7 @@ class LWAIL(DDPG):
                 )
 
                 done_indices = torch.where(dones)[0].tolist()
+                done_indices = self._eval_keep(done_indices, eval_counts)
                 self.metrics.update(self.epoch, self.env, obs, rewards, done_indices, infos)
 
                 obs = next_obs

@@ -262,6 +262,18 @@ class Agent:
         return out
 
     @staticmethod
+    def _eval_keep(done_indices, counts, per_env=2):
+        """Evaluation: keep each env's first ``per_env`` episodes only (as SHAC / MENTOR).
+
+        Counting the first N finished episodes of any env instead over-represents envs that fail quickly
+        (short, low-return episodes).
+        """
+        keep = [i for i in done_indices if counts[i] < per_env]
+        for i in done_indices:
+            counts[i] += 1
+        return keep
+
+    @staticmethod
     def _handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated', 'truncated')):
         timeout_envs = None
         for timeout_key in timeout_keys:
