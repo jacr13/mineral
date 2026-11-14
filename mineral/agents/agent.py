@@ -239,6 +239,28 @@ class Agent:
                 _obs[k] = v
         return _obs
 
+    def _real_next_obs(self, next_obs, dones, infos):
+        """The true s_{t+1} of each env.
+
+        For envs that reset this step (``dones`` as returned by the env, before any timeout masking), the observation
+        before the reset (``infos['obs_before_reset']``) instead of the reset one.
+        """
+        before = infos.get('obs_before_reset') if isinstance(infos, dict) else None
+        if before is None:
+            return next_obs
+        done = dones.bool()
+        if not done.any():
+            return next_obs
+        before = self._convert_obs(before)
+        out = {}
+        for k, v in next_obs.items():
+            if k in before:
+                b = before[k].to(device=v.device, dtype=v.dtype)
+                out[k] = torch.where(done.to(v.device).view(-1, *([1] * (v.dim() - 1))), b, v)
+            else:
+                out[k] = v
+        return out
+
     @staticmethod
     def _handle_timeout(dones, info, timeout_keys=('time_outs', 'TimeLimit.truncated', 'truncated')):
         timeout_envs = None

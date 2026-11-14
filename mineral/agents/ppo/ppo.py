@@ -225,6 +225,7 @@ class PPO(DAPGMixin, Agent):
                     **self.metrics.result(prefix='train'),
                 }
                 metrics.update(episode_metrics)
+                metrics.update(self._extra_metrics())
 
                 self.writer.add(self.agent_steps, metrics)
                 self.writer.write()
@@ -255,6 +256,7 @@ class PPO(DAPGMixin, Agent):
         for mini_ep in range(0, self.mini_epochs):
             self.mini_epoch += 1
             ep_kls = []
+            self._before_mini_epoch(results)
             for i in range(len(self.storage)):
                 value_preds, old_action_log_probs, advantage, old_mu, old_sigma, returns, actions, obs_dict = self.storage[i]
                 if not isinstance(obs_dict, dict):
@@ -292,6 +294,10 @@ class PPO(DAPGMixin, Agent):
                 if self.dapg_config is not None:
                     demo_actor_loss, demo_nll_loss = self.update_dapg()
                     loss += demo_actor_loss
+
+                aux_loss = self._aux_loss(results)
+                if aux_loss is not None:
+                    loss = loss + aux_loss
 
                 self.optim.zero_grad()
                 loss.backward() if not self.multi_gpu else self.accelerator.backward(loss)
@@ -353,6 +359,17 @@ class PPO(DAPGMixin, Agent):
             self.last_lr = self.scheduler.update(self.agent_steps)
 
         return results
+
+    def _before_mini_epoch(self, results):
+        """Hook for subclasses (imitation agents): called at the start of every mini-epoch."""
+
+    def _aux_loss(self, results):
+        """Hook for subclasses: extra loss added to the PPO loss of every minibatch (None = nothing)."""
+        return None
+
+    def _extra_metrics(self):
+        """Hook for subclasses: extra scalars logged every epoch."""
+        return {}
 
     def eval(self):
         self.set_eval()

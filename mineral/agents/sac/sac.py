@@ -93,7 +93,12 @@ class SAC(Agent):
             self.obs_space, self.action_dim, capacity=int(self.sac_config.memory_size), device=self.device
         )
         self.n_step_buffer = NStepReplay(
-            self.obs_space, self.action_dim, self.num_actors, self.sac_config.nstep, device=self.device
+            self.obs_space,
+            self.action_dim,
+            self.num_actors,
+            self.sac_config.nstep,
+            gamma=float(self.sac_config.gamma),
+            device=self.device,
         )
         self.reward_shaper = RewardShaper(**self.sac_config.reward_shaper)
 
@@ -127,7 +132,7 @@ class SAC(Agent):
         if sample:
             actions = distr.rsample()
         else:
-            actions = mu
+            actions = distr.mean  # the mean in action space (tanh(loc) for a squashed normal, not the pre-tanh loc)
 
         if logprob:
             log_prob = distr.log_prob(actions).sum(-1, keepdim=True)
@@ -163,6 +168,7 @@ class SAC(Agent):
 
             next_obs, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs)
+            real_next_obs = self._real_next_obs(next_obs, dones, infos)  # true s_{t+1} for envs that reset
 
             done_indices = torch.where(dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)
@@ -175,7 +181,7 @@ class SAC(Agent):
             traj_actions[:, i] = actions
             traj_dones[:, i] = dones
             traj_rewards[:, i] = rewards
-            for k, v in next_obs.items():
+            for k, v in real_next_obs.items():
                 traj_next_obs[k][:, i] = v
             self.obs = next_obs  # update obs
 
@@ -230,6 +236,7 @@ class SAC(Agent):
                 **self.metrics.result(prefix="train"),
             }
             metrics.update(episode_metrics)
+            metrics.update(self._extra_metrics())
 
             self.writer.add(self.agent_steps, metrics)
             self.writer.write()
@@ -277,6 +284,10 @@ class SAC(Agent):
                 if not self.sac_config.no_tgt_actor:
                     soft_update(self.actor_target, self.actor, self.sac_config.tau)
         return results
+
+    def _extra_metrics(self):
+        """Hook for subclasses (imitation agents): extra scalars logged every epoch."""
+        return {}
 
     def get_alpha(self, detach=True, scalar=False):
         if self.sac_config.alpha is None:

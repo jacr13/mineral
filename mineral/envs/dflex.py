@@ -84,5 +84,25 @@ def make_envs(config):
         seed=config.seed,
         **env_kwargs,
     )
-
+    _keep_obs_before_reset(env)
     return env
+
+
+def _keep_obs_before_reset(env):
+    """Make no_grad DFlex envs return infos['obs_before_reset'].
+
+    With no_grad=True the pinned DFlex envs do not return it, so the observation of the last step of an episode is
+    lost to the auto-reset. step() sets ``extras`` and then calls ``self.reset(env_ids)``: wrap the instance's reset
+    to store the observation buffer first (as DFlex does when no_grad=False).
+    """
+    if not getattr(env, 'no_grad', False):
+        return
+    reset = env.reset
+
+    def reset_keeping_obs(env_ids=None, force_reset=True):
+        extras = getattr(env, 'extras', None)
+        if env_ids is not None and isinstance(extras, dict) and 'obs_before_reset' not in extras:
+            extras['obs_before_reset'] = env.obs_buf.clone()
+        return reset(env_ids, force_reset)
+
+    env.reset = reset_keeping_obs
