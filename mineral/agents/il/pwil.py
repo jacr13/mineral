@@ -100,6 +100,7 @@ class PWIL(SAC):
             next_obs_raw, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs_raw)
             real_next_obs = self._real_next_obs(next_obs, dones, infos)  # true s_{t+1} for envs that reset
+            next_obs, real_next_obs, dones, _ = self._reset_nonfinite(self.obs, next_obs, real_next_obs, dones)
 
             if self.reward_on_next_obs:
                 # Reward the state reached by `actions`. `obs_before_reset` is the true s_{t+1} for envs that

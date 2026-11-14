@@ -169,6 +169,8 @@ class SAC(Agent):
             next_obs, rewards, dones, infos = env.step(actions)
             next_obs = self._convert_obs(next_obs)
             real_next_obs = self._real_next_obs(next_obs, dones, infos)  # true s_{t+1} for envs that reset
+            next_obs, real_next_obs, dones, _ = self._reset_nonfinite(self.obs, next_obs, real_next_obs, dones)
+            rewards = torch.nan_to_num(torch.as_tensor(rewards), nan=0.0, posinf=0.0, neginf=0.0)
 
             done_indices = torch.where(dones)[0].tolist()
             self.metrics.update(self.epoch, self.env, self.obs, rewards, done_indices, infos)

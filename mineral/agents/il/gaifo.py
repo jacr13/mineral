@@ -123,6 +123,7 @@ class GAIfO(PPO):
             next_obs = self._convert_obs(obs)
             dones = torch.as_tensor(dones, device=self.device)
             real_next = self._real_next_obs(next_obs, dones, infos)
+            next_obs, real_next, dones, _ = self._reset_nonfinite(self.obs, next_obs, real_next, dones)
             for k, v in real_next.items():
                 self.next_obs_buf[k][n] = v.to(self.device)
             for o in (self.obs, real_next):
