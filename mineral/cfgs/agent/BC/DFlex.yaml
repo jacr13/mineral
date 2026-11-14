@@ -10,6 +10,7 @@ network:
 
 bc:
   num_actors: ${...task.env.numEnvs}
+  obs_keys: '^obs$'  # policy input: observation keys (regex), flattened and concatenated
   demos:
     path: ""
     n_trajs: 8

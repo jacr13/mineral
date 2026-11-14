@@ -7,3 +7,4 @@ defaults:
 algo: OPOLO
 sac:
   nstep: 1
+  memory_size: 2e5  # dict observations with point clouds: 1e6 transitions do not fit in GPU memory

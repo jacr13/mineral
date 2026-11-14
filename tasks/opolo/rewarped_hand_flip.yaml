@@ -26,7 +26,7 @@ agent:
     discriminator:
       mlp_kwargs:
         units: [256, 256]
-      encoder_kwargs:
+      +encoder_kwargs:
         mlp_keys: "com_q|joint_q"
         mlp_kwargs: null
 logdir: "workdir/Rewarpedhand_flip-OPOLO/$(date +%Y%m%d-%H%M%S.%2N)"
