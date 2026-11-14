@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from ...common.demos import get_demos
+from ...nets.multi_encoder import MultiEncoder
 from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
 from .best_of_k import (
@@ -229,6 +230,20 @@ class FOCUS(SHAC):
 
         return results
 
+    def _encode_window(self, obs):
+        """Encode a window of observations {key: (B, T, ...)} into features (B, T, Z).
+
+        The default encoder (x['obs']) acts element-wise and is applied as is. A MultiEncoder (Rewarped tasks: point
+        clouds, flattened MLP inputs) expects one frame per row, so the window is flattened to (B * T, ...), encoded,
+        and its feature 'z' reshaped back.
+        """
+        if not isinstance(self.actor_encoder, MultiEncoder):
+            return self.actor_encoder(obs)
+        B, T = next(iter(obs.values())).shape[:2]
+        out = self.actor_encoder({k: v.reshape(B * T, *v.shape[2:]) for k, v in obs.items()})
+        z = out["z"] if isinstance(out, dict) else out
+        return z.view(B, T, *z.shape[1:])
+
     def compute_actor_loss(self):
         # The score-function estimator never differentiates through the
         # simulator, so building the pathwise graph over the rollout is not just
@@ -364,21 +379,8 @@ class FOCUS(SHAC):
             else:
                 obs_exp = self.demos["obs"]
 
-        # B_agent, T_agent = next(iter(obs_window.values())).shape[0:2]
-        # B_exp, T_exp = next(iter(obs_exp.values())).shape[0:2]
-
-        # obs_window = {k: v.view(-1, *v.shape[2:]) for k, v in obs_window.items()}
-        # obs_exp = {k: v.view(-1, *v.shape[2:]) for k, v in obs_exp.items()}
-
-        obs_z = self.actor_encoder(obs_window)
-        exp_z = self.actor_encoder(obs_exp).detach()
-
-        # if isinstance(obs_z, dict):
-        #     obs_z = obs_z["z"].view(B_agent, T_agent, *obs_z["z"].shape[1:])
-        # if isinstance(exp_z, dict):
-        #     exp_z = exp_z["z"].view(B_exp, T_exp, *exp_z["z"].shape[1:])
-
-        # exp_z = exp_z.detach()
+        obs_z = self._encode_window(obs_window)
+        exp_z = self._encode_window(obs_exp).detach()
 
         self.timer.start("train/compute_actor_loss/loss_fn")
         loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=True)
