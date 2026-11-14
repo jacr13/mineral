@@ -185,4 +185,7 @@ class GAIfO(PPO):
         super().load(f, ckpt_keys)
         ckpt = torch.load(f, map_location=self.device, weights_only=False)
         if 'discriminator' in ckpt:
-            self.discriminator.load_state_dict(ckpt['discriminator'])
+            try:
+                self.discriminator.load_state_dict(ckpt['discriminator'])
+            except RuntimeError as e:  # e.g. a checkpoint from before the state-only inputs; the policy is loaded
+                print(f'Warning: discriminator not loaded ({str(e).splitlines()[0]})')
