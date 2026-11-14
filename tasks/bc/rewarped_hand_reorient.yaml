@@ -9,7 +9,6 @@ agent:
   network:
     units: [512, 256]
   bc:
-    obs_keys: "^obs$"
     demos:
       path: "experts/demos/Rewarped_AllegroHand_demos128_return231_len546.pt"
       n_trajs: 8
