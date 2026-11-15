@@ -58,7 +58,30 @@ class Metrics(nn.Module):
         self._update_infos(epoch, env, obs, rewards, done_indices, extras)
         self._update_video(epoch, env, obs, rewards, done_indices, extras)
 
+    def _update_successes(self, env, done_indices):
+        """Goal-reaching tasks (e.g. Rewarped AllegroHand): successes per episode from the env's own counter.
+
+        ``env.successes`` counts goals reached in the current episode and is zeroed when the env resets, so the
+        increments are accumulated here; logged as ``<prefix>_infos/successes`` (per episode) and
+        ``<prefix>_infos/success_any`` (fraction of episodes with at least one success).
+        """
+        s = getattr(env, 'successes', None)
+        if not isinstance(s, torch.Tensor) or s.dim() != 1:
+            return
+        s = s.detach().float().to(self.current_scores['rewards'].device)
+        if getattr(self, '_succ_prev', None) is None or self._succ_prev.shape != s.shape:
+            self._succ_prev = torch.zeros_like(s)
+            self._succ_cur = torch.zeros_like(s)
+        self._succ_cur += (s - self._succ_prev).clamp(min=0)
+        self._succ_prev = s.clone()
+        if len(done_indices) > 0:
+            v = self._succ_cur[done_indices]
+            self._episode_info['successes'].update(v.cpu().numpy())
+            self._episode_info['success_any'].update((v > 0).float().cpu().numpy())
+            self._succ_cur[done_indices] = 0
+
     def _update_scores(self, epoch, env, obs, rewards, done_indices, extras):
+        self._update_successes(env, done_indices)
         self.current_scores['rewards'] += rewards
         self.current_scores['lengths'] += 1
         if len(done_indices) > 0:
