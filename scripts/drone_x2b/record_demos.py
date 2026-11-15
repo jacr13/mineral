@@ -3,9 +3,9 @@
 import argparse
 
 import torch
+from common import Actor
 
 from mineral.envs.drone import DroneEnv
-from common import Actor
 
 p = argparse.ArgumentParser()
 p.add_argument('--ckpt', required=True)

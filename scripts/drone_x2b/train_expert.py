@@ -10,8 +10,8 @@ import time
 
 import torch
 import torch.nn as nn
-
 from common import Actor, evaluate, mlp
+
 from mineral.envs.drone import DEFAULT_TASK, HARD_TASK, DroneEnv
 
 p = argparse.ArgumentParser()

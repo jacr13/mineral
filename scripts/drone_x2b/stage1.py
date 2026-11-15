@@ -62,8 +62,16 @@ el = time.time() - t0
 rel_true, rel_rec, acts, dens = torch.cat(rel_true), torch.cat(rel_rec), torch.cat(acts), torch.cat(dens)
 qs = torch.tensor([0.5, 0.95, 0.99], device=dev)
 print(f'{len(S)} transitions, {counter.total / len(S):.1f} sim steps per transition, {el:.1f}s')
-print('stored actions (AUDIT) rel residual q50/95/99/max', [f'{v:.2e}' for v in rel_true.quantile(qs).tolist()], f'{rel_true.max():.2e}')
-print('recovered actions      rel residual q50/95/99/max', [f'{v:.2e}' for v in rel_rec.quantile(qs).tolist()], f'{rel_rec.max():.2e}')
+print(
+    'stored actions (AUDIT) rel residual q50/95/99/max',
+    [f'{v:.2e}' for v in rel_true.quantile(qs).tolist()],
+    f'{rel_true.max():.2e}',
+)
+print(
+    'recovered actions      rel residual q50/95/99/max',
+    [f'{v:.2e}' for v in rel_rec.quantile(qs).tolist()],
+    f'{rel_rec.max():.2e}',
+)
 for name, rel in (('stored (AUDIT)', rel_true), ('recovered', rel_rec)):
     ab = rel * dens
     mv = dens > 0.1

@@ -224,7 +224,11 @@ class DroneSim:
 
     def step_controls(self, body_q, body_qd, u):
         """Differentiable in all three when grad is enabled and the sim was built with requires_grad."""
-        if self.requires_grad and torch.is_grad_enabled() and (body_q.requires_grad or body_qd.requires_grad or u.requires_grad):
+        if (
+            self.requires_grad
+            and torch.is_grad_enabled()
+            and (body_q.requires_grad or body_qd.requires_grad or u.requires_grad)
+        ):
             return _DroneStep.apply(body_q, body_qd, u, self)
         with wp.ScopedDevice(self.device):
             s0, s1 = self._s0, self._s1
