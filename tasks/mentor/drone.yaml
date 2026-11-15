@@ -1,0 +1,30 @@
+# MENTOR on the Warp quadrotor (ICML plan X2b): 8 demos, replays, anchor 0.5, no gate.
+task:
+  name: Drone
+  env:
+    env_name: drone
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    demos:
+      path: "experts/demos/Warp_Drone_demos128_return251_len300.pt"
+      n_trajs: 8
+    teacher:
+      anchor_mix: 0.5
+    gate:
+      tau: 1000000000
+      quantile: 0
+    augment:
+      replay_batches: 12
+      replay_steps: 16
+      replay_noise: 0.2
+logdir: "workdir/Drone-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "4h"

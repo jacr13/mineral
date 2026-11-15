@@ -255,16 +255,33 @@ class SynergySpec(EnvSpec):
         return self.base.from_state(env, q, qd)
 
 
-SPECS = {'cartpoleswingup': CartPoleSpec, 'hopper': HopperSpec, 'ant': AntSpec, 'humanoid': HumanoidSpec, 'snu_humanoid': SNUHumanoidSpec}
+SPECS = {
+    'cartpoleswingup': CartPoleSpec,
+    'hopper': HopperSpec,
+    'ant': AntSpec,
+    'humanoid': HumanoidSpec,
+    'snu_humanoid': SNUHumanoidSpec,
+}
+
+
+def OneStep(spec, n, device, counter):
+    """One-step map for ``spec``: the spec's own simulator when it has one (e.g. the Warp drone), else DFlex."""
+    if hasattr(spec, 'one_step'):
+        return spec.one_step(n, device, counter)
+    return DFlexOneStep(spec, n, device, counter)
 
 
 def get_spec(env_name):
+    if env_name == 'drone':
+        from ...envs.drone import DroneSpec
+
+        return DroneSpec()
     if env_name not in SPECS:
         raise ValueError(f'MENTOR has no observation-to-state map for env {env_name!r}; supported: {sorted(SPECS)}')
     return SPECS[env_name]()
 
 
-class OneStep:
+class DFlexOneStep:
     """``obs, a -> next_obs`` for a fixed batch of ``n`` states, differentiable in both arguments.
 
     Owns its own DFlex env (``n`` parallel copies) and only uses its model and integrator.

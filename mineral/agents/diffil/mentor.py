@@ -1648,6 +1648,8 @@ class MENTOR(Agent):
             'eval_scores/episode_lengths': float(np.mean(lengths)),
             'eval_scores/normalized_return': mean_ret / self.expert_return,
         }
+        if getattr(self, 'last_eval_successes', None):
+            metrics['eval_scores/success_rate'] = float(np.mean(self.last_eval_successes))
         self.writer.add(self.agent_steps, metrics)
         self.writer.write()
         print(
@@ -1696,9 +1698,11 @@ class MENTOR(Agent):
         count = torch.zeros(n, dtype=torch.long, device=self.device)
         returns, lengths = [], []
         max_steps = episodes_per_env * env.episode_length + 10
+        self.last_eval_successes = []  # goal-reaching envs report a per-episode success flag (info['successes'])
         for _ in range(max_steps):
             with torch.no_grad():
-                o, r, d, _ = env.step(self.env_action(self.policy(obs)))
+                o, r, d, info = env.step(self.env_action(self.policy(obs)))
+            succ = info.get('successes') if isinstance(info, dict) else None
             obs = self._state_obs(self._convert_obs(o)).clone()
             ret += r
             length += 1
@@ -1706,6 +1710,8 @@ class MENTOR(Agent):
                 if count[i] < episodes_per_env:
                     returns.append(ret[i].item())
                     lengths.append(int(length[i].item()))
+                    if isinstance(succ, torch.Tensor) and succ.dtype == torch.bool:
+                        self.last_eval_successes.append(bool(succ[i]))
                 count[i] += 1
                 ret[i] = 0.0
                 length[i] = 0

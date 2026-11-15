@@ -311,7 +311,11 @@ class DroneEnv:
     num_obs, num_actions = 18, 4
 
     def __init__(self, num_envs, device='cuda:0', seed=0, no_grad=True, **task):
+        import gym
+
         self.num_envs, self.device = num_envs, device
+        self.observation_space = gym.spaces.Box(-float('inf'), float('inf'), (self.num_obs,))
+        self.action_space = gym.spaces.Box(-1.0, 1.0, (self.num_actions,))
         self.cfg = dict(DEFAULT_TASK, **task)
         self.episode_length = int(self.cfg['episode_length'])
         self.sim = DroneSim(num_envs, device, requires_grad=not no_grad)
@@ -372,6 +376,10 @@ class DroneEnv:
     def obs(self):
         return obs_from_state(self.body_q, self.body_qd, self.target)
 
+    @property
+    def obs_buf(self):
+        return self.obs()
+
     def _current_target(self):
         k = self.waypoints.shape[1]
         seg = (self.progress_buf * k // self.episode_length).clamp(max=k - 1)
@@ -398,6 +406,7 @@ class DroneEnv:
                 'obs_before_reset': obs.detach().clone() if self.no_grad else obs,
                 'termination': diverged,
                 'truncation': ended & ~diverged,
+                'time_outs': ended & ~diverged,  # name used by mineral's RL agents for bootstrapping
                 'episode_ends': ended,
                 'successes': ended & ~diverged & (self.hold_buf >= c['hold_steps']),
                 'dist': d.detach(),
@@ -420,6 +429,12 @@ class DroneSpec:
     """Exact observation <-> state map for MENTOR (the whole 18-d observation is the state)."""
 
     env_name, obs_dim, act_dim, act_offset = 'drone', 18, 4, 0
+
+    def make_env(self, num_envs, device, seed=0, stochastic_init=True, early_termination=True, grad=False, **task):
+        return DroneEnv(num_envs, device, seed=seed, no_grad=not grad, **task)
+
+    def one_step(self, n, device, counter):
+        return DroneOneStep(n, device, counter)
 
     def to_state(self, env, obs):
         return state_from_obs(obs)
@@ -451,3 +466,23 @@ class DroneOneStep:
                 else:
                     self.counter.fwd += self.n
             return self.spec.from_state(None, q1, qd1)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# mineral task suite (task.suite: drone)
+
+
+def make_envs(config):
+    from omegaconf import OmegaConf
+
+    kw = OmegaConf.to_container(config.task.env, resolve=True)
+    num_envs = kw.pop('numEnvs')
+    kw.pop('env_name', None)
+    no_grad = bool(kw.pop('no_grad', True))
+    for k in ('stochastic_init', 'render', 'early_termination'):
+        kw.pop(k, None)
+    return DroneEnv(num_envs, config.sim_device, seed=config.seed, no_grad=no_grad, **kw)
+
+
+def make_datasets(config, env):
+    return None

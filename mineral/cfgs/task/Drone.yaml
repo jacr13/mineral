@@ -1,0 +1,9 @@
+# Warp quadrotor goal reaching (mineral/envs/drone.py): fly from a random start to a random target and hold it.
+suite: drone
+name: Drone
+
+env:
+  numEnvs: ${resolve_default:64,${...num_envs}}
+  env_name: drone
+  no_grad: True
+env_autoresets: True
