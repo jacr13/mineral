@@ -41,7 +41,7 @@ class ILD(SHAC):
         self.expert_obs = {k: v[valid] for k, v in self.demos["obs"].items()}  # (M, ...)
         from ..il.common import state_dims
 
-        self.state_d = state_dims(full_cfg, self.obs_space, self.ild_config.get("state_obs", True))
+        self.state_d = state_dims(full_cfg, self.obs_space, self.ild_config.get("state_obs", False))
         print(f"[ILD] expert state set: {int(valid.sum())} states from {N} demos")
 
     def train(self):

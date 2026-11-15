@@ -93,7 +93,7 @@ class LWAIL(DDPG):
         if encoder_kwargs is None:
             encoder_kwargs = self.network_config.get("encoder_kwargs", {})
 
-        self.state_d = state_dims(full_cfg, self.obs_space, self.lwail_config.get("state_obs", True))
+        self.state_d = state_dims(full_cfg, self.obs_space, self.lwail_config.get("state_obs", False))
         self.discriminator = Discriminator(
             sliced_space(self.obs_space, self.state_d),
             self.action_dim,

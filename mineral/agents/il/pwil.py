@@ -49,7 +49,9 @@ class PWIL(SAC):
             raise ValueError("pwil.reward_on_next_obs requires pwil.observation_only=true")
 
         # state-only atoms use the state part of the observation (DFlex obs end with the previous action)
-        self.state_d = state_dims(full_cfg, self.obs_space, self.observation_only)
+        self.state_d = state_dims(
+            full_cfg, self.obs_space, self.observation_only and bool(self.pwil_config.get('state_obs', False))
+        )
         atoms = {**self.demos, "obs": slice_obs(self.demos["obs"], self.state_d)}
         self.pwil_rewarder = PWILRewarder(
             atoms,

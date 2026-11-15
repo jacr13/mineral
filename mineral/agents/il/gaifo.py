@@ -21,7 +21,7 @@ class GAIfO(PPO):
         self.il_config = il = full_cfg.agent.il
         self.expert = ExpertTransitions(self.device, il.demos)
 
-        self.state_d = state_dims(full_cfg, self.obs_space, il.get('state_obs', True))
+        self.state_d = state_dims(full_cfg, self.obs_space, il.get('state_obs', False))
         dcfg = il.discriminator
         self.discriminator = TransitionDiscriminator(
             sliced_space(self.obs_space, self.state_d),

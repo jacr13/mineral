@@ -19,7 +19,9 @@ class BCO(BC):
         super().__init__(full_cfg, **kwargs)
         inv = self.bc_config.inverse
         # the inverse model reads the state part only (DFlex obs end with the previous action, i.e. a_t is in s')
-        self.inv_d = state_dims(full_cfg, self.obs_space) if self.obs_keys == ['obs'] else None
+        self.inv_d = (
+            state_dims(full_cfg, self.obs_space, self.bc_config.get('state_obs', False)) if self.obs_keys == ['obs'] else None
+        )
         d = self.inv_d or self.expert_s.shape[-1]
         self.inverse = InverseActionModel({'obs': (d,)}, self.action_dim, self.device, dict(inv))
         self.data = {'obs': [], 'act': [], 'next': []}

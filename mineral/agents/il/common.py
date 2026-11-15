@@ -19,11 +19,13 @@ def to_device(obs, device):
     return {k: v.to(device) for k, v in obs.items()}
 
 
-def state_dims(full_cfg, obs_space, enabled=True):
+def state_dims(full_cfg, obs_space, enabled=False):
     """Leading coordinates of the flat 'obs' vector that describe the state, or None for the whole vector.
 
-    DFlex Ant / Humanoid / SNU observations end with the previous action, so s' contains a_t; state-only
-    components (discriminators, inverse models, matching costs) read only the state part, as MENTOR does.
+    DFlex Ant / Humanoid / SNU observations end with the previous action, so s' contains a_t. Off by default:
+    baselines use the environment's observation as in prior work (FOCUS and the published baselines); with
+    ``state_obs: true`` the discriminators, inverse models and matching costs read only the state part, as MENTOR
+    does (ILD then fails on Humanoid: its Chamfer cost matched the expert's previous actions).
     """
     if not enabled or 'obs' not in obs_space or full_cfg.task.name != 'DFlex':
         return None
