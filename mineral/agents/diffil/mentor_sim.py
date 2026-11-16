@@ -272,10 +272,10 @@ def OneStep(spec, n, device, counter):
 
 
 def get_spec(env_name):
-    if env_name == 'drone':
+    if env_name in ('drone', 'drone_abs'):
         from ...envs.drone import DroneSpec
 
-        return DroneSpec()
+        return DroneSpec(absolute=env_name == 'drone_abs')
     if env_name not in SPECS:
         raise ValueError(f'MENTOR has no observation-to-state map for env {env_name!r}; supported: {sorted(SPECS)}')
     return SPECS[env_name]()

@@ -537,6 +537,16 @@ class RejoinTeacher:
         for part in [p for p in str(cfg.get('ignore_dims', '') or '').split(',') if p.strip()]:
             a_, _, b_ = part.strip().replace(':', '-').partition('-')
             self.w[int(a_) : (int(b_) if b_ else int(a_) + 1)] = 0.0
+        # Goal-matched mentor (optional): observation coordinates holding the goal, e.g. "3-6" for the absolute drone;
+        # windows come only from demos whose goal equals the learner's (within match_tol)
+        self.match_dims, self.match_tol = None, float(cfg.get('match_tol', 1e-4))
+        spec_ = str(cfg.get('match_dims', '') or '')
+        if spec_.strip():
+            idx = []
+            for part in [p for p in spec_.split(',') if p.strip()]:
+                a_, _, b_ = part.strip().replace(':', '-').partition('-')
+                idx += list(range(int(a_), int(b_) if b_ else int(a_) + 1))  # 'a-b' = a .. b-1, as ignore_dims
+            self.match_dims = torch.tensor(idx, device=device)
         self.S_flat = (S * self.w).reshape(-1, D)
         # Support barrier (optional): penalise planned states outside the per-coordinate range
         # the demos visit (widened by support_margin standard deviations), e.g. a torso too low.
@@ -590,8 +600,16 @@ class RejoinTeacher:
     def windows(self, x):
         d = torch.cdist(x * self.w, self.S_flat).view(-1, self.N, self.T)
         d = d.masked_fill(~self.window_ok[None], float('inf'))
+        if self.match_dims is not None:  # goal-matched mentor: only demos whose goal equals the learner's
+            g, G = x[:, self.match_dims], self.S[:, 0, self.match_dims]  # a demo's goal is constant along it
+            same = (g[:, None] - G[None]).abs().amax(-1) <= self.match_tol  # (n, N)
+            # a learner whose goal no demo has keeps the nearest windows over all demos
+            same = same | ~same.any(1, keepdim=True)
+            d = d.masked_fill(~same[:, :, None], float('inf'))
         dmin, jmin = d.min(-1)
-        top = dmin.topk(self.m, dim=1, largest=False).indices
+        vals, top = dmin.topk(self.m, dim=1, largest=False)
+        if self.match_dims is not None:  # fewer matching demos than windows: repeat the best one
+            top = torch.where(torch.isfinite(vals), top, top[:, :1].expand_as(top))
         return top, jmin.gather(1, top)
 
     def a_ref(self, traj, j):
@@ -832,6 +850,8 @@ class MENTOR(Agent):
             )
         else:
             self.spec = get_spec(self.env_name)
+            if hasattr(self.spec, 'set_task'):  # envs the agent builds itself (eval, library) use the task's settings
+                self.spec.set_task(full_cfg.task.env)
         self.full_state = bool(getattr(self.spec, 'full_state', False))
         self.state_bank = None
         self.counter = SimCounter()  # Stage I + teacher simulator transitions

@@ -162,6 +162,16 @@ def obs_from_state(body_q, body_qd, target):
     return torch.cat([rel, quat_to_mat(body_q[:, 3:7]), body_qd[:, 3:6], body_qd[:, 0:3]], -1)
 
 
+def abs_obs_from_state(body_q, body_qd, target):
+    """Absolute frame: [position, target, R, v, w] [n, 21]."""
+    return torch.cat([body_q[:, 0:3], target, quat_to_mat(body_q[:, 3:7]), body_qd[:, 3:6], body_qd[:, 0:3]], -1)
+
+
+def rel_from_abs(obs):
+    """Absolute observation [n, 21] -> relative observation [n, 18] (what the expert reads)."""
+    return torch.cat([obs[:, 0:3] - obs[:, 3:6], obs[:, 6:]], -1)
+
+
 def state_from_obs(obs):
     """Observation [n, 18] -> (body_q, body_qd) with the target at the origin (exact: translation invariance)."""
     q = torch.cat([obs[:, 0:3], mat_to_quat(obs[:, 3:12])], -1)
@@ -293,6 +303,12 @@ DEFAULT_TASK = dict(
     hold_steps=60,  # success: within success_radius during the last hold_steps steps
     success_radius=0.1,
     diverge_dist=100.0,  # safety only: the episode ends early beyond this distance or on non-finite states
+    # goal-matching test (ICML plan X2b): 'absolute' observation = [position, target, R, v, w] (21-d) instead of the
+    # position relative to the target (18-d); targets: a finite list of target positions, target_ids: the ones reset
+    # samples from (e.g. seen targets for training, held-out ones for evaluation)
+    obs_frame='relative',
+    targets=None,
+    target_ids=None,
 )
 
 # Not validated: a SHAC expert fine-tuned from the default one reached 0 % success in 600 iterations (the last waypoint
@@ -314,9 +330,20 @@ class DroneEnv:
         import gym
 
         self.num_envs, self.device = num_envs, device
+        self.cfg = dict(DEFAULT_TASK, **task)
+        self.absolute = self.cfg['obs_frame'] == 'absolute'
+        if self.cfg['obs_frame'] not in ('relative', 'absolute'):
+            raise ValueError(f"obs_frame must be relative or absolute, not {self.cfg['obs_frame']!r}")
+        self.num_obs = 21 if self.absolute else 18
+        self.target_set = None
+        if self.cfg['targets'] is not None:
+            self.target_set = torch.tensor(self.cfg['targets'], dtype=torch.float32, device=device).view(-1, 3)
+            ids = self.cfg['target_ids']
+            self.target_pool = torch.tensor(
+                list(range(len(self.target_set))) if ids is None else list(ids), dtype=torch.long, device=device
+            )
         self.observation_space = gym.spaces.Box(-float('inf'), float('inf'), (self.num_obs,))
         self.action_space = gym.spaces.Box(-1.0, 1.0, (self.num_actions,))
-        self.cfg = dict(DEFAULT_TASK, **task)
         self.episode_length = int(self.cfg['episode_length'])
         self.sim = DroneSim(num_envs, device, requires_grad=not no_grad)
         self.no_grad = no_grad
@@ -339,7 +366,11 @@ class DroneEnv:
         c = self.cfg
         k = self.waypoints.shape[1]
         wps = torch.zeros(m, k, 3, device=self.device)
-        wps[:, 0] = self._u((m, 3), c['target_range'])
+        if self.target_set is not None:
+            pick = torch.randint(len(self.target_pool), (m,), device=self.device, generator=self.gen)
+            wps[:, 0] = self.target_set[self.target_pool[pick]]
+        else:
+            wps[:, 0] = self._u((m, 3), c['target_range'])
         for j in range(1, k):
             wps[:, j] = wps[:, j - 1] + self._u((m, 3), c['waypoint_range'])
         pos = wps[:, 0] + self._u((m, 3), c['start_range'])
@@ -374,6 +405,8 @@ class DroneEnv:
         self.body_q, self.body_qd = self.body_q.detach(), self.body_qd.detach()
 
     def obs(self):
+        if self.absolute:
+            return abs_obs_from_state(self.body_q, self.body_qd, self.target)
         return obs_from_state(self.body_q, self.body_qd, self.target)
 
     @property
@@ -395,7 +428,7 @@ class DroneEnv:
             self.body_q, self.body_qd = self.sim.step(self.body_q, self.body_qd, self.actions)
             self.progress_buf += 1
             obs = self.obs()  # relative to the target of the step just taken
-            rew, d = self.reward(obs)
+            rew, d = self.reward(rel_from_abs(obs) if self.absolute else obs)
             rew = torch.where(torch.isfinite(rew), rew, torch.full_like(rew, -3.0))  # diverged to non-finite states
         with torch.no_grad():
             c = self.cfg
@@ -426,15 +459,31 @@ class DroneEnv:
 
 
 class DroneSpec:
-    """Exact observation <-> state map for MENTOR (the whole 18-d observation is the state)."""
+    """Exact observation <-> state map for MENTOR (the whole 18-d observation is the state).
+
+    absolute=True (env 'drone_abs'): 21-d [position, target, R, v, w]; the target is carried through unchanged.
+    """
 
     env_name, obs_dim, act_dim, act_offset = 'drone', 18, 4, 0
 
+    def __init__(self, absolute=False):
+        self.absolute = absolute
+        self.task = {}  # task settings of the configured env (set_task), used by the agent's own envs
+        if absolute:
+            self.env_name, self.obs_dim = 'drone_abs', 21
+
+    def set_task(self, env_cfg):
+        self.task = {k: env_cfg[k] for k in DEFAULT_TASK if k in env_cfg}
+        if self.task.get('targets') is not None:
+            self.task['targets'] = [list(t) for t in self.task['targets']]
+        if self.task.get('target_ids') is not None:
+            self.task['target_ids'] = list(self.task['target_ids'])
+
     def make_env(self, num_envs, device, seed=0, stochastic_init=True, early_termination=True, grad=False, **task):
-        return DroneEnv(num_envs, device, seed=seed, no_grad=not grad, **task)
+        return DroneEnv(num_envs, device, seed=seed, no_grad=not grad, **dict(self.task, **task))
 
     def one_step(self, n, device, counter):
-        return DroneOneStep(n, device, counter)
+        return DroneOneStep(n, device, counter, spec=self)
 
     def to_state(self, env, obs):
         return state_from_obs(obs)
@@ -450,21 +499,27 @@ class DroneOneStep:
     demo steps is a change of target, not of state, and must be removed before inversion).
     """
 
-    def __init__(self, n, device, counter=None, requires_grad=True):
-        self.spec, self.n, self.device, self.counter = DroneSpec(), n, device, counter
+    def __init__(self, n, device, counter=None, requires_grad=True, spec=None):
+        self.spec, self.n, self.device, self.counter = spec or DroneSpec(), n, device, counter
         self.sim = DroneSim(n, device, requires_grad=requires_grad)
 
     def __call__(self, obs, a, grad=True):
         if obs.shape[0] != self.n:
             raise ValueError(f'DroneOneStep built for batch {self.n}, got {obs.shape[0]}')
         with torch.set_grad_enabled(grad and torch.is_grad_enabled()):
-            q, qd = state_from_obs(obs)
+            if self.spec.absolute:  # simulate relative to the target (translation invariance), then shift back
+                target = obs[:, 3:6]
+                q, qd = state_from_obs(rel_from_abs(obs))
+            else:
+                q, qd = state_from_obs(obs)
             q1, qd1 = self.sim.step(q, qd, a)
             if self.counter is not None:
                 if grad:
                     self.counter.fwdbwd += self.n
                 else:
                     self.counter.fwd += self.n
+            if self.spec.absolute:
+                return abs_obs_from_state(torch.cat([q1[:, 0:3] + target, q1[:, 3:7]], -1), qd1, target)
             return self.spec.from_state(None, q1, qd1)
 
 

@@ -6,4 +6,7 @@ env:
   numEnvs: ${resolve_default:64,${...num_envs}}
   env_name: drone
   no_grad: True
+  obs_frame: relative  # relative | absolute (goal-matching test: [position, target, R, v, w])
+  targets: null  # finite target set [[x, y, z], ...] (null: uniform in target_range)
+  target_ids: null  # indices of targets the resets sample from
 env_autoresets: True

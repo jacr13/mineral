@@ -91,6 +91,8 @@ mentor:
     effort_kind: activation
     smooth_weight: 0.0  # > 0: penalise sum_k ||u_k - u_{k-1}||^2 within the plan
     ignore_dims: ""  # observation coordinates the teacher ignores (window matching and cost), e.g. "45-52"
+    match_dims: ""  # goal-matched mentor: goal coordinates ('a-b' = a..b-1, e.g. "3-6"); windows only from demos with the learner's goal
+    match_tol: 1e-4
     batch: 340
     batches_per_round: 6
 

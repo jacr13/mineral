@@ -1,0 +1,36 @@
+# Goal-matched mentor test (ICML plan X2b, Joao's proposal 2026-11-16): absolute-frame drone, finite target set.
+# 12 targets (fixed seed); training and in-run evaluation on the 8 seen ones (target_ids), held-out 8-11 evaluated
+# separately. Demo i flies to seen target i % 8: n_trajs 8 = one demo per target, 32 = four.
+# Mentor variants: default (nearest demo window), teacher.match_dims="3-6" (only demos with the learner's target).
+task:
+  name: Drone
+  env:
+    env_name: drone_abs
+    obs_frame: absolute
+    targets: [[0.1397, -1.2048, 0.6368], [0.6276, -1.0690, -0.2998], [-1.1717, 0.5189, -0.5387], [1.4051, 1.4198, 0.2037], [-0.8526, -1.1747, -0.2196], [-0.5629, 0.8815, -1.7078], [1.8797, -1.5689, 1.5315], [-0.3473, 1.0288, 0.7794], [0.0837, 0.3729, 1.5188], [0.5144, 1.0611, -1.5471], [1.4238, 0.6883, 0.5066], [0.2763, 0.9749, 1.8369]]
+    target_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    demos:
+      path: "experts/demos/Warp_DroneAbs_demos128_return251_len300.pt"
+      n_trajs: 8
+    teacher:
+      anchor_mix: 0.5
+    gate:
+      tau: 1000000000
+      quantile: 0
+    augment:
+      replay_batches: 12
+      replay_steps: 16
+      replay_noise: 0.2
+logdir: "workdir/DroneAbs-MENTOR/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120]
+
+spawner:
+  runtime: "4h"
