@@ -34,6 +34,9 @@ ild:
   bootstrap_iters: 1000
   bootstrap_invert:  # Stage I settings (as MENTOR b0)
     iters: 20
+    param: box  # box | tanh (SNU)
+    reg: 0.0
+    fd_step: 0.01
     jacobian: broyden
     refresh_jacobian: autodiff
     refresh: 0
