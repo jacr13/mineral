@@ -524,6 +524,9 @@ class RejoinTeacher:
             raise ValueError(f'unknown teacher effort_kind {self.effort_kind!r}')
         self.smooth = float(cfg.get('smooth_weight', 0.0))
         self.offsets = torch.tensor(list(cfg.phase_offsets), device=device)
+        # Partial rejoin (rejoin_alpha < 1): the target is the demo window's motion started from the learner's state,
+        # s_{j+K} + (1 - alpha) (x - s_j); alpha = 1 rejoins the demo itself, alpha = 0 only copies its motion.
+        self.alpha = float(cfg.get('rejoin_alpha', 1.0))
         N, T, D = S.shape
         self.N, self.T, self.D = N, T, D
         valid = torch.arange(T, device=device)[None] < lengths[:, None]
@@ -619,11 +622,18 @@ class RejoinTeacher:
                 outside = outside + (((self.lo - y).clamp_min(0) + (y - self.hi).clamp_min(0)) * self.w).pow(2).sum(-1)
         return y, outside
 
-    def cost(self, rolled, a, traj, j, a_ref):
-        y, outside = rolled
+    def targets(self, traj, j, x=None):
+        """Rejoin targets (n, offsets, D): the demo state K steps after each window start, per phase offset."""
         idx = j[:, None] + self.K - 1 + self.offsets[None]
         idx = torch.minimum(idx.clamp_min(0), (self.lengths[traj] - 1)[:, None])
         target = self.S1[traj[:, None], idx]
+        if self.alpha < 1.0 and torch.is_tensor(x):
+            target = target + (1.0 - self.alpha) * (x - self.S[traj, j])[:, None]
+        return target
+
+    def cost(self, rolled, a, traj, j, a_ref, x=None):
+        y, outside = rolled
+        target = self.targets(traj, j, x)
         err = (((y[:, None] - target) * self.w) ** 2).sum(-1).min(-1).values
         c = err + self.lam * ((a - a_ref) ** 2).sum((-1, -2)) + self.barrier * outside
         if self.effort > 0:
@@ -646,7 +656,7 @@ class RejoinTeacher:
             # the last pass is forward-only: a DFlex step recorded with grad=True must be back-propagated (tape leak)
             last = it == self.iters or stop
             with torch.set_grad_enabled(not last):
-                c = self.cost(self.rollout(sim, x, a, grad=not last), a, traj, j, a_ref)
+                c = self.cost(self.rollout(sim, x, a, grad=not last), a, traj, j, a_ref, x)
             with torch.no_grad():
                 better = c < best
                 best = torch.where(better, c.detach(), best)
@@ -675,7 +685,7 @@ class RejoinTeacher:
         a_ref_all = self.a_ref(traj_all, j_all)
         if self.screen:
             with torch.no_grad():
-                c0 = self.cost(self.rollout(self.sim_all, xr, a_ref_all, grad=False), a_ref_all, traj_all, j_all, a_ref_all)
+                c0 = self.cost(self.rollout(self.sim_all, xr, a_ref_all, grad=False), a_ref_all, traj_all, j_all, a_ref_all, xr)
             sel = c0.view(n, m).argmin(1)
             traj, jj = top[ar, sel], j[ar, sel]
             a_ref = self.a_ref(traj, jj)
@@ -694,10 +704,8 @@ class RejoinTeacher:
         self.last_choice = (x, plan, top[ar, sel], j[ar, sel])
         return plan[:, 0], best.view(n, m)[ar, sel]
 
-    def terminal_error(self, y, traj, j):
-        idx = j[:, None] + self.K - 1 + self.offsets[None]
-        idx = torch.minimum(idx.clamp_min(0), (self.lengths[traj] - 1)[:, None])
-        return (((y[:, None] - self.S1[traj[:, None], idx]) * self.w) ** 2).sum(-1).min(-1).values
+    def terminal_error(self, y, traj, j, x=None):
+        return (((y[:, None] - self.targets(traj, j, x)) * self.w) ** 2).sum(-1).min(-1).values
 
     @torch.no_grad()
     def advantage(self, policy):
@@ -715,7 +723,7 @@ class RejoinTeacher:
         for k in range(self.K):
             y_t = self.sim_eval(y_t, plan[:, k], grad=False)
             y_p = self.sim_eval(y_p, policy(y_p), grad=False)
-        return self.terminal_error(y_t, traj, j), self.terminal_error(y_p, traj, j)
+        return self.terminal_error(y_t, traj, j, x), self.terminal_error(y_p, traj, j, x)
 
 
 class SampleTeacher(RejoinTeacher):
@@ -751,7 +759,7 @@ class SampleTeacher(RejoinTeacher):
             xr = x[:, None].expand(n, m, self.D).reshape(-1, self.D)
             traj_all, j_all = top.reshape(-1), j.reshape(-1)
             a_all = self.a_ref(traj_all, j_all)
-            c0 = self.cost(self.rollout(self.sim_all, xr, a_all, grad=False), a_all, traj_all, j_all, a_all)
+            c0 = self.cost(self.rollout(self.sim_all, xr, a_all, grad=False), a_all, traj_all, j_all, a_all, xr)
             sel = c0.view(n, m).argmin(1)
             traj, jj = top[ar, sel], j[ar, sel]
         else:
@@ -759,7 +767,7 @@ class SampleTeacher(RejoinTeacher):
         a_demo = self.a_ref(traj, jj)
         a_ref = self.anchored(self.sim_sample, x, a_demo) if self.anchor_policy is not None else a_demo
         def cost(a):
-            return self.cost(self.rollout(self.sim_sample, x, a, grad=False), a, traj, jj, a_ref)
+            return self.cost(self.rollout(self.sim_sample, x, a, grad=False), a, traj, jj, a_ref, x)
 
         best_a, best_c = a_ref, cost(a_ref)
         c_demo = cost(a_demo)

@@ -83,6 +83,7 @@ mentor:
     lr: 0.2
     action_reg: 0.05
     phase_offsets: [-2, -1, 0, 1, 2, 3, 4, 5, 6]
+    rejoin_alpha: 1.0  # < 1: partial rejoin, target s_{j+K} + (1 - alpha) (x - s_j) (follow the demo's motion from x)
     support_barrier: 0.0  # > 0: penalise planned states outside the demos' per-coordinate range
     support_margin: 0.5  # widen that range by this many demo standard deviations
     anchor_mix: 0.0  # > 0: regularise plans towards the policy's closed-loop actions (1 = policy only, 0 = demo only)
