@@ -1,0 +1,45 @@
+# MENTOR, frozen ICML configuration (X1, D1 approved 2026-11-16): Humanoid, 8 demos.
+# Same mechanisms on every DFlex task; per-task values (Stage I iterations / parametrisation, teacher horizon, gate)
+# are reported in the paper's appendix. Source groups: `icml x1s0`, `icml x1s1` (mentor_icml/results/REPORT.md).
+task:
+  name: DFlex
+  env:
+    env_name: humanoid
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    demos:
+      path: "experts/demos/DFlex_humanoid_demos128_return8116_len984.pt"
+      n_trajs: 8
+    invert:
+      jacobian: broyden
+      refresh_jacobian: autodiff
+      refresh: 0
+      iters: 20
+      starts: 1
+    teacher:
+      anchor_mix: 0.5
+      batches_per_round: 9
+      horizon: 16
+    gate:
+      # no gate (threshold above every cost)
+      tau: 1000000000
+      quantile: 0
+    rollout:
+      length: 120
+      reset_every: 60
+      noise: 0.2
+    augment:
+      replay_batches: 12
+      replay_steps: 16
+      replay_noise: 0.2
+logdir: "workdir/DFlexHumanoid-MENTOR-icml/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "6h"

@@ -1424,6 +1424,10 @@ class MENTOR(Agent):
         batch = int(cfg.batch)
         n_batches = int(cfg.batches_per_round) if n_batches is None else n_batches
         need = batch * n_batches
+        if need == 0:  # no labels on visited states (ablation: labels on demo-derived states only)
+            self.last_label_index = torch.zeros(0, dtype=torch.long, device=self.device)
+            self.last_label_k = torch.zeros(0, dtype=torch.long, device=self.device)
+            return visited[:0], visited.new_zeros(0, self.A_hat.shape[-1]), visited.new_zeros(0)
         if visited.shape[0] < need:
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]

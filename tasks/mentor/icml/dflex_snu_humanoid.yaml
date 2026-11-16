@@ -1,0 +1,49 @@
+# MENTOR, frozen ICML configuration (X1, D1 approved 2026-11-16): SNU Humanoid, 8 demos.
+# Same mechanisms on every DFlex task; per-task values (Stage I iterations / parametrisation, teacher horizon, gate)
+# are reported in the paper's appendix. Source groups: `icml x1s0`, `icml x1s1` (mentor_icml/results/REPORT.md).
+task:
+  name: DFlex
+  env:
+    env_name: snu_humanoid
+agent:
+  name: MENTOR/DFlex
+  mentor:
+    rounds: 12
+    demos:
+      path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+      n_trajs: 8
+    invert:
+      # 152 muscles for 18 dofs: unbounded tanh parametrisation, small minimum-norm regulariser,
+      # exact Jacobian refreshed every 5 iterations
+      param: tanh
+      reg: 0.0001
+      iters: 60
+      batch: 1000
+      jacobian: broyden
+      refresh_jacobian: autodiff
+      refresh: 5
+    teacher:
+      anchor_mix: 0.5
+      batches_per_round: 9
+      horizon: 12
+      action_reg: 0.005
+    gate:
+      tau: 10.0
+      quantile: 0.8
+    rollout:
+      length: 120
+      reset_every: 60
+      noise: 0.2
+    augment:
+      replay_batches: 12
+      replay_steps: 16
+      replay_noise: 0.2
+logdir: "workdir/DFlexSNUHumanoid-MENTOR-icml/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "6h"
