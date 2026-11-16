@@ -1,0 +1,21 @@
+# ILD as in the paper (agent ILD/DFlex, mode paper), 8 demos, 64 envs, 20M env steps (312 whole-episode iterations).
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+    numEnvs: 64
+agent:
+  name: ILD/DFlex
+  shac:
+    max_agent_steps: 20000000
+  ild:
+    demos:
+      path: experts/demos/DFlex_hopper_demos128_return4812_len1000.pt
+      n_trajs: 8
+logdir: workdir/DFlexHopper-ILDpaper/$(date +%Y%m%d-%H%M%S.%2N)
+run: train_eval
+seed: 100
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+spawner:
+  runtime: 12h

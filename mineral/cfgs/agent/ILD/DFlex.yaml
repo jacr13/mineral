@@ -1,0 +1,40 @@
+# ILD as in the paper (Chen et al., CVPR 2023; github.com/sail-sg/ILD, policy/brax_task/train_multi_traj.py defaults):
+# whole-episode rollouts from a reset, gradient cut every 10 steps, per-step gradient norm <= 1, Chamfer on simulator
+# states with the best demo per env, Adam 1e-3 -> 1e-5, global clip 0.3, policy MLP 512-256 swish (SiLU), tanh-Gaussian.
+# Without the paper's tanh on the loss. bootstrap: stage1 = the paper's BC warm start on Stage I recovered actions.
+defaults:
+  - /agent/SHAC/DFlexAnt@_here_
+  - _self_
+
+algo: ILD
+
+network:
+  actor_kwargs:
+    mlp_kwargs:
+      units: [512, 256]
+      norm_type: null
+      act_type: SiLU
+  tanh_clamp: True
+
+ild:
+  mode: paper  # paper | window (earlier SHAC-window variant)
+  demos:
+    path: ""
+    n_trajs: 8
+    subsample_factor: 1
+  loss_state: True  # Chamfer features: state part of the observation (the paper compares simulator states)
+  episode_len: 0  # 0 = the env's episode length
+  trunc_len: 10
+  step_grad_norm: 1.0
+  max_grad_norm: 0.3
+  lr: 1e-3
+  min_lr: 1e-5
+  deviation_factor: 1.0
+  bootstrap: none  # none | stage1
+  bootstrap_iters: 1000
+  bootstrap_invert:  # Stage I settings (as MENTOR b0)
+    iters: 20
+    jacobian: broyden
+    refresh_jacobian: autodiff
+    refresh: 0
+    batch: 2000
