@@ -94,11 +94,34 @@ def mcp_inputs(values):
     return inputs
 
 
+# Inputs shipped with the run itself: local files copied into the export under attached/<relative>, uploaded by the
+# supervisor with job.sbatch, and bound read-only at /workspace/<relative>. Expanded by the job's shell.
+ATTACHED = '${RUN_ROOT}/attached/'
+
+
+def attached_inputs(values):
+    """--attach_input relative/path=local/path -> ({relative: ATTACHED + relative}, {relative: local Path})."""
+    inputs, local = {}, {}
+    for value in values or []:
+        relative, separator, source = value.partition('=')
+        if not separator or not re.fullmatch(r'[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*', relative) or any(
+            part in ('.', '..') for part in relative.split('/')
+        ):
+            raise ValueError('--attach_input must be relative/path=local/path (no traversal)')
+        path = Path(source).expanduser().resolve()
+        if not path.exists():
+            raise ValueError(f'--attach_input: {path} does not exist')
+        inputs[relative], local[relative] = ATTACHED + relative, path
+    return inputs, local
+
+
 def shell_path(value, suffix=''):
-    """Shell word for an input path: quoted, or expanded from MCP_RUNS_DIR for --mcp_input."""
+    """Shell word for an input path: quoted, or expanded from MCP_RUNS_DIR / RUN_ROOT for --mcp_input / --attach_input."""
     if value.startswith(MCP_INPUTS):
         # mcp_inputs() restricts the relative part to [A-Za-z0-9_./-], safe inside double quotes
         return '"${MCP_RUNS_DIR:?MCP_RUNS_DIR is set by the cluster supervisor}/inputs/' + value[len(MCP_INPUTS) :] + suffix + '"'
+    if value.startswith(ATTACHED):  # same character restriction (attached_inputs)
+        return '"$RUN_ROOT/attached/' + value[len(ATTACHED) :] + suffix + '"'
     return shlex.quote(value + suffix)
 
 
@@ -166,8 +189,11 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
     return '\n'.join(lines)
 
 
-def write_export(state_dir, name, run_id, script, config, metadata, enqueue=False):
-    """Previews are inert. Enqueue publishes a complete directory before its manifest."""
+def write_export(state_dir, name, run_id, script, config, metadata, enqueue=False, attachments=None):
+    """Previews are inert. Enqueue publishes a complete directory before its manifest.
+
+    ``attachments`` {relative: local path}: copied (symlinks resolved) to attached/<relative> in the export.
+    """
     root = Path(state_dir).expanduser().resolve()
     parent = root / ('incoming' if enqueue else 'previews')
     parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +209,13 @@ def write_export(state_dir, name, run_id, script, config, metadata, enqueue=Fals
                         config_sha256=hashlib.sha256(config_text.encode()).hexdigest(),
                         script_sha256=hashlib.sha256(script.encode()).hexdigest())
         (temporary / 'run.json').write_text(json.dumps(metadata, indent=2) + '\n')
+        for relative, source in (attachments or {}).items():
+            dest = temporary / 'attached' / relative
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if Path(source).is_dir():
+                shutil.copytree(source, dest, symlinks=False)
+            else:
+                shutil.copy2(source, dest)
         # Flush payloads before publishing the ready marker.
         for path in temporary.rglob('*'):
             if path.is_file():

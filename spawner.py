@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from mineral.common.cluster_jobs import (
+    attached_inputs,
     bootstrap,
     cluster_inputs,
     managed_source,
@@ -452,10 +453,14 @@ def run(args):
         commit, dirty = source_revision(args.git_commit)
         inputs = cluster_inputs(args.cluster_input)
         # Default: demos from <root>/inputs/experts/demos on the cluster (the root reaches jobs as MCP_RUNS_DIR)
-        managed = mcp_inputs(args.mcp_input or ([] if args.cluster_input else ['experts/demos']))
+        managed = mcp_inputs(args.mcp_input or ([] if args.cluster_input or args.attach_input else ['experts/demos']))
         if set(managed) & set(inputs):
             raise ValueError('An input path is given both with --cluster_input and --mcp_input')
         inputs.update(managed)
+        attached, attachments = attached_inputs(args.attach_input)
+        if set(attached) & set(inputs):
+            raise ValueError('An input path is given twice (--attach_input and --cluster_input / --mcp_input)')
+        inputs.update(attached)
         # Without --cluster_repo the supervisor clones <repo>_<branch> under its cluster root.
         git_source = None if args.cluster_repo else managed_source(
             commit, args.git_remote, args.git_branch, require_pushed=args.enqueue
@@ -567,7 +572,7 @@ def run(args):
                 continue
             setattr(effective_args, key, value)
         if supervisor_dir:
-            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'priority', 'uv_update'):
+            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'attach_input', 'priority', 'uv_update'):
                 if getattr(effective_args, key) != getattr(args, key):
                     raise ValueError(f'Supervisor option {key} must be supplied on the command line, not overridden by the task')
         if effective_args.runtime is None:
@@ -678,7 +683,7 @@ def run(args):
                     task_file=str(config_path), training_outputs='results/', slurm_logs='out/',
                 )
                 exported = write_export(supervisor_dir, submission_name, run_id, script_path.read_text(),
-                                        effective_config, metadata, enqueue=args.enqueue)
+                                        effective_config, metadata, enqueue=args.enqueue, attachments=attachments)
                 print(f'{"Enqueued" if args.enqueue else "Preview"} run {run_id}: {exported}')
             created_scripts.append(script_path)
             if effective_args.cleanup:
@@ -751,6 +756,8 @@ if __name__ == "__main__":
     parser.add_argument('--mcp_input', action='append', default=[], help='Read-only input from the supervisor root on the '
                         'cluster: relative/path -> $MCP_RUNS_DIR/inputs/relative/path. Default without any input '
                         'option: experts/demos')
+    parser.add_argument('--attach_input', action='append', default=[], help='Read-only input shipped with the run: '
+                        'relative/path=local/path is copied into the export and bound at /workspace/relative/path')
     parser.add_argument('--priority', type=int, default=40, help='Supervisor submission priority, 0–100')
     boolean_flag(parser, 'enqueue', default=False, help='Publish supervisor exports to incoming instead of inert previews')
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
