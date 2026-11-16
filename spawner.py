@@ -56,7 +56,7 @@ CALIBERS = [
         },
     },
 ]
-SBATCH_GPU = "#SBATCH --gres=gpu:1{extra_gpu_params}"
+SBATCH_GPU = "#SBATCH --gres=gpu:{gpu_type}1{extra_gpu_params}"
 SBATCH_GPU_MEMORY = ",VramPerGpu:{gpu_memory}G"
 SBATCH_CONSTRAINT = "#SBATCH --constraint={gpu_constraint}"
 
@@ -414,7 +414,8 @@ def _write_slurm_script(script_path, name, command, args):
     if args.gpu_memory is not None:
         extra_gpu_params += SBATCH_GPU_MEMORY.format(gpu_memory=args.gpu_memory)
 
-    extra_params = SBATCH_GPU.format(extra_gpu_params=extra_gpu_params) if args.device == "gpu" else ""
+    gpu_type = f"{args.gpu_type}:" if getattr(args, "gpu_type", None) else ""
+    extra_params = SBATCH_GPU.format(gpu_type=gpu_type, extra_gpu_params=extra_gpu_params) if args.device == "gpu" else ""
     if args.gpu_constraint:
         extra_params += "\n" + SBATCH_CONSTRAINT.format(gpu_constraint=args.gpu_constraint)
 
@@ -738,6 +739,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--memory", type=str, default="8", help="specify the cpu memory in gb")
     parser.add_argument("--gpu_memory", type=str, default=None, help="specify the gpu memory in gb")
+    parser.add_argument("--gpu_type", type=str, default=None, help="Slurm GRES GPU type, e.g. nvidia_geforce_rtx_3090 (same GPU for timing runs)")
     parser.add_argument(
         "--gpu_constraint",
         type=str,
