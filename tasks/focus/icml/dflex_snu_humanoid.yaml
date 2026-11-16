@@ -1,0 +1,44 @@
+# FOCUS-OT as used in the paper's comparison (the earlier runs behind the FOCUS row: SAPO base, OT with L2 cost,
+# learned 64-d loss features, critic reward shaping with exp mapping). Settings are explicit here, not in a sweep
+# block, because `--set seed` replaces the sweep. Reproduced 2026-11-16 (icml focussanity: Ant 0.95 at 4.9 M steps).
+task:
+  name: DFlex
+  env:
+    env_name: snu_humanoid
+agent:
+  name: FOCUS/DFlexAntSAPO
+  shac:
+    max_epochs: 50000
+    max_agent_steps: 15000000
+  focus:
+    demos:
+      path: "experts/demos/DFlex_snu_demos128_return6246_len929.pt"
+      n_trajs: 8
+    loss_best_of_k_k: 8
+    critic_disabled: false
+    critic_reward_shapping: true
+    critic_reward_mapping: exp
+    critic_reward_normalize: false
+    imitation_loss_type: ot
+    loss_ot_cost_type: l2
+    loss_use_huber_speedup: false
+    loss_use_detached_prev_obs: false
+    loss_mlp_features_dim: 64
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: "workdir/DFlexSNUHumanoid-FOCUS-icml/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "12h"
