@@ -1,0 +1,17 @@
+# X9 stage 3a: MENTOR's mentor alone as a receding-horizon tracker of the LAFAN1 G1 clips on NablaEngine
+# (scripts/x9_nabla/rhc_track.py). Needs mineral_nabla.sif and the 40 LAFAN1 G1 CSVs attached at data/lafan1_g1
+# (--attach_input data/lafan1_g1=<local dir>; CC BY-NC-ND, never committed). Options go in script_args per launch.
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: MENTOR/DFlex
+script: scripts/x9_nabla/rhc_track.py
+script_args: "--csv_dir data/lafan1_g1 --mode windows --out ${logdir}/rhc_track.json"
+logdir: "workdir/X9-rhc/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train
+seed: 100
+
+spawner:
+  runtime: "2h"

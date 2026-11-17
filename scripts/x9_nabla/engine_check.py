@@ -40,7 +40,7 @@ def batch(n, start=0):
 qpos, qvel, warm, ctrl, fr, com = batch(256)
 o1 = torch_ffi.step(qpos, qvel, warm, ctrl, fr, com)
 o2 = torch_ffi.step(qpos.clone(), qvel.clone(), warm.clone(), ctrl.clone(), fr, com)
-report['reset_bitwise_equal'] = bool(all(torch.equal(a, b) for a, b in zip(o1, o2)))
+report['reset_bitwise_equal'] = bool(all(torch.equal(a, b) for a, b in zip(o1, o2, strict=False)))
 print('reset bitwise equal:', report['reset_bitwise_equal'])
 
 # 2. gradient vs central finite differences (float32: compare directions and relative errors)
