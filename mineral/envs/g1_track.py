@@ -25,6 +25,8 @@ W = {'body_pos': 1.0, 'body_ori': 1.0, 'body_lin_vel': 1.0, 'body_ang_vel': 1.0,
 TERMS = tuple(W)
 MAX_REWARD = DT * sum(W[k] for k in ("body_pos", "body_ori", "body_lin_vel", "body_ang_vel", "root_pos", "root_ori"))
 OMEGA = 10 * 2.0 * math.pi
+HIST, FUTURE, PROPRIO_DIM, GOAL_FRAME_DIM, ANCHOR_ORI_DIM = 10, 10, 93, 68, 6
+SCALE = {'joint_vel': 1 / 5.0, 'ang_vel': 1 / 2.0}
 Q0 = {"hip_pitch": -0.312, "knee": 0.669, "ankle_pitch": -0.363, "elbow": 0.6,
       "left_shoulder_roll": 0.2, "right_shoulder_roll": -0.2, "shoulder_pitch": 0.2}
 
@@ -114,6 +116,13 @@ class G1Track:
         self.body_ids = t([m.body(n).id for n in BM_BODIES], torch.long)
         self.anchor_k = BM_BODIES.index(ANCHOR)
         self.root_com_id = int(m.body_rootid[m.body("pelvis").id])
+        self.torso_id = m.body(ANCHOR).id
+        # policy observation pieces (NablaMimic TrackingEnv: proprio, _goal_features, goal's anchor orientation)
+        rq = self.ref_qpos[:, 3:7]
+        lin_h = rotate(self.ref_qvel[:, :3], quat_inv(yaw_quat(rq)))
+        self.goal_feat = torch.cat([self.ref_qpos[:, 7:] - self.q0, self.ref_qvel[:, 6:] * SCALE['joint_vel'],
+                                    gravity_b(rq), self.ref_qvel[:, 3:6] * SCALE['ang_vel'], lin_h,
+                                    self.ref_qpos[:, 2:3]], -1)
 
     # ------------------------------------------------------------ frames and states
     def next_frame(self, f, k=1):
@@ -134,6 +143,29 @@ class G1Track:
         fr, com = self.world(qpos.shape[0])
         return self.ffi.step(qpos.contiguous(), qvel.contiguous(), warm.contiguous(), ctrl.contiguous(), fr, com,
                              iterations=self.iterations, kinematics=kinematics)
+
+    # ------------------------------------------------------------ policy observation (NablaMimic, no noise)
+    def proprio(self, q, v, prev_a):
+        """Proprioception (B, 93).
+
+        Joint angles - q0, scaled joint velocities, scaled root angular velocity, gravity in the root frame, previous
+        action.
+        """
+        return torch.cat([q[:, 7:] - self.q0, v[:, 6:] * SCALE['joint_vel'], v[:, 3:6] * SCALE['ang_vel'],
+                          gravity_b(q[:, 3:7] / q[:, 3:7].norm(dim=-1, keepdim=True)), prev_a], -1)
+
+    def goal_ref(self, f):
+        """(B, FUTURE * 68): features of the next FUTURE reference frames (held at the clip end)."""
+        idx = torch.minimum(f[:, None] + torch.arange(FUTURE, device=self.device), self.last[f][:, None])
+        return self.goal_feat[idx].reshape(f.shape[0], -1)
+
+    def anchor_ori(self, torso_quat, f):
+        """(B, 6): the reference torso orientation in the robot torso frame, first two rotation-matrix columns."""
+        e = quat_mul(quat_inv(torso_quat), self.ref_body_quat[f, self.anchor_k])
+        w, x, y, z = e.unbind(-1)
+        c0 = torch.stack([1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y)], -1)
+        c1 = torch.stack([2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)], -1)
+        return torch.cat([c0, c1], -1)
 
     # ------------------------------------------------------------ partial inversion of the reference (Stage I)
     def invert(self, frames, iters=8, damping=1e-2, w_vel=0.1, chunk=4096):

@@ -67,6 +67,7 @@ frames = rng.integers(0, nf - 1, args.n)
 frames = np.minimum(frames, sub['last'][frames])
 d = mujoco.MjData(m)
 fields = {k: [] for k in ('qpos', 'xpos', 'xquat', 'cvel', 'subtree_com')}
+fields_qvel = []
 for i, f in enumerate(frames):
     q, v = sub['qpos'][f].astype(np.float64).copy(), sub['qvel'][f].astype(np.float64).copy()
     s = 0.0 if i < 4 else (1.0 if i < args.n // 2 else 3.0)  # 4 exact reference states, then small and large perturbations
@@ -83,6 +84,7 @@ for i, f in enumerate(frames):
     mujoco.mj_kinematics(m, d)
     mujoco.mj_comPos(m, d)
     mujoco.mj_comVel(m, d)
+    fields_qvel.append(d.qvel.copy())
     fields['qpos'].append(d.qpos.copy())
     fields['xpos'].append(d.xpos.copy())
     fields['xquat'].append(d.xquat.copy())
@@ -125,5 +127,24 @@ for i, n in enumerate(g1_track.TERMS):
 print('termination agree:', bool((my_term == ref_term).all()), f'({int(ref_term.sum())} of {args.n} terminated)')
 print('exact reference states, tracking terms / max:', (my_terms[:4, :6].sum(1) / g1_track.MAX_REWARD).round(4))
 ok &= bool((my_term == ref_term).all())
+
+# policy observation pieces (no noise, no encoder bias): proprioception, future reference features, anchor orientation
+def obs_one(qpos, qvel, xpos, xquat, cvel, scom, f, ap):
+    dx = env.d0.replace(qpos=qpos, qvel=qvel, xpos=xpos, xquat=xquat, cvel=cvel, subtree_com=scom)
+    xi = env.sample_xi(jax.random.PRNGKey(0))
+    return env.proprio(dx, xi, ap), env.goal_ref(f), env._anchor_rel(dx, f)[nm_env.GOAL_ANCHOR]
+
+
+qvel_states = torch.as_tensor(np.asarray(fields_qvel, np.float32))
+ref_obs = [np.asarray(x) for x in jax.vmap(obs_one)(
+    jnp.asarray(F['qpos']), jnp.asarray(qvel_states.numpy()),
+    *(jnp.asarray(F[k]) for k in ('xpos', 'xquat', 'cvel', 'subtree_com')), jnp.asarray(frames, jnp.int32),
+    jnp.asarray(a_prev))]
+my_obs = [mine.proprio(T['qpos'], qvel_states, torch.as_tensor(a_prev)).numpy(), mine.goal_ref(ft).numpy(),
+          mine.anchor_ori(T['xquat'][:, mine.torso_id], ft).numpy()]
+for name, x, y in zip(('proprio', 'goal_ref', 'anchor_ori'), my_obs, ref_obs, strict=True):
+    d = np.abs(x - y).max()
+    print(f'{name:13s} max |diff| {d:.3e}  (max |value| {np.abs(y).max():.3e})')
+    ok &= d <= 1e-4 * max(np.abs(y).max(), 1.0)
 print('PORT OK' if ok else 'PORT MISMATCH')
 sys.exit(0 if ok else 1)

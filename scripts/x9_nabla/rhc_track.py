@@ -26,6 +26,7 @@ import numpy as np
 import torch
 
 from mineral.envs import g1_ref
+from mineral.envs.g1_mentor import Mentor, MentorConfig
 from mineral.envs.g1_track import MAX_REWARD, TERMS, G1Track, W
 
 p = argparse.ArgumentParser()
@@ -157,64 +158,12 @@ if args.init == 'invert':
           f'p10/p50/p90 {qs[0]:.3f}/{qs[1]:.3f}/{qs[2]:.3f}, mean |a*| {inv["action_abs_mean"]:.2f}', flush=True)
 
 # ---------------------------------------------------------------- planner
-wj = torch.full((env.nu,), args.w_joint, device=dev)
-
-
-def state_cost(q, v, f):
-    r, rv = env.ref_qpos[f], env.ref_qvel[f]
-    quat = q[:, 3:7] / q[:, 3:7].norm(dim=-1, keepdim=True)
-    c = (wj * (q[:, 7:] - r[:, 7:]) ** 2).sum(-1)
-    c = c + args.w_jvel * ((v[:, 6:] - rv[:, 6:]) ** 2).sum(-1)
-    c = c + args.w_z * (q[:, 2] - r[:, 2]) ** 2 + args.w_xy * ((q[:, :2] - r[:, :2]) ** 2).sum(-1)
-    c = c + args.w_ori * 4.0 * (1.0 - (quat * r[:, 3:7]).sum(-1) ** 2)
-    c = c + args.w_rvel * ((v[:, :6] - rv[:, :6]) ** 2).sum(-1)
-    return c
-
-
-def plan_cost(q, v, w, f, delta, u_prev):
-    """Total planning cost (B,) of the residual plan delta (B, K, nu) from state (q, v, w) at frame f.
-
-    u_prev: the last applied setpoint (start of the setpoint-change term).
-    """
-    cost = 0.0
-    for k in range(args.K):
-        fk = env.next_frame(f, k)
-        u = env.ref_qpos[env.next_frame(fk), 7:] + env.action_scale * delta[:, k]
-        if args.w_rate:
-            cost = cost + args.w_rate * (((u - u_prev) / env.action_scale) ** 2).sum(-1)
-            u_prev = u
-        ctrl = torch.clamp(u, env.ctrl_lo, env.ctrl_hi)
-        q, v, w = env.step(q, v, w, ctrl)
-        wk = 1.0 if k == args.K - 1 else args.w_run
-        if wk:
-            cost = cost + wk * state_cost(q, v, env.next_frame(f, k + 1))
-    if args.w_act:
-        cost = cost + args.w_act * (delta ** 2).mean((1, 2))
-    return cost
+mentor = Mentor(env, MentorConfig.from_args(args))
 
 
 def plan(q, v, w, f, delta, u_prev):
-    """Adam on the residual plan; returns the best iterate per world (by its own cost) and its cost."""
-    best = delta.clone()
-    with torch.no_grad():
-        best_cost = plan_cost(q, v, w, f, delta, u_prev)
-    x = delta.clone().requires_grad_(True)
-    opt = torch.optim.Adam([x], lr=args.lr)
-    for _ in range(args.iters):
-        c = plan_cost(q, v, w, f, x, u_prev)
-        cd = c.detach()
-        better = cd < best_cost
-        best[better], best_cost = x.detach()[better], torch.where(better, cd, best_cost)
-        opt.zero_grad(set_to_none=True)
-        c.sum().backward()
-        x.grad.nan_to_num_(0.0, 0.0, 0.0)
-        opt.step()
-    if args.iters:
-        with torch.no_grad():
-            cd = plan_cost(q, v, w, f, x, u_prev)
-        better = cd < best_cost
-        best[better], best_cost = x.detach()[better], torch.where(better, cd, best_cost)
-    return best, best_cost
+    best, cost, _ = mentor.plan(q, v, w, f, delta, u_prev)
+    return best, cost
 
 
 # ---------------------------------------------------------------- closed loop

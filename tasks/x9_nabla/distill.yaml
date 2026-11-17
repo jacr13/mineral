@@ -1,0 +1,16 @@
+# X9 stage 3b: a tracker policy distilled from MENTOR's mentor on the LAFAN1 G1 clips (scripts/x9_nabla/distill.py).
+# Needs mineral_nabla.sif and the LAFAN1 G1 CSVs attached at data/lafan1_g1 (CC BY-NC-ND, never committed).
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: MENTOR/DFlex
+script: scripts/x9_nabla/distill.py
+script_args: "--csv_dir data/lafan1_g1 --out ${logdir}/distill.json --save_policy ${logdir}/policy.pt"
+logdir: "workdir/X9-distill/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train
+seed: 100
+
+spawner:
+  runtime: "12h"
