@@ -1473,8 +1473,16 @@ class MENTOR(Agent):
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]
         if select == 'far' and not self.full_state:
             perm = self.demo_distance(visited).topk(need).indices
-        elif select not in ('random', 'far'):
-            raise ValueError(f'teacher.select must be random or far, not {select!r}')
+        elif select == 'curriculum' and not self.full_state:
+            # closest fraction f of the visited states (distance to the nearest demo state), sampled at random; f grows
+            # linearly from select_start in round 1 to 1 in round select_rounds (then the same as random)
+            f0, R = float(cfg.get('select_start', 0.3)), max(1, int(cfg.get('select_rounds', 6)))
+            f = min(1.0, f0 + (1.0 - f0) * (self.round - 1) / max(1, R - 1))
+            n_keep = max(need, int(round(f * visited.shape[0])))
+            close = self.demo_distance(visited).topk(n_keep, largest=False).indices
+            perm = close[torch.randperm(n_keep, device=self.device, generator=self.generator)[:need]]
+        elif select not in ('random', 'far', 'curriculum'):
+            raise ValueError(f'teacher.select must be random, far or curriculum, not {select!r}')
         if self.full_state:  # label the states saved during the rollouts (bank holds exactly `need` of them)
             if self.state_bank is None or self.state_bank[0].shape[0] < need:
                 raise ValueError('full-state MENTOR labels the states saved by collect(); the bank is too small')

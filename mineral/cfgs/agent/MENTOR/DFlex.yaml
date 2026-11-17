@@ -95,7 +95,9 @@ mentor:
     match_tol: 1e-4
     batch: 340
     batches_per_round: 6
-    select: random  # learner states to label: random, or far (farthest from the demonstrations first)
+    select: random  # learner states to label: random | far (farthest first) | curriculum (closest fraction, widening)
+    select_start: 0.3  # curriculum: fraction of the closest visited states in round 1
+    select_rounds: 6  # curriculum: round at which the fraction reaches 1 (all visited states)
 
   # keep a label if its rejoin cost <= max(tau, cost quantile); quantile 0 = fixed tau
   gate:
