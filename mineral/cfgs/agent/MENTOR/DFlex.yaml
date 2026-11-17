@@ -95,6 +95,7 @@ mentor:
     match_tol: 1e-4
     batch: 340
     batches_per_round: 6
+    select: random  # learner states to label: random, or far (farthest from the demonstrations first)
 
   # keep a label if its rejoin cost <= max(tau, cost quantile); quantile 0 = fixed tau
   gate:

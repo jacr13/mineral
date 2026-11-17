@@ -1449,9 +1449,19 @@ class MENTOR(Agent):
         noise = torch.randn(count, demo.shape[1], device=self.device, generator=self.generator)
         return demo[idx] + scale * demo.std(0) * noise
 
+    @torch.no_grad()
+    def demo_distance(self, x, chunk=2048):
+        """Distance of each state to its nearest demo state, in the teacher's weighted metric (no simulation)."""
+        w = self.teacher.w
+        demo = self.S[self.valid] * w
+        return torch.cat([torch.cdist(x[i : i + chunk] * w, demo).min(1).values for i in range(0, x.shape[0], chunk)])
+
     def label(self, visited, n_batches=None):
         cfg = self.mentor_config.teacher
         batch = int(cfg.batch)
+        # teacher.select (learner states only): random, or far = the states farthest from the demonstrations first,
+        # i.e. where the policy has left the data and a label is most informative
+        select = str(cfg.get('select', 'random')) if n_batches is None else 'random'
         n_batches = int(cfg.batches_per_round) if n_batches is None else n_batches
         need = batch * n_batches
         if need == 0:  # no labels on visited states (ablation: labels on demo-derived states only)
@@ -1461,6 +1471,10 @@ class MENTOR(Agent):
         if visited.shape[0] < need:
             raise ValueError(f'rollouts give {visited.shape[0]} states, the teacher needs {need}; raise rollout.length')
         perm = torch.randperm(visited.shape[0], device=self.device, generator=self.generator)[:need]
+        if select == 'far' and not self.full_state:
+            perm = self.demo_distance(visited).topk(need).indices
+        elif select not in ('random', 'far'):
+            raise ValueError(f'teacher.select must be random or far, not {select!r}')
         if self.full_state:  # label the states saved during the rollouts (bank holds exactly `need` of them)
             if self.state_bank is None or self.state_bank[0].shape[0] < need:
                 raise ValueError('full-state MENTOR labels the states saved by collect(); the bank is too small')
