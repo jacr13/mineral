@@ -114,6 +114,14 @@ print(f'{len(env.names)} clips, {NF} frames, {GPU}{" (DRY RUN)" if args.dry_run 
       f'{time.time() - t_start:.0f} s', flush=True)
 
 
+def sim_steps():
+    """Simulator steps: every step call counts its batch size once, forward-only or with a tape.
+
+    Backward passes and tape replays are not steps.
+    """
+    return sum(v for k, v in cost.items() if k != 'stage1_bwd_replays')
+
+
 def com0(n):
     return torch.zeros(n, 3, device=dev)
 
@@ -289,7 +297,7 @@ def run_eval(rnd):
     if args.eval_full:
         e['full'] = evaluate(env.starts.clone(), env.lengths - 1)
     e['seconds'] = time.time() - t
-    e['sim_steps'] = sum(cost.values())
+    e['sim_steps'] = sim_steps()
     e['wall_s'] = time.time() - t_start
     history['evals'].append(e)
     print(f'EVAL round {rnd}: windows return {e["windows"]["norm_return"]:.3f} fell {e["windows"]["failed_frac"]:.3f}'
@@ -343,7 +351,7 @@ for rnd in range(1, args.rounds + 1):
     loss = train(args.sgd_steps)
     r = {'round': rnd, 'labels': labelled, 'falls_per_1k_steps': 1000 * falls / (args.envs * args.rollout),
          'label_cost_ratio_p50': torch.stack(imp).mean().item(), 'loss': loss, 'buffer': buf.size(),
-         'sim_steps': sum(cost.values()), 'seconds': time.time() - tr, 'wall_s': time.time() - t_start}
+         'sim_steps': sim_steps(), 'seconds': time.time() - tr, 'wall_s': time.time() - t_start}
     history['rounds'].append(r)
     print(f'round {rnd}: falls/1k steps {r["falls_per_1k_steps"]:.1f}, label cost / policy plan cost {r["label_cost_ratio_p50"]:.3f}, '
           f'loss {loss:.4f}, {r["seconds"]:.0f} s, sim steps {r["sim_steps"] / 1e6:.1f} M', flush=True)
@@ -355,6 +363,7 @@ for rnd in range(1, args.rounds + 1):
         break
 
 history['cost'] = cost
+history['sim_steps'] = sim_steps()
 history['wall_s'] = time.time() - t_start
 Path(args.out).parent.mkdir(parents=True, exist_ok=True)
 Path(args.out).write_text(json.dumps(history, indent=1))
