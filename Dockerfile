@@ -22,7 +22,7 @@ RUN apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install --no-ins
 RUN groupadd -g "${GROUP_ID}" noroot \
  && useradd -m -u "${USER_ID}" -g "${GROUP_ID}" -s /bin/bash noroot \
  && install -d -o "${USER_ID}" -g "${GROUP_ID}" \
-    /workspace /opt/python /opt/venv /home/noroot/.cache \
+    /workspace /opt/python /opt/venv /opt/nablaengine /home/noroot/.cache \
  && install -d -m 1777 /tmp/.X11-unix
 
 ENV HOME=/home/noroot \
@@ -76,5 +76,23 @@ adjoint.write_text(adjoint.read_text().replace(
 with patch("torch.cuda.is_available", return_value=True):
     import dflex
 PY
+
+# NablaEngine (G1 motion tracking, ICML plan X9): the package comes from uv.lock; its G1 model and reference data live
+# in the repository's fixtures/ (and test states in benchmarks/), so keep a checkout of the same commit.
+ARG NABLAENGINE_REV=31842fb
+RUN git clone -q https://github.com/sailab-ai/NablaEngine.git /opt/nablaengine \
+ && git -C /opt/nablaengine checkout -q "${NABLAENGINE_REV}"
+ENV DK_FIXTURES=/opt/nablaengine/fixtures/mjlab \
+    DK_BENCH_DATA=/opt/nablaengine/benchmarks/data \
+    NVCC=/usr/local/cuda/bin/nvcc \
+    DK_CACHE_DIR=/opt/nablaengine_cache
+# Prebuild the engine's PyTorch library for the cluster's GPU architectures (no GPU needed at build time): Turing
+# (sm_75), A100 (sm_80), RTX 3090 / A5000 / A6000 (sm_86), Ada (sm_89), H100 (sm_90). At run time init() only loads
+# it (the image is read-only). A GPU outside this list: point DK_CACHE_DIR to a writable folder and it is built there.
+USER root
+RUN install -d -o 1000 -g 1000 /opt/nablaengine_cache
+USER 1000:1000
+RUN python -m nablaengine.torch_ffi build --arch sm_75 --arch sm_80 --arch sm_86 --arch sm_89 --arch sm_90 \
+ && ls /opt/nablaengine_cache
 
 CMD ["/bin/bash"]

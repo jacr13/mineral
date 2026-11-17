@@ -14,7 +14,10 @@ dependencies = [
     "jax[cuda12]>=0.11,<0.12; sys_platform == 'linux'",
     "jax>=0.11,<0.12; sys_platform == 'darwin'",
     "matplotlib>=3.10.8,<4.0.0",
-    "mujoco-mjx>=3.14,<4.0.0",
+    # NablaEngine (X9, G1 motion tracking) ships its model in MuJoCo 3.17.0's binary format
+    "mujoco==3.17.0",
+    "mujoco-mjx==3.17.0",
+    "nablaengine",
     "pandas>=2.3.3,<3.0.0",
     "python-dotenv>=1.2.1,<2.0.0",
     "rewarped==1.3.3",
@@ -55,6 +58,7 @@ override-dependencies = ["usd-core>=26.8,<27.0"]
 
 [tool.uv.sources]
 dflex = { git = "https://github.com/jacr13/DiffRL.git", branch = "main" }
+nablaengine = { git = "https://github.com/sailab-ai/NablaEngine.git", rev = "31842fb" }
 torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'linux'" }]
 
 [[tool.uv.index]]
@@ -151,9 +155,9 @@ rm -rf .coverage
 
 # docker
 # --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)
-docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 -t candidj0/mineral:latest ."
+docker_build = "docker build --build-arg USER_ID=1000 --build-arg GROUP_ID=1000 -t candidj0/mineral:nabla ."
 
-docker_push = "docker push candidj0/mineral:latest"
+docker_push = "docker push candidj0/mineral:nabla"
 dbp = ["docker_build", "docker_push"]
 
 docker = """
@@ -166,7 +170,7 @@ docker run \
     -v /etc/timezone:/etc/timezone:ro \
     -v /etc/localtime:/etc/localtime:ro \
     -v .:/workspace \
-    candidj0/mineral:latest bash
+    candidj0/mineral:nabla bash
 """
 
 docker_win = """
@@ -177,7 +181,7 @@ docker run \
     -it \
     -u 1000:1000 \
     -v .:/workspace \
-    candidj0/mineral:latest bash
+    candidj0/mineral:nabla bash
 """
 
 docker_win_su = """
@@ -187,5 +191,5 @@ docker run \
     --env-file .env \
     -it \
     -v .:/workspace \
-    candidj0/mineral:latest bash
+    candidj0/mineral:nabla bash
 """

@@ -1,0 +1,16 @@
+# X9 stage 1: NablaEngine checks (reset, gradient vs finite differences, tape replay, throughput) on one cluster GPU.
+# Needs the image candidj0/mineral:nabla (mineral_nabla.sif); writes engine_check.json into the run's results.
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: MENTOR/DFlex
+script: scripts/x9_nabla/engine_check.py
+script_args: "--out ${logdir}/engine_check.json"
+logdir: "workdir/X9-engine-check/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train
+seed: 100
+
+spawner:
+  runtime: "30m"

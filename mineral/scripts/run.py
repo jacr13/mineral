@@ -203,6 +203,14 @@ if __name__ == '__main__':
     )(lambda x: c.append(x))()
     config = c[0]
 
+    if config.get('script'):  # a standalone script (checks, audits) through the same launcher and job layout
+        import runpy
+        import shlex
+
+        sys.argv = [config.script, *shlex.split(str(config.get('script_args') or ''))]
+        runpy.run_path(config.script, run_name='__main__')
+        sys.exit(0)
+
     task_suite = config.task.get('suite', 'isaacgymenvs')
     if task_suite == 'isaacgymenvs':
         from ..envs.isaacgymenvs import import_isaacgym

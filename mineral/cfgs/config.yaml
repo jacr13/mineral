@@ -71,6 +71,10 @@ run: 'train'  # train | eval | train_eval
 ckpt: ''  # ckpt file to load
 ckpt_keys: ''  # set to '' to load all ckpt keys
 max_runtime: null  # e.g. "2-00:00:00" or "6h"
+# run this Python file (relative to the checkout) with script_args instead of an agent, e.g. engine checks on the
+# cluster (scripts/x9_nabla/engine_check.py); the job's outputs go to logdir
+script: null
+script_args: ''
 
 seed: 42
 torch_deterministic: False  # force the usage of deterministic algorithms in PyTorch
