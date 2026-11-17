@@ -503,7 +503,7 @@ def run(args):
             return str(p).lstrip("./")
 
         allowed_paths = {Path(p) for p in args.env_files}
-        allowed_names = {p.name for p in allowed_paths}
+        allowed_names = {p.name for p in allowed_paths if len(p.parts) == 1}  # bare names only
         allowed_strs = {_norm_str(p) for p in allowed_paths}
         filtered_configs = []
         for cfg in configs:
@@ -513,7 +513,15 @@ def run(args):
             except ValueError:
                 rel = cfg
             rel_str = _norm_str(rel)
-            if cfg.name in allowed_names or _norm_str(cfg) in allowed_strs or rel_str in allowed_strs:
+            # a bare file name selects only files directly in the task folder; files in subfolders (e.g. a frozen
+            # variant set in tasks/<method>/icml/) need their path relative to the task folder, so one name never
+            # launches two task files
+            try:
+                rel_task = _norm_str(cfg.relative_to(task_path.resolve())) if task_path.is_dir() else cfg.name
+            except ValueError:
+                rel_task = None
+            by_name = cfg.name in allowed_names and (not task_path.is_dir() or cfg.parent == task_path.resolve())
+            if by_name or rel_task in allowed_strs or _norm_str(cfg) in allowed_strs or rel_str in allowed_strs:
                 filtered_configs.append(cfg)
         configs = filtered_configs
         if not configs:
