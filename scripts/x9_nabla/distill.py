@@ -62,6 +62,10 @@ p.add_argument('--buffer', type=int, default=262144)
 p.add_argument('--policy_lr', type=float, default=3e-4)
 p.add_argument('--batch', type=int, default=4096)
 p.add_argument('--sgd_steps', type=int, default=200)
+p.add_argument('--grad_clip', type=float, default=1.0, help='global gradient-norm clip of the policy update')
+p.add_argument('--label_max', type=float, default=10.0, help='drop labels with |a| above this (action units)')
+p.add_argument('--obs_max', type=float, default=100.0, help='drop samples with |observation| above this')
+p.add_argument('--vel_max', type=float, default=50.0, help='restart worlds whose |qvel| exceeds this')
 # evaluation
 p.add_argument('--eval_every', type=int, default=10)
 p.add_argument('--eval_windows', type=int, default=512)
@@ -157,13 +161,30 @@ class Buffer:
 buf = Buffer(args.buffer)
 
 
+stats = {'skipped_updates': 0, 'dropped_labels': 0, 'vel_resets': 0}
+
+
+def add_checked(hist, goal, anc, y):
+    """Add samples whose observation and label are finite and within bounds (counted in stats otherwise)."""
+    ok = (torch.isfinite(y).all(-1) & (y.abs() <= args.label_max).all(-1)
+          & torch.isfinite(hist).all(-1) & (hist.abs() <= args.obs_max).all(-1)
+          & torch.isfinite(goal).all(-1) & torch.isfinite(anc).all(-1))
+    stats['dropped_labels'] += int((~ok).sum())
+    if ok.any():
+        buf.add(hist[ok], goal[ok], anc[ok], y[ok])
+
+
 def train(steps):
     losses = []
     for _ in range(steps):
         h, g, a, y = buf.sample(args.batch)
         loss = ((policy(h, g, a) - y) ** 2).mean()
+        if not torch.isfinite(loss):
+            stats['skipped_updates'] += 1
+            continue
         opt.zero_grad(set_to_none=True)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy.parameters(), args.grad_clip)
         opt.step()
         losses.append(loss.detach())
     return torch.stack(losses).mean().item() if losses else None
@@ -320,7 +341,9 @@ for rnd in range(1, args.rounds + 1):
         fell, ended, _ = roll.step(a)
         cost['rollout_fwd'] += args.envs
         falls += int(fell.sum())
-        done = (fell | ended).nonzero()[:, 0]
+        wild = ~(roll.v.abs() <= args.vel_max).all(-1)  # exploding (or non-finite) velocities: restart
+        stats['vel_resets'] += int((wild & ~fell).sum())
+        done = (fell | ended | wild).nonzero()[:, 0]
         roll.reset(done, sample_starts(done.shape[0]))
     # label the snapshots with the mentor, warm-started from the policy's own K-step plan
     labelled = 0
@@ -345,11 +368,11 @@ for rnd in range(1, args.rounds + 1):
         fb, fo = mentor.sim_steps(c.shape[0])
         cost['label_fwdbwd'] += fb
         cost['label_fwd'] += fo
-        buf.add(*obs, best[:, 0])
+        add_checked(*obs, best[:, 0])
         imp.append((bc / c0.clamp_min(1e-9)).median())
         labelled += c.shape[0]
     loss = train(args.sgd_steps)
-    r = {'round': rnd, 'labels': labelled, 'falls_per_1k_steps': 1000 * falls / (args.envs * args.rollout),
+    r = {'round': rnd, 'labels': labelled, **stats, 'falls_per_1k_steps': 1000 * falls / (args.envs * args.rollout),
          'label_cost_ratio_p50': torch.stack(imp).mean().item(), 'loss': loss, 'buffer': buf.size(),
          'sim_steps': sim_steps(), 'seconds': time.time() - tr, 'wall_s': time.time() - t_start}
     history['rounds'].append(r)
