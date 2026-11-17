@@ -135,6 +135,61 @@ class G1Track:
         return self.ffi.step(qpos.contiguous(), qvel.contiguous(), warm.contiguous(), ctrl.contiguous(), fr, com,
                              iterations=self.iterations, kinematics=kinematics)
 
+    # ------------------------------------------------------------ partial inversion of the reference (Stage I)
+    def invert(self, frames, iters=8, damping=1e-2, w_vel=0.1, chunk=4096):
+        """Residual actions a*(f) that take the reference state at f closest to the next reference frame's joints.
+
+        Levenberg-Marquardt on the 29 actions, residual = joint angles and w_vel * joint velocities of step(ref_f, a)
+        minus those of ref_{f+1}; zero weight on the root (unactuated; motion capture is not reachable exactly). The
+        Jacobian is exact: one forward with a tape, replayed for each of the 58 residual rows (no finite differences).
+        Returns a* (N, nu) and the relative residual |r(a*)| / |r(0)| per frame.
+        """
+        ffi, nu = self.ffi, self.nu
+        out_a, out_rel = [], []
+        for f in frames.split(chunk):
+            B = f.shape[0]
+            fr, com = self.world(B)
+            q, v = self.ref_qpos[f].contiguous(), self.ref_qvel[f].contiguous()
+            w = torch.zeros_like(v)
+            f1 = self.next_frame(f)
+            tgt = torch.cat([self.ref_qpos[f1, 7:], w_vel * self.ref_qvel[f1, 6:]], -1)
+
+            def resid(a, tape=False, q=q, v=v, w=w, fr=fr, com=com, f1=f1, tgt=tgt):
+                ctrl = torch.clamp(self.ref_qpos[f1, 7:] + self.action_scale * a, self.ctrl_lo, self.ctrl_hi)
+                o = ffi.forward(q, v, w, ctrl.contiguous(), fr, com, iterations=self.iterations, tape=tape)
+                r = torch.cat([o[0][:, 7:], w_vel * o[1][:, 6:]], -1) - tgt
+                return (r, o[4]) if tape else r
+
+            a = torch.zeros(B, nu, device=self.device)
+            lam = torch.full((B,), damping, device=self.device)
+            cost = (resid(a) ** 2).sum(-1)
+            c0 = cost.clone()
+            eye = torch.eye(nu, device=self.device)
+            for _ in range(iters):
+                r, tape = resid(a, tape=True)
+                J = torch.empty(B, r.shape[1], nu, device=self.device)
+                for i in range(r.shape[1]):
+                    gq, gv = torch.zeros_like(q), torch.zeros_like(v)
+                    if i < nu:
+                        gq[:, 7 + i] = 1.0
+                    else:
+                        gv[:, 6 + i - nu] = w_vel
+                    J[:, i] = ffi.backward(tape, fr, com, gq, gv)[2] * self.action_scale
+                JtJ = J.transpose(1, 2) @ J
+                g = (J.transpose(1, 2) @ r[..., None])[..., 0]
+                diag = torch.diagonal(JtJ, dim1=1, dim2=2)
+                A = JtJ + lam[:, None, None] * (eye * (diag[:, None, :] + 1e-6))
+                step = torch.nan_to_num(-torch.linalg.solve(A, g[..., None])[..., 0], 0.0, 0.0, 0.0)
+                cand = a + step
+                c_new = (resid(cand) ** 2).sum(-1)
+                ok = c_new < cost
+                a = torch.where(ok[:, None], cand, a)
+                cost = torch.where(ok, c_new, cost)
+                lam = torch.where(ok, lam * 0.3, lam * 10.0).clamp(1e-6, 1e6)
+            out_a.append(a)
+            out_rel.append((cost / c0.clamp_min(1e-12)).sqrt())
+        return torch.cat(out_a), torch.cat(out_rel)
+
     # ------------------------------------------------------------ score (NablaMimic reward, terminated)
     def reward_terms(self, kin, f, u, u_prev):
         """Per-world reward terms (B, len(TERMS)) at a post-step state and its reference frame f.

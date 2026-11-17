@@ -43,6 +43,11 @@ p.add_argument('--w_xy', type=float, default=1.0)
 p.add_argument('--w_ori', type=float, default=1.0)
 p.add_argument('--w_rvel', type=float, default=0.1)
 p.add_argument('--w_act', type=float, default=0.0, help='weight of mean squared residual action')
+p.add_argument('--init', choices=('zero', 'invert'), default='zero',
+               help='new plan steps start at 0 or at the partial inversion a*(f) of the reference (G1Track.invert)')
+p.add_argument('--inv_iters', type=int, default=8)
+p.add_argument('--inv_damping', type=float, default=1e-2)
+p.add_argument('--inv_wvel', type=float, default=0.1)
 p.add_argument('--window', type=int, default=250, help='windows mode: steps per window')
 p.add_argument('--n_windows', type=int, default=512)
 p.add_argument('--max_steps', type=int, default=0, help='full mode: cut the clips (0: whole clips)')
@@ -98,6 +103,8 @@ if args.dry_run:
         return q2, v2, w, q2, torch.zeros(q.shape[0], nb, 3, device=q.device), quat, \
             torch.zeros(q.shape[0], nb, 6, device=q.device), torch.zeros(q.shape[0], nb, 3, device=q.device)
     env.step = toy_step
+    env.invert = lambda frames, **kw: (torch.zeros(frames.shape[0], env.nu, device=dev),
+                                       torch.ones(frames.shape[0], device=dev))
 print(f'{len(env.names)} clips, {env.last.shape[0]} frames, references in {t_refs:.0f} s, {gpu}'
       f'{" (DRY RUN: toy physics)" if args.dry_run else ""}', flush=True)
 
@@ -117,6 +124,24 @@ else:
     steps = int(horizon.max())
 B = f0.shape[0]
 clip_of = torch.searchsorted(env.starts, f0, right=True) - 1
+
+# ---------------------------------------------------------------- partial inversion of the visited reference frames
+a_star = torch.zeros(env.last.shape[0], env.nu, device=dev)
+inv = None
+if args.init == 'invert':
+    span = torch.arange(steps + args.K + 1, device=dev)
+    need = torch.unique(torch.minimum(f0[:, None] + span[None], env.last[f0][:, None]).reshape(-1))
+    t_inv = time.time()
+    a_n, rel = env.invert(need, iters=args.inv_iters, damping=args.inv_damping, w_vel=args.inv_wvel)
+    a_star[need] = a_n
+    qs = torch.quantile(rel.float(), torch.tensor([0.1, 0.5, 0.9], device=dev)).tolist()
+    inv = {'frames': int(need.shape[0]), 'seconds': time.time() - t_inv, 'rel_residual_p10_p50_p90': qs,
+           'action_abs_mean': a_n.abs().mean().item(), 'action_abs_p99': torch.quantile(a_n.abs().flatten()[:10 ** 6], 0.99).item(),
+           'sim_steps_fwd_with_tape': args.inv_iters * int(need.shape[0]),
+           'sim_steps_fwd': (args.inv_iters + 1) * int(need.shape[0]),
+           'backward_replays': args.inv_iters * 2 * env.nu * int(need.shape[0])}
+    print(f'inversion of {inv["frames"]} reference transitions in {inv["seconds"]:.0f} s: relative residual '
+          f'p10/p50/p90 {qs[0]:.3f}/{qs[1]:.3f}/{qs[2]:.3f}, mean |a*| {inv["action_abs_mean"]:.2f}', flush=True)
 
 # ---------------------------------------------------------------- planner
 wj = torch.full((env.nu,), args.w_joint, device=dev)
@@ -178,7 +203,7 @@ q, v = env.ref_state(f0)
 w = torch.zeros_like(v)
 f = f0.clone()
 u_prev = env.q0.expand(B, -1).clone()
-delta = torch.zeros(B, args.K, env.nu, device=dev)
+delta = a_star[env.next_frame(f0[:, None], torch.arange(args.K, device=dev)[None])].clone()
 alive = torch.ones(B, dtype=torch.bool, device=dev)
 fall_t = torch.full((B,), -1, dtype=torch.long, device=dev)
 cause = torch.zeros(B, dtype=torch.long, device=dev)
@@ -213,7 +238,7 @@ for t in range(steps):
         if traj is not None:
             for k, x in (('qpos', qn), ('qvel', v), ('ctrl', ctrl), ('frame', f), ('alive', alive)):
                 traj[k].append(x.cpu())
-        delta = torch.cat([delta[:, 1:], torch.zeros_like(delta[:, :1])], 1)
+        delta = torch.cat([delta[:, 1:], a_star[env.next_frame(f, args.K - 1)][:, None]], 1)
     if (t + 1) % args.log_every == 0 or t + 1 == steps:
         el = time.time() - t0
         ret = (tsum.sum(1) / (horizon * MAX_REWARD)).mean().item()
@@ -245,6 +270,7 @@ out = {
     'mean_plan_cost': (plan_c.sum() / nal.sum()).item() if args.iters else None,
     'cost': {'sim_steps_fwdbwd': n_fwdbwd, 'sim_steps_fwd': n_fwd,
              'per_control_step': {'fwdbwd': args.iters * args.K, 'fwd': (2 * args.K if args.iters else 0) + 1}},
+    'inversion': inv,
     'wall_s': wall,
     'ms_per_control_step': wall / max(1, t + 1) * 1e3,
     'peak_mem_gb': torch.cuda.max_memory_allocated(dev) / 2 ** 30 if dev.type == 'cuda' else None,
