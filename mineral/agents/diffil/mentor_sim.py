@@ -35,6 +35,35 @@ class SimCounter:
         self.fwd, self.fwdbwd = int(d['fwd']), int(d['fwdbwd'])
 
 
+class PhaseCounters:
+    """One SimCounter per phase; the total is their sum (no phase is derived by subtraction).
+
+    stage1: initial action inversion; relabel: Stage I re-solves with the policy prior; teacher: rejoin plans, window
+    screening, gate calibration and library bootstrapping; replay: noisy replays of the demo actions; jacobian:
+    per-sample Jacobians of the dataset.
+    """
+
+    PHASES = ('stage1', 'relabel', 'teacher', 'replay', 'jacobian')
+
+    def __init__(self):
+        self.phases = {p: SimCounter() for p in self.PHASES}
+
+    def __getitem__(self, phase):
+        return self.phases[phase]
+
+    @property
+    def total(self):
+        return sum(c.total for c in self.phases.values())
+
+    def state_dict(self):
+        return {p: c.state_dict() for p, c in self.phases.items()}
+
+    def load_state_dict(self, d):
+        for p, c in self.phases.items():
+            if p in d:
+                c.load_state_dict(d[p])
+
+
 class EnvSpec:
     env_name = None
     obs_dim = None  # observation coordinates that describe the state (actions stripped)

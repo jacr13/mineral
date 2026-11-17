@@ -27,7 +27,7 @@ import torch.nn as nn
 
 from ...common.demos import get_demos
 from ..agent import Agent
-from .mentor_sim import OneStep, SimCounter, SynergySpec, get_spec
+from .mentor_sim import OneStep, PhaseCounters, SimCounter, SynergySpec, get_spec
 
 
 class MentorPolicy(nn.Module):
@@ -854,7 +854,7 @@ class MENTOR(Agent):
                 self.spec.set_task(full_cfg.task.env)
         self.full_state = bool(getattr(self.spec, 'full_state', False))
         self.state_bank = None
-        self.counter = SimCounter()  # Stage I + teacher simulator transitions
+        self.counters = PhaseCounters()  # simulator transitions per phase (each step call adds its batch size)
         self.generator = torch.Generator(device=self.device)
         self.generator.manual_seed(self.seed)
 
@@ -957,10 +957,9 @@ class MENTOR(Agent):
         learner = int(self.agent_steps)
         return {
             'sim_steps/learner': learner,
-            'sim_steps/stage1': int(self.stage1_steps),
-            'sim_steps/teacher_fwd': int(self.counter.fwd - self.stage1_steps),
-            'sim_steps/teacher_fwdbwd': int(self.counter.fwdbwd),
-            'sim_steps/total': learner + int(self.counter.total),
+            'sim_steps/stage1': int(self.counters['stage1'].total),
+            **{f'sim_steps/{p}_{k}': int(getattr(c, k)) for p, c in self.counters.phases.items() for k in ('fwd', 'fwdbwd')},
+            'sim_steps/total': learner + int(self.counters.total),
         }
 
     def env_action(self, a):
@@ -1004,7 +1003,6 @@ class MENTOR(Agent):
             print(f'[MENTOR] Stage I ({self.spec.stage1}): {n} transitions, no simulation')
             return {'stage1/sim_steps': 0, 'stage1/time': time.time() - t0}
         t0 = time.time()
-        before = self.counter.total
         a_flat, cost = self._lm_solve(s, s1, int(cfg.iters), int(cfg.get('refresh', 0)))
         mu, sweeps = float(cfg.get('smooth', 0.0)), int(cfg.get('smooth_sweeps', 0))
         for _ in range(sweeps if mu > 0 else 0):  # couple neighbouring transitions: + mu ||a_t - mean(a_t-1, a_t+1)||^2
@@ -1012,7 +1010,7 @@ class MENTOR(Agent):
             a_flat, cost = self._lm_solve(
                 s, s1, int(cfg.get('sweep_iters', 10)), int(cfg.get('refresh', 0)), target=target, x0=a_flat, reg=reg
             )
-        self.stage1_steps = self.counter.total - before
+        self.stage1_steps = self.counters['stage1'].total
         A_hat = torch.zeros(*self.S.shape[:2], self.spec.act_dim, device=self.device)
         A_hat[self.valid] = a_flat
         self.A_hat = self.A_labels = A_hat  # teacher reference actions and Stage I labels
@@ -1039,14 +1037,15 @@ class MENTOR(Agent):
         )
         return stats
 
-    def _lm_solve(self, s, s1, iters, refresh, target=None, x0=None, reg=None):
+    def _lm_solve(self, s, s1, iters, refresh, target=None, x0=None, reg=None, phase='stage1'):
         """Stage I Levenberg-Marquardt over all (s, s1) pairs in fixed-size batches; returns actions and residuals."""
         cfg = self.mentor_config.invert
+        counter = self.counters[phase]
         batch = int(cfg.batch)
         if self.full_state:  # Levenberg-Marquardt through Rewarped via the adapter's observation-to-state map
-            step = self.spec.make_obs_step(batch, self.device, self.counter)
+            step = self.spec.make_obs_step(batch, self.device, counter)
         else:
-            step = OneStep(self.spec, batch, self.device, self.counter)
+            step = OneStep(self.spec, batch, self.device, counter)
         acts, costs = [], []
         n = s.shape[0]
         for c0 in range(0, n, batch):
@@ -1133,13 +1132,14 @@ class MENTOR(Agent):
         if self.audit_actions is not None or int(self.mentor_config.get('synergies', {}).get('dims', 0)) > 0:
             raise ValueError('invert.policy_prior is incompatible with the action audit and with synergies')
         s, s1 = self.S[self.valid], self.S1[self.valid]
-        before, t0 = self.counter.total, time.time()
+        t0 = time.time()
         self.policy.eval()
         prior = torch.cat([self.policy(s[i : i + 65536]).clamp(-1, 1) for i in range(0, s.shape[0], 65536)])
         a_old = self.A_labels[self.valid]
         target, reg = self._stage1_target(a_old, prior=prior)
         a_new, cost = self._lm_solve(
-            s, s1, int(cfg.get('relabel_iters', 10)), int(cfg.get('refresh', 0)), target=target, x0=a_old, reg=reg
+            s, s1, int(cfg.get('relabel_iters', 10)), int(cfg.get('refresh', 0)), target=target, x0=a_old, reg=reg,
+            phase='relabel',
         )
         self.A_labels[self.valid] = a_new  # A_hat is the same tensor (the teacher's reference actions)
         self.data_a[: a_new.shape[0]] = a_new  # the Stage I pairs come first in the dataset
@@ -1148,7 +1148,7 @@ class MENTOR(Agent):
             'stage1/relabel_change_rms': ((a_new - a_old) ** 2).mean().sqrt().item(),
             'stage1/relabel_policy_gap_rms': ((a_new - prior) ** 2).mean().sqrt().item(),
             'stage1/relabel_rel_residual_q50': rel.median().item(),
-            'stage1/relabel_sim_steps': self.counter.total - before,
+            'stage1/relabel_sim_steps': int(self.counters['relabel'].total),  # cumulative over all relabels
             'stage1/relabel_time': time.time() - t0,
         }
         print(
@@ -1170,7 +1170,7 @@ class MENTOR(Agent):
         if n_have >= n_all:
             return
         if getattr(self, 'jac_step', None) is None:
-            self.jac_step = OneStep(self.spec, batch, self.device, self.counter)
+            self.jac_step = OneStep(self.spec, batch, self.device, self.counters['jacobian'])
         out = []
         for c0 in range(n_have, n_all, batch):
             s = self.data_s[c0 : c0 + batch]
@@ -1367,7 +1367,9 @@ class MENTOR(Agent):
         tau = float(bcfg.get('teacher_tau', bcfg.get('tau', 0.1)))
         q = float(bcfg.get('quantile', 0.8))
         t0 = time.time()
-        driver = RejoinTeacher(self.spec, self.S, self.S1, self.A_hat, self.lengths, n, self.device, self.counter, cfg.teacher)
+        driver = RejoinTeacher(
+            self.spec, self.S, self.S1, self.A_hat, self.lengths, n, self.device, self.counters['teacher'], cfg.teacher
+        )
         env_cfg = self.full_cfg.task.env
         env = self.spec.make_env(
             n,
@@ -1422,7 +1424,7 @@ class MENTOR(Agent):
         """
         B = int(self.mentor_config.teacher.batch)
         if getattr(self, 'replay_step', None) is None:
-            self.replay_step = OneStep(self.spec, B, self.device, self.counter)
+            self.replay_step = OneStep(self.spec, B, self.device, self.counters['replay'])
         out = []
         for _ in range(0, count, B):
             traj = torch.randint(0, self.S.shape[0], (B,), device=self.device, generator=self.generator)
@@ -1563,7 +1565,7 @@ class MENTOR(Agent):
             self.lengths,
             int(cfg.teacher.batch),
             self.device,
-            self.counter,
+            self.counters['teacher'],
             cfg.teacher,
         )
         gate_tau, gate_q = float(cfg.gate.tau), float(cfg.gate.quantile)
@@ -1782,7 +1784,7 @@ class MENTOR(Agent):
             'data_s': self.data_s,
             'data_a': self.data_a,
             'data_k': getattr(self, 'data_k', None),
-            'counter': self.counter.state_dict(),
+            'counters': self.counters.state_dict(),
             'stage1_steps': self.stage1_steps,
             'wall': self._wall(),
         }
@@ -1798,7 +1800,10 @@ class MENTOR(Agent):
             self.data_k = torch.zeros(self.data_s.shape[0], dtype=torch.long, device=self.device)
         if ckpt.get('synergies') is not None:
             self.use_synergies(*ckpt['synergies'])
-        self.counter.load_state_dict(ckpt['counter'])
+        if 'counters' in ckpt:
+            self.counters.load_state_dict(ckpt['counters'])
+        else:  # older checkpoints kept one counter for everything after the learner: keep its total under teacher
+            self.counters['teacher'].load_state_dict(ckpt['counter'])
         self.stage1_steps = ckpt['stage1_steps']
         self.wall_offset = ckpt.get('wall', 0.0)
         self.policy.eval()
