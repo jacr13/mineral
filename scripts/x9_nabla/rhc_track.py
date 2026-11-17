@@ -43,6 +43,9 @@ p.add_argument('--w_xy', type=float, default=1.0)
 p.add_argument('--w_ori', type=float, default=1.0)
 p.add_argument('--w_rvel', type=float, default=0.1)
 p.add_argument('--w_act', type=float, default=0.0, help='weight of mean squared residual action')
+p.add_argument('--w_rate', type=float, default=0.0,
+               help='weight of the squared setpoint changes over the plan (from the last applied setpoint), in action units')
+p.add_argument('--inv_smooth', type=int, default=0, help='moving average of a* over +-h frames of the same clip')
 p.add_argument('--init', choices=('zero', 'invert'), default='zero',
                help='new plan steps start at 0 or at the partial inversion a*(f) of the reference (G1Track.invert)')
 p.add_argument('--inv_iters', type=int, default=8)
@@ -134,6 +137,16 @@ if args.init == 'invert':
     t_inv = time.time()
     a_n, rel = env.invert(need, iters=args.inv_iters, damping=args.inv_damping, w_vel=args.inv_wvel)
     a_star[need] = a_n
+    if args.inv_smooth:
+        done = torch.zeros(env.last.shape[0], device=dev)
+        done[need] = 1.0
+        first = env.starts[torch.searchsorted(env.starts, need, right=True) - 1]
+        acc, cnt = torch.zeros_like(a_n), torch.zeros(need.shape[0], device=dev)
+        for o in range(-args.inv_smooth, args.inv_smooth + 1):
+            j = torch.minimum(torch.clamp(need + o, min=0), env.last[need]).clamp(min=first)
+            acc += a_star[j] * done[j, None]
+            cnt += done[j]
+        a_star[need] = acc / cnt[:, None]
     qs = torch.quantile(rel.float(), torch.tensor([0.1, 0.5, 0.9], device=dev)).tolist()
     inv = {'frames': int(need.shape[0]), 'seconds': time.time() - t_inv, 'rel_residual_p10_p50_p90': qs,
            'action_abs_mean': a_n.abs().mean().item(), 'action_abs_p99': torch.quantile(a_n.abs().flatten()[:10 ** 6], 0.99).item(),
@@ -158,13 +171,19 @@ def state_cost(q, v, f):
     return c
 
 
-def plan_cost(q, v, w, f, delta):
-    """Total planning cost (B,) of the residual plan delta (B, K, nu) from state (q, v, w) at frame f."""
+def plan_cost(q, v, w, f, delta, u_prev):
+    """Total planning cost (B,) of the residual plan delta (B, K, nu) from state (q, v, w) at frame f.
+
+    u_prev: the last applied setpoint (start of the setpoint-change term).
+    """
     cost = 0.0
     for k in range(args.K):
         fk = env.next_frame(f, k)
-        ctrl = torch.clamp(env.ref_qpos[env.next_frame(fk), 7:] + env.action_scale * delta[:, k], env.ctrl_lo,
-                           env.ctrl_hi)
+        u = env.ref_qpos[env.next_frame(fk), 7:] + env.action_scale * delta[:, k]
+        if args.w_rate:
+            cost = cost + args.w_rate * (((u - u_prev) / env.action_scale) ** 2).sum(-1)
+            u_prev = u
+        ctrl = torch.clamp(u, env.ctrl_lo, env.ctrl_hi)
         q, v, w = env.step(q, v, w, ctrl)
         wk = 1.0 if k == args.K - 1 else args.w_run
         if wk:
@@ -174,15 +193,15 @@ def plan_cost(q, v, w, f, delta):
     return cost
 
 
-def plan(q, v, w, f, delta):
+def plan(q, v, w, f, delta, u_prev):
     """Adam on the residual plan; returns the best iterate per world (by its own cost) and its cost."""
     best = delta.clone()
     with torch.no_grad():
-        best_cost = plan_cost(q, v, w, f, delta)
+        best_cost = plan_cost(q, v, w, f, delta, u_prev)
     x = delta.clone().requires_grad_(True)
     opt = torch.optim.Adam([x], lr=args.lr)
     for _ in range(args.iters):
-        c = plan_cost(q, v, w, f, x)
+        c = plan_cost(q, v, w, f, x, u_prev)
         cd = c.detach()
         better = cd < best_cost
         best[better], best_cost = x.detach()[better], torch.where(better, cd, best_cost)
@@ -192,7 +211,7 @@ def plan(q, v, w, f, delta):
         opt.step()
     if args.iters:
         with torch.no_grad():
-            cd = plan_cost(q, v, w, f, x)
+            cd = plan_cost(q, v, w, f, x, u_prev)
         better = cd < best_cost
         best[better], best_cost = x.detach()[better], torch.where(better, cd, best_cost)
     return best, best_cost
@@ -214,7 +233,7 @@ traj = {'qpos': [], 'qvel': [], 'ctrl': [], 'frame': [], 'alive': []} if args.sa
 t0 = time.time()
 for t in range(steps):
     if args.iters:
-        delta, pc = plan(q, v, w, f, delta)
+        delta, pc = plan(q, v, w, f, delta, u_prev)
         n_fwdbwd += args.iters * args.K * B
         n_fwd += 2 * args.K * B
         plan_c += torch.where(alive, pc, torch.zeros_like(pc))
