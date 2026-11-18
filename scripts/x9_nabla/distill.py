@@ -62,6 +62,8 @@ p.add_argument('--buffer', type=int, default=262144)
 p.add_argument('--policy_lr', type=float, default=3e-4)
 p.add_argument('--batch', type=int, default=4096)
 p.add_argument('--sgd_steps', type=int, default=200)
+p.add_argument('--obs_anchor_pos', action='store_true',
+               help='add the reference torso position in the robot torso frame to the policy input (not in NablaMimic)')
 p.add_argument('--grad_clip', type=float, default=1.0, help='global gradient-norm clip of the policy update')
 p.add_argument('--label_max', type=float, default=10.0, help='drop labels with |a| above this (action units)')
 p.add_argument('--obs_max', type=float, default=100.0, help='drop samples with |observation| above this')
@@ -109,7 +111,8 @@ f_all = torch.arange(NF, device=dev)
 starts_valid = f_all[f_all < env.last]
 gen = torch.Generator(device='cpu').manual_seed(args.seed + 1)
 HIST_DIM, GOAL_DIM = HIST * PROPRIO_DIM, FUTURE * GOAL_FRAME_DIM
-policy = Actor(GOAL_DIM, HIST_DIM, ANCHOR_ORI_DIM, env.nu).to(dev)
+ANC_DIM = ANCHOR_ORI_DIM + (3 if args.obs_anchor_pos else 0)
+policy = Actor(GOAL_DIM, HIST_DIM, ANC_DIM, env.nu).to(dev)
 opt = torch.optim.Adam(policy.parameters(), lr=args.policy_lr)
 cost = {'stage1_fwd': 0, 'stage1_fwd_tape': 0, 'stage1_bwd_replays': 0, 'rollout_fwd': 0, 'label_fwd': 0,
         'label_fwdbwd': 0}
@@ -130,8 +133,16 @@ def com0(n):
     return torch.zeros(n, 3, device=dev)
 
 
-def torso_quat(q, v):
-    return env.ffi.kinematics(q.contiguous(), v.contiguous(), com0(q.shape[0]))[2][:, env.torso_id]
+def torso_pose(q, v):
+    """(B, 7): torso position and orientation of the states."""
+    k = env.ffi.kinematics(q.contiguous(), v.contiguous(), com0(q.shape[0]))
+    return torch.cat([k[1][:, env.torso_id], k[2][:, env.torso_id]], -1)
+
+
+def anchor_obs(tq, f):
+    """The goal's anchor part: reference torso orientation (6), and with --obs_anchor_pos its position (3)."""
+    ori = env.anchor_ori(tq[:, 3:], f)
+    return torch.cat([ori, env.anchor_pos(tq[:, :3], tq[:, 3:], f)], -1) if args.obs_anchor_pos else ori
 
 
 # ---------------------------------------------------------------- buffer
@@ -139,7 +150,7 @@ class Buffer:
     def __init__(self, n):
         self.hist = torch.zeros(n, HIST_DIM, device=dev)
         self.goal = torch.zeros(n, GOAL_DIM, device=dev)
-        self.anc = torch.zeros(n, ANCHOR_ORI_DIM, device=dev)
+        self.anc = torch.zeros(n, ANC_DIM, device=dev)
         self.y = torch.zeros(n, env.nu, device=dev)
         self.n, self.i, self.full = n, 0, False
 
@@ -212,7 +223,7 @@ if args.stage1:
     q, v = env.ref_qpos[fr], env.ref_qvel[fr]
     prev = torch.cat([torch.zeros_like(a_star[:, :1]), a_star[:, :-1]], 1)
     prop = env.proprio(q.reshape(-1, 36), v.reshape(-1, 35), prev.reshape(-1, env.nu)).reshape(-1, L, PROPRIO_DIM)
-    ident = torch.tensor([1.0, 0, 0, 0, 1.0, 0], device=dev)
+    ident = torch.tensor([1.0, 0, 0, 0, 1.0, 0] + [0.0] * (ANC_DIM - ANCHOR_ORI_DIM), device=dev)  # reference states
     for t in range(HIST, L):
         hist = prop[:, t - HIST + 1:t + 1].reshape(-1, HIST_DIM)
         buf.add(hist, env.goal_ref(fr[:, t]), ident.expand(fr.shape[0], -1), a_star[:, t])
@@ -239,7 +250,7 @@ class Rollout:
         self.prev_a = torch.zeros(n, env.nu, device=dev)
         self.u_prev = env.q0.expand(n, -1).clone()
         self.hist = env.proprio(self.q, self.v, self.prev_a)[:, None].repeat(1, HIST, 1)
-        self.tq = torso_quat(self.q, self.v)
+        self.tq = torso_pose(self.q, self.v)
 
     def reset(self, idx, f):
         if idx.numel() == 0:
@@ -248,10 +259,10 @@ class Rollout:
         self.f[idx], self.q[idx], self.v[idx], self.w[idx] = f, q, v, 0.0
         self.prev_a[idx], self.u_prev[idx] = 0.0, env.q0
         self.hist[idx] = env.proprio(q, v, torch.zeros(f.shape[0], env.nu, device=dev))[:, None].repeat(1, HIST, 1)
-        self.tq[idx] = torso_quat(q, v)
+        self.tq[idx] = torso_pose(q, v)
 
     def obs(self):
-        return self.hist.reshape(-1, HIST_DIM), env.goal_ref(self.f), env.anchor_ori(self.tq, self.f)
+        return self.hist.reshape(-1, HIST_DIM), env.goal_ref(self.f), anchor_obs(self.tq, self.f)
 
     @torch.no_grad()
     def step(self, a):
@@ -261,7 +272,8 @@ class Rollout:
         self.q, self.v, self.w, qn, xpos, xquat, cvel, scom = env.step(self.q, self.v, self.w, ctrl, kinematics=True)
         self.f = env.next_frame(self.f)
         terms = env.reward_terms((qn, xpos, xquat, cvel, scom), self.f, u, self.u_prev)
-        self.u_prev, self.prev_a, self.tq = u, a, xquat[:, env.torso_id]
+        self.u_prev, self.prev_a = u, a
+        self.tq = torch.cat([xpos[:, env.torso_id], xquat[:, env.torso_id]], -1)
         self.hist = torch.cat([self.hist[:, 1:], env.proprio(qn, self.v, a)[:, None]], 1)
         fell, _ = env.terminated(qn, self.f)
         return fell, env.clip_ended(self.f), terms

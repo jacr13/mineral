@@ -132,7 +132,7 @@ ok &= bool((my_term == ref_term).all())
 def obs_one(qpos, qvel, xpos, xquat, cvel, scom, f, ap):
     dx = env.d0.replace(qpos=qpos, qvel=qvel, xpos=xpos, xquat=xquat, cvel=cvel, subtree_com=scom)
     xi = env.sample_xi(jax.random.PRNGKey(0))
-    return env.proprio(dx, xi, ap), env.goal_ref(f), env._anchor_rel(dx, f)[nm_env.GOAL_ANCHOR]
+    return env.proprio(dx, xi, ap), env.goal_ref(f), env._anchor_rel(dx, f)[nm_env.GOAL_ANCHOR], env._anchor_rel(dx, f)[:3]
 
 
 qvel_states = torch.as_tensor(np.asarray(fields_qvel, np.float32))
@@ -141,8 +141,9 @@ ref_obs = [np.asarray(x) for x in jax.vmap(obs_one)(
     *(jnp.asarray(F[k]) for k in ('xpos', 'xquat', 'cvel', 'subtree_com')), jnp.asarray(frames, jnp.int32),
     jnp.asarray(a_prev))]
 my_obs = [mine.proprio(T['qpos'], qvel_states, torch.as_tensor(a_prev)).numpy(), mine.goal_ref(ft).numpy(),
-          mine.anchor_ori(T['xquat'][:, mine.torso_id], ft).numpy()]
-for name, x, y in zip(('proprio', 'goal_ref', 'anchor_ori'), my_obs, ref_obs, strict=True):
+          mine.anchor_ori(T['xquat'][:, mine.torso_id], ft).numpy(),
+          mine.anchor_pos(T['xpos'][:, mine.torso_id], T['xquat'][:, mine.torso_id], ft).numpy()]
+for name, x, y in zip(('proprio', 'goal_ref', 'anchor_ori', 'anchor_pos'), my_obs, ref_obs, strict=True):
     d = np.abs(x - y).max()
     print(f'{name:13s} max |diff| {d:.3e}  (max |value| {np.abs(y).max():.3e})')
     ok &= d <= 1e-4 * max(np.abs(y).max(), 1.0)

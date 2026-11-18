@@ -167,6 +167,13 @@ class G1Track:
         c1 = torch.stack([2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)], -1)
         return torch.cat([c0, c1], -1)
 
+    def anchor_pos(self, torso_pos, torso_quat, f):
+        """Reference torso position in the robot torso frame (B, 3).
+
+        The position part of NablaMimic's _anchor_rel, which its policy observation leaves out.
+        """
+        return rotate(self.ref_body_pos[f, self.anchor_k] - torso_pos, quat_inv(torso_quat))
+
     # ------------------------------------------------------------ partial inversion of the reference (Stage I)
     def invert(self, frames, iters=8, damping=1e-2, w_vel=0.1, chunk=4096):
         """Residual actions a*(f) that take the reference state at f closest to the next reference frame's joints.
