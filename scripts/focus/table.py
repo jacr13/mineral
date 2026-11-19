@@ -137,12 +137,14 @@ def main():
                 cells.append('–')
                 continue
             got = [x for x in recs if x['task'] == t and x['arm'] == arm]
-            ok = [x for x in got if int(x['reached']) and int(x['deterministic']) and int(x['episodes']) == 128]
+            # an exception excuses the budget rule for that run (it is reported, and the reason is printed);
+            # a run that is missing or not deterministic is never counted
+            exc = lambda x: (args.batch, t, arm, x['seed']) in exceptions
+            ok = [x for x in got if (int(x['reached']) or exc(x)) and int(x['deterministic']) and int(x['episodes']) == 128]
             bad = [r for r in exp_rows if r['run_id'] not in {x['run_id'] for x in ok}]
-            excused = [r for r in bad if (args.batch, t, arm, r['seed']) in exceptions]
-            unexcused = [r for r in bad if (args.batch, t, arm, r['seed']) not in exceptions]
+            unexcused = bad
             n_ok = len(ok)
-            cell_complete = not unexcused and n_ok + len(excused) == args.expect and len(exp_rows) == args.expect
+            cell_complete = not unexcused and n_ok == args.expect and len(exp_rows) == args.expect
             if not cell_complete:
                 complete = False
                 if not args.allow_incomplete:
