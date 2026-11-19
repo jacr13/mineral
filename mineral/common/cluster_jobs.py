@@ -151,6 +151,12 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
         'export APPTAINERENV_MINERAL_GIT_COMMIT="$MINERAL_GIT_COMMIT"',
         checkout,
         'git -C "$CLUSTER_REPO" cat-file -e "$MINERAL_GIT_COMMIT^{commit}"',
+        # Slurm may requeue a job (node failure, preemption) and rerun this script in the same folder: start the run
+        # again from a clean source tree and an empty results folder (a fresh start of the same seed), instead of
+        # failing on the leftovers of the first attempt.
+        'if [ "${SLURM_RESTART_COUNT:-0}" -gt 0 ]; then echo "requeued (restart $SLURM_RESTART_COUNT): starting'
+        ' again from a clean source and results folder" >&2; rm -rf "$RUN_ROOT/results"; fi',
+        'rm -rf "$RUN_ROOT/source"',
         'mkdir "$RUN_ROOT/source"',
         'git -C "$CLUSTER_REPO" archive "$MINERAL_GIT_COMMIT" | tar -x -C "$RUN_ROOT/source"',
         'mkdir -p "$RUN_ROOT/results"',

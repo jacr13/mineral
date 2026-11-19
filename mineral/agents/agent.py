@@ -348,6 +348,9 @@ class Agent:
         """Call once before the training loop."""
         self._protocol_t0 = time.time()
         self._protocol_eval_seconds = 0.0
+        curve = os.path.join(self.logdir, 'eval_curve.jsonl')
+        if os.path.exists(curve):  # a restarted job starts its curve again
+            os.remove(curve)
         if self.eval_every_steps > 0:
             self._protocol_next = 0
             self.protocol_step()
