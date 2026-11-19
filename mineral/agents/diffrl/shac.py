@@ -10,6 +10,7 @@ import itertools
 import json
 import os
 import re
+import time
 from copy import deepcopy
 
 import numpy as np
@@ -193,6 +194,15 @@ class SHAC(Agent):
         self.episode_discounted_rewards = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
         self.episode_gamma = torch.ones(self.num_envs, dtype=torch.float32, device=self.device)
 
+        # --- Evaluation protocol ---
+        # eval_deterministic: the final evaluation (scores.json) uses the policy mean; the stochastic one is kept
+        # in scores_stochastic.json. eval_every_steps > 0: deterministic evaluations of the current policy at fixed
+        # step intervals (eval_curve.jsonl), the source of learning curves; the environments are reset afterwards.
+        # save_eval_rollouts: dump the evaluation episodes (observations, actions) to logdir/demos.
+        self.eval_deterministic = bool(full_cfg.agent.get('eval_deterministic', False))
+        self.eval_every_steps = int(full_cfg.agent.get('eval_every_steps', 0) or 0)
+        self.save_eval_rollouts = bool(full_cfg.agent.get('save_eval_rollouts', True))
+
         self.episode_rewards_hist = []
         self.episode_lengths_hist = []
         self.episode_discounted_rewards_hist = []
@@ -276,8 +286,9 @@ class SHAC(Agent):
         obs = self._convert_obs(obs)
 
         episodes = 0
+        keep_rollouts = self.save_eval_rollouts
         while episodes < num_episodes:
-            for env_num in range(self.num_envs):
+            for env_num in range(self.num_envs if keep_rollouts else 0):
                 for k, v in obs.items():
                     rollouts[env_num]["obs"][k].append(v[env_num].clone())
 
@@ -294,7 +305,7 @@ class SHAC(Agent):
             obs = self._convert_obs(obs)
             real_obs = self._convert_obs(real_obs)
 
-            for env_num in range(self.num_envs):
+            for env_num in range(self.num_envs if keep_rollouts else 0):
                 for k, v in real_obs.items():
                     rollouts[env_num]["next_obs"][k].append(v[env_num].clone())
                 rollouts[env_num]["actions"].append(actions[env_num])
@@ -323,15 +334,16 @@ class SHAC(Agent):
                     episode_discounted_rewards[done_env_id] = 0.0
                     episode_gamma[done_env_id] = 1.0
 
-                    completed_episodes[episodes] = {
-                        "obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["obs"].items()},
-                        "act": torch.stack(rollouts[done_env_id]["actions"]),
-                        "next_obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["next_obs"].items()},
-                        "rew": torch.stack(rollouts[done_env_id]["rew"]),
-                        "done": torch.stack(rollouts[done_env_id]["done"]),
-                    }
-                    completed_episodes_returns.append(completed_episodes[episodes]["rew"].sum().item())
-                    completed_episodes_lengths.append(completed_episodes[episodes]["rew"].shape[0])
+                    if keep_rollouts:
+                        completed_episodes[episodes] = {
+                            "obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["obs"].items()},
+                            "act": torch.stack(rollouts[done_env_id]["actions"]),
+                            "next_obs": {k: torch.stack(v) for k, v in rollouts[done_env_id]["next_obs"].items()},
+                            "rew": torch.stack(rollouts[done_env_id]["rew"]),
+                            "done": torch.stack(rollouts[done_env_id]["done"]),
+                        }
+                    completed_episodes_returns.append(episode_rewards_hist[-1])
+                    completed_episodes_lengths.append(episode_lengths_hist[-1])
                     episodes += 1
                     rollouts[done_env_id] = {
                         "obs": {k: [] for k in self.obs_space.keys()},
@@ -343,7 +355,7 @@ class SHAC(Agent):
         mean_completed_episode_return = np.mean(completed_episodes_returns)
         mean_completed_episodes_lengths = np.mean(completed_episodes_lengths)
         save_path = os.path.join(self.logdir, "demos")
-        if save_path is not None:
+        if keep_rollouts:
             os.makedirs(save_path, exist_ok=True)
             task_name = self.full_cfg.task.name
             env_name = self.full_cfg.task.env.env_name
@@ -367,9 +379,45 @@ class SHAC(Agent):
             print("Skipping clear_grad")
         self.env.reset()
 
+    @torch.no_grad()
+    def _periodic_eval(self):
+        """Deterministic evaluation of the current policy (128 episodes, first two of each env), appended to
+        eval_curve.jsonl. Evaluation steps are not counted in agent_steps; the environments and the training
+        episode statistics are reset afterwards, so training resumes from fresh episodes."""
+        t0 = time.time()
+        self.set_eval()
+        rew, lengths, _ = self.evaluate_policy(num_episodes=self.num_actors * 2, sample=False)
+        self.initialize_env()
+        self.episode_rewards.zero_()
+        self.episode_lengths.zero_()
+        self.episode_discounted_rewards.zero_()
+        self.episode_gamma.fill_(1.0)
+        dt = time.time() - t0
+        self._eval_seconds += dt
+        rec = {
+            'agent_steps': int(self.agent_steps),
+            'epoch': int(self.epoch),
+            'train_seconds': time.time() - self._train_t0 - self._eval_seconds,
+            'eval_seconds': dt,
+            'mean_return': float(np.mean(rew)),
+            'mean_length': float(np.mean(lengths)),
+            'episode_rewards': [float(x) for x in rew],
+            'episode_lengths': [int(x) for x in lengths],
+        }
+        with open(os.path.join(self.logdir, 'eval_curve.jsonl'), 'a') as f:
+            f.write(json.dumps(rec) + '\n')
+        self.writer.add(self.agent_steps, {'eval_curve/episode_rewards': rec['mean_return'],
+                                           'eval_curve/episode_lengths': rec['mean_length']})
+        print(f"periodic eval at {int(self.agent_steps):,} steps: return {rec['mean_return']:.1f} ({dt:.0f} s)")
+
     def train(self):
         # initializations
         self.initialize_env()
+        self._train_t0 = time.time()
+        self._eval_seconds = 0.0
+        next_eval = self.eval_every_steps if self.eval_every_steps > 0 else None
+        if next_eval is not None:
+            self._periodic_eval()  # the untrained policy: curves start at step 0
 
         while self.agent_steps < self.max_agent_steps:
             self.epoch += 1
@@ -497,6 +545,11 @@ class SHAC(Agent):
 
             self._checkpoint_save(mean_episode_rewards)
 
+            if next_eval is not None and self.agent_steps >= next_eval and self.agent_steps < self.max_agent_steps:
+                self._periodic_eval()
+                while next_eval <= self.agent_steps:
+                    next_eval += self.eval_every_steps
+
             if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                 print(
                     f'Epochs: {self.epoch + 1} |',
@@ -515,6 +568,16 @@ class SHAC(Agent):
 
         timings = self.timer.stats(step=self.agent_steps)
         print(timings)
+
+        budget = {
+            'agent_steps': int(self.agent_steps),
+            'max_agent_steps': int(self.max_agent_steps),
+            'reached_budget': bool(self.agent_steps >= self.max_agent_steps),
+            'epochs': int(self.epoch),
+            'train_seconds': time.time() - self._train_t0 - self._eval_seconds,
+            'periodic_eval_seconds': self._eval_seconds,
+        }
+        json.dump(budget, open(os.path.join(self.logdir, 'budget.json'), 'w'), indent=2)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
@@ -955,8 +1018,25 @@ class SHAC(Agent):
     def eval(self):
         self.set_eval()
 
+        if self.eval_deterministic:
+            # the stochastic policy is evaluated too and kept beside the deterministic score
+            self.env.reset()
+            sr, sl, sd = self.evaluate_policy(num_episodes=self.num_actors * 2, sample=True)
+            json.dump(
+                {
+                    "agent_steps": self.agent_steps,
+                    "sample": True,
+                    "eval_scores/episode_rewards": sr,
+                    "eval_scores/episode_lengths": sl,
+                    "eval_scores/episode_discounted_rewards": sd,
+                },
+                open(os.path.join(self.logdir, "scores_stochastic.json"), "w"),
+                indent=4,
+            )
+            self.env.reset()
+
         episode_rewards, episode_lengths, episode_discounted_rewards = self.evaluate_policy(
-            num_episodes=self.num_actors * 2, sample=True
+            num_episodes=self.num_actors * 2, sample=not self.eval_deterministic
         )
 
         metrics = {
@@ -975,6 +1055,7 @@ class SHAC(Agent):
             "mini_epoch": self.mini_epoch,
             "agent_steps": self.agent_steps,
             "eval_scores/num_episodes": len(episode_rewards),
+            "eval_scores/sample": not self.eval_deterministic,
             "eval_scores/episode_rewards": episode_rewards,
             "eval_scores/episode_lengths": episode_lengths,
             "eval_scores/episode_discounted_rewards": episode_discounted_rewards,
