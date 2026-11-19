@@ -15,3 +15,12 @@ p2dry:
   tasks: [hopper]
   arms: [default, noalign, dtw, uot_expert_rho0.3, bl_gaifo_gp1, bl_maad_gp1, bl_dac, bl_opolo, bl_pwil_b2, bl_lwail,
          bl_oops_it1000, bl_ild_paper, bl_diffmimic, bl_bco, bl_gail_gp1, bl_bc]
+
+# Screening round 2 (item 3): the -c term makes the reward negative for large costs; with the unbounded L2 cost the
+# agent learns to end episodes (p0screen ant cost_l2: 0.003, 20-step episodes). Control = default of round 1.
+p0screen2:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [default, no_minus_c, no_minus_c_cost_l2]
+  skip: {hopper: [no_minus_c_cost_l2]}
+  control: default

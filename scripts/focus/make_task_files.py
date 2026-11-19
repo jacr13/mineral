@@ -67,6 +67,8 @@ ARMS = {
     'through_sinkhorn': dict(loss_ot_detach_plan=False),
     'score_function': dict(actor_grad_estimator='score_function'),
 }
+# second screening round: the default without the -c term (reward never negative), and the L2 ablation of it
+ARMS['no_minus_c_cost_l2'] = dict(critic_reward_minus_cost=False, loss_ot_cost_type='l2')
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     ARMS[f'uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
     ARMS[f'uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
