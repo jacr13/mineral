@@ -61,10 +61,10 @@ def main():
               ['run_id', 'agent_steps', 'train_seconds', 'return_norm'])
     tasks = args.tasks or [t for t in EXPERT if any(r['task'] == t for r in rows)]
     arms = args.arms or list(dict.fromkeys(r['arm'] for r in rows))
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    colors = [plt.get_cmap('tab20')(i) for i in range(20)]
     os.makedirs(FIG, exist_ok=True)
     for axis in ('steps', 'time'):
-        fig, axs = plt.subplots(1, len(tasks), figsize=(3.6 * len(tasks), 3.0), squeeze=False)
+        fig, axs = plt.subplots(1, len(tasks), figsize=(3.6 * len(tasks) + 2.2, 3.2), squeeze=False)
         for ax, t in zip(axs[0], tasks):
             for i, arm in enumerate(arms):
                 runs = [curves[r['run_id']] for r in rows if r['task'] == t and r['arm'] == arm and r['run_id'] in curves]
@@ -81,14 +81,15 @@ def main():
                     ys = [[np.interp(x, [p[1] for p in c], [p[2] for p in c]) for c in runs] for x in xs]
                     xplot = xs / 3600
                 m = np.array([band(y) for y in ys])
-                ax.plot(xplot, m[:, 0], color=colors[i % len(colors)], label=f'{arm} (n={len(runs)})', lw=1.5)
+                ax.plot(xplot, m[:, 0], color=colors[i % len(colors)], label=f'{arm} (n={len(runs)})', lw=1.5,
+                        ls='--' if arm.startswith('bl_') else '-')
                 ax.fill_between(xplot, m[:, 1], m[:, 2], color=colors[i % len(colors)], alpha=0.2, lw=0)
             ax.set_title(TASK_NAMES[t])
             ax.set_xlabel('environment steps (M)' if axis == 'steps' else 'training time (h)')
             ax.set_ylim(-0.05, 1.1)
             ax.grid(alpha=0.3)
         axs[0][0].set_ylabel('return / expert (deterministic eval)')
-        axs[0][-1].legend(fontsize=7, loc='lower right')
+        axs[0][-1].legend(fontsize=7, loc='center left', bbox_to_anchor=(1.02, 0.5), frameon=False)
         fig.tight_layout()
         for ext in ('pdf', 'png'):
             fig.savefig(os.path.join(FIG, f'{name}_{axis}.{ext}'), dpi=150)
