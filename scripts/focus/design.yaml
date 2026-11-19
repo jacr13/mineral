@@ -24,3 +24,11 @@ p0screen2:
   arms: [default, no_minus_c, no_minus_c_cost_l2]
   skip: {hopper: [no_minus_c_cost_l2]}
   control: default
+
+# Screening round 3: on Humanoid the clean default (0.53) is below the paper's OT-Cos configuration (0.89). The two
+# changes other than -c, each against the default without -c (control), on the humanoids.
+p0screen3:
+  seeds: tuning
+  tasks: [humanoid, snu_humanoid]
+  arms: [no_minus_c, no_minus_c_legacy_units, no_minus_c_abs_softmin]
+  control: no_minus_c

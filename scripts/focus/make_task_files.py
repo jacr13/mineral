@@ -69,6 +69,10 @@ ARMS = {
 }
 # second screening round: the default without the -c term (reward never negative), and the L2 ablation of it
 ARMS['no_minus_c_cost_l2'] = dict(critic_reward_minus_cost=False, loss_ot_cost_type='l2')
+# third round: the two other changes of the clean default, each against the default without -c
+ARMS['no_minus_c_legacy_units'] = dict(critic_reward_minus_cost=False, loss_cost_units='legacy')
+ARMS['no_minus_c_abs_softmin'] = dict(critic_reward_minus_cost=False, loss_best_of_k_relative=False,
+                                      loss_best_of_k_tau=0.5)
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     ARMS[f'uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
     ARMS[f'uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
