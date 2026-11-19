@@ -25,3 +25,4 @@ for k,v in sorted(out.items()):
 PY
 echo '--- p0screen2'; python3 scripts/focus/table.py p0screen2 --expect 3 --allow-incomplete --control default 2>&1 | sed -n '5,10p'
 echo '--- p2dry'; python3 scripts/focus/table.py p2dry --expect 2 --allow-incomplete 2>&1 | sed -n '5,24p'
+echo '--- p0screen3'; python3 scripts/focus/table.py p0screen3 --expect 3 --allow-incomplete --control no_minus_c 2>&1 | sed -n '5,10p'
