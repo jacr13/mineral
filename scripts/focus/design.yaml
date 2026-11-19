@@ -32,3 +32,12 @@ p0screen3:
   tasks: [humanoid, snu_humanoid]
   arms: [no_minus_c, no_minus_c_legacy_units, no_minus_c_abs_softmin]
   control: no_minus_c
+
+# Screening round 4: p0screen (9c295f3) reset the training envs at every periodic evaluation, which depressed
+# training (same default arm, same seeds: Humanoid 0.741 there, 0.975 in p0screen2). Clean comparison of the
+# candidate default (no -c) with the paper's OT-Cos configuration, same batch, shared evaluation on its own env.
+p0screen4:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [ref_otcos, no_minus_c]
+  control: ref_otcos
