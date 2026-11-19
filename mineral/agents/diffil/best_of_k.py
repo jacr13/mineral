@@ -27,6 +27,7 @@ def log_sinkhorn_unbalanced(
     eps: float = 0.1,
     iters: int = 60,
     rho: float = 1.0,
+    side: str = "both",
 ) -> torch.Tensor:
     """Entropic OT with *relaxed* marginals (unbalanced Sinkhorn).
 
@@ -48,7 +49,14 @@ def log_sinkhorn_unbalanced(
         eps: entropic regularisation.
         iters: Sinkhorn iterations.
         rho: marginal relaxation. Smaller = more mass may go unmatched.
+        side: "both" relaxes both marginals (KL on each side). "expert" relaxes only the expert-side (column)
+            marginal: every agent step keeps exactly mass 1/T, so it is always charged for its match, while
+            expert steps the agent does not reach within the window may receive less mass. The row update is
+            done last so the agent-side marginal holds exactly on return, and no total-mass renormalisation is
+            needed (the total is exactly 1).
     """
+    if side not in ("both", "expert"):
+        raise ValueError(f"Invalid side: {side}")
     B, T, _ = C.shape
     log_K = -C / eps
     log_u = torch.zeros(B, T, device=C.device, dtype=C.dtype)
@@ -63,6 +71,11 @@ def log_sinkhorn_unbalanced(
     scale = rho / (rho + eps)
 
     lse = torch.logsumexp
+    if side == "expert":
+        for _ in range(iters):
+            log_v = scale * (log_b - lse(log_K.transpose(-2, -1) + log_u.unsqueeze(1), dim=-1))
+            log_u = log_a - lse(log_K + log_v.unsqueeze(1), dim=-1)
+        return (log_u.unsqueeze(-1) + log_K + log_v.unsqueeze(-2)).exp()
     for _ in range(iters):
         log_u = scale * (log_a - lse(log_K + log_v.unsqueeze(1), dim=-1))
         log_v = scale * (log_b - lse(log_K.transpose(-2, -1) + log_u.unsqueeze(1), dim=-1))
@@ -153,6 +166,7 @@ def ground_cost_matrix(
     cost_type: Literal["huber", "l2", "cosine"] = "l2",
     huber_delta: float = 1.0,
     force_huber: bool = False,
+    mean_over_dims: bool = False,
 ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
     """Pairwise ground cost between two feature sequences.
 
@@ -169,9 +183,17 @@ def ground_cost_matrix(
             squared-L2 matrix as the second element so a caller can align on one
             cost and score with the other.
 
+        mean_over_dims: divide the squared-L2 (and Huber) cost by the feature dimension, so that it is the mean
+            squared difference per dimension (the unit of the index-wise criterion) instead of a sum that grows
+            with the dimension. The cosine cost does not depend on the dimension and is unchanged.
+
     Returns:
         ``(C, C_sq_l2_or_None)``.
     """
+    if mean_over_dims and cost_type != "cosine":
+        d = X.shape[-1]
+        C, C2 = ground_cost_matrix(X, Y, cost_type=cost_type, huber_delta=huber_delta, force_huber=force_huber)
+        return C / d, (None if C2 is None else C2 / d)
     if force_huber or cost_type == "huber":
         C2 = pairwise_sqdist(X, Y).clamp_min(1e-12)
         C = torch.sqrt(C2 + 1e-12)
@@ -195,8 +217,14 @@ class OTSinkhornCriterion(BestOfKCriterion):
         huber_delta: float = 1.0,
         detach_plan: bool = True,
         marginal_rho: Optional[float] = None,
+        marginal_side: str = "both",
+        step_cost: str = "legacy",
     ):
         super().__init__()
+        if step_cost not in ("legacy", "expected"):
+            raise ValueError(f"Invalid step_cost: {step_cost}")
+        self.step_cost = step_cost
+        self.marginal_side = marginal_side
         self.eps = eps
         self.iters = iters
         self.use_huber_speedup = use_huber_speedup
@@ -223,12 +251,14 @@ class OTSinkhornCriterion(BestOfKCriterion):
             cost_type=self.cost_type,
             huber_delta=self.huber_delta,
             force_huber=bool(use_huber),
+            mean_over_dims=self.step_cost == "expected",
         )
 
     def _plan(self, C):
         if self.marginal_rho is None:
             return log_sinkhorn(C, eps=self.eps, iters=self.iters)
-        return log_sinkhorn_unbalanced(C, eps=self.eps, iters=self.iters, rho=self.marginal_rho)
+        return log_sinkhorn_unbalanced(C, eps=self.eps, iters=self.iters, rho=self.marginal_rho,
+                                       side=self.marginal_side)
 
     def forward(self, sim_f: torch.Tensor, exp_f: torch.Tensor):
         B, K, T, d = exp_f.shape
@@ -245,10 +275,20 @@ class OTSinkhornCriterion(BestOfKCriterion):
 
         P_eff = P.detach() if self.detach_plan else P
         plan_costs = (P_eff * C).sum(dim=-1).view(B, K, T)  # cost per sim timestep
-        Lk = plan_costs.sum(dim=-1)  # [B, K]
+        if self.step_cost == "expected":
+            # Each agent step carries mass 1/T in the balanced plan, so T * sum_j P_tj C_tj is the expected ground
+            # cost of step t's match (index-wise matching is the special case P = I / T), and the window score is
+            # the mean over steps. Every criterion then reports per-step costs in the unit of the ground cost.
+            plan_costs = plan_costs * T
+            Lk = plan_costs.mean(dim=-1)
+        else:
+            Lk = plan_costs.sum(dim=-1)  # [B, K]
+        with torch.no_grad():
+            row_mass = P.detach().sum(dim=-1) * T  # 1 for every step in the balanced plan
         info = {
             "per_step_costs": plan_costs,
             "transport_plans": P.detach().view(B, K, T, T),
+            "row_mass": row_mass.view(B, K, T),
         }
         return Lk, info
 
@@ -394,8 +434,14 @@ class SoftDTWCriterion(BestOfKCriterion):
         open_end: bool = False,
         subsequence: bool = False,
         normalize: Literal["rows", "total", "none"] = "rows",
+        step_cost: str = "legacy",
     ):
         super().__init__()
+        if step_cost not in ("legacy", "expected"):
+            raise ValueError(f"Invalid step_cost: {step_cost}")
+        if step_cost == "expected" and normalize != "rows":
+            raise ValueError('step_cost "expected" needs normalize "rows" (each agent step carries unit weight)')
+        self.step_cost = step_cost
         self.gamma = gamma
         self.cost_type = cost_type
         self.huber_delta = huber_delta
@@ -414,7 +460,8 @@ class SoftDTWCriterion(BestOfKCriterion):
         # No Sinkhorn anywhere on this path: the alignment is the DP recursion
         # in soft_dtw() below.
         C, _ = ground_cost_matrix(
-            sim_f_tiled, exp_f_flat, cost_type=self.cost_type, huber_delta=self.huber_delta
+            sim_f_tiled, exp_f_flat, cost_type=self.cost_type, huber_delta=self.huber_delta,
+            mean_over_dims=self.step_cost == "expected",
         )  # [B*K, T, L]
 
         # soft_dtw needs grad w.r.t. C to read off the alignment matrix.
@@ -444,7 +491,11 @@ class SoftDTWCriterion(BestOfKCriterion):
         # Same shape of computation as OTSinkhornCriterion: fixed alignment,
         # gradients through the costs.
         plan_costs = (W * C).sum(dim=-1).view(B, K, T)
-        Lk = plan_costs.sum(dim=-1)  # [B, K]
+        if self.step_cost == "expected":
+            plan_costs = plan_costs * T  # rows of W sum to 1/T: expected ground cost of each step's match
+            Lk = plan_costs.mean(dim=-1)
+        else:
+            Lk = plan_costs.sum(dim=-1)  # [B, K]
         info = {
             "per_step_costs": plan_costs,
             "transport_plans": W.view(B, K, T, T),
@@ -574,8 +625,10 @@ class ORCACriterion(BestOfKCriterion):
         huber_delta: float = 1.0,
         normalize_p: bool = False,
         cost_mode: Literal["neg_log_r", "one_minus_r"] = "neg_log_r",
+        normalize_cost: bool = True,
     ):
         super().__init__()
+        self.normalize_cost = normalize_cost
         self.lam = lam
         self.cost_type = cost_type
         self.huber_delta = huber_delta
@@ -588,6 +641,12 @@ class ORCACriterion(BestOfKCriterion):
         exp_t = exp_f.contiguous().view(B * K, T, d)
         C = ground_cost_matrix(sim_t, exp_t, cost_type=self.cost_type,
                                huber_delta=self.huber_delta)[0]
+        if self.normalize_cost:
+            # ORCA's lam is defined against distances of order 1; our L2 ground cost runs ~80, so -log R reaches
+            # ~660 per step and exp(-cost) underflows to exactly zero (all 21 ORCA locomotion runs of 10 Nov 2026
+            # trained on a zero reward). Scale the cost to unit mean and average -log R over the prefix below.
+            # Restored from the old code (mineral dev), where it was the default; the port had dropped it.
+            C = C / C.detach().mean().clamp_min(1e-8)
         # ORCA yields a reward in [0, 1]; this pipeline consumes a non-negative
         # cost. Two conversions, both monotone:
         #
@@ -605,6 +664,8 @@ class ORCACriterion(BestOfKCriterion):
             logR = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p,
                                     return_log=True)
             per_step = (-logR).view(B, K, T)
+            if self.normalize_cost:
+                per_step = per_step / float(exp_f.shape[2])
         else:
             R = ordered_coverage(C, lam=self.lam, normalize_p=self.normalize_p)
             per_step = (1.0 - R).view(B, K, T)
@@ -672,9 +733,14 @@ class BestOfK(nn.Module):
         detach_prev_obs: bool = False,
         criterion: Optional[BestOfKCriterion] = None,
         device: Optional[torch.device] = None,
+        relative: bool = False,
     ):
         super().__init__()
 
+        # relative=True: the softmin over the K candidates acts on Lk / mean_k(Lk), the candidates' scores relative
+        # to each other, so the temperature means the same thing for every ground cost and alignment objective
+        # (with raw scores a fixed tau gave a hard argmin for the L2 cost and a plain average for the cosine one).
+        self.relative = relative
         self.T = T
         self.K = K
         self.tau = tau
@@ -806,11 +872,21 @@ class BestOfK(nn.Module):
             Lk, crit_info = crit_out, {}
 
         # ---- Softmin over K ----
-        loss = -self.tau * torch.logsumexp(-Lk / self.tau, dim=1).mean()
+        if self.relative:
+            scale = Lk.detach().mean(dim=1, keepdim=True).clamp_min(1e-12)
+            Lk_sel = Lk / scale
+        else:
+            scale = None
+            Lk_sel = Lk
+        loss = -self.tau * torch.logsumexp(-Lk_sel / self.tau, dim=1)
+        if scale is not None:
+            loss = loss * scale.squeeze(1)
+        loss = loss.mean()
+        w = torch.softmax(-Lk_sel.detach() / self.tau, dim=1)  # [B,K]
         weighted_per_step_costs = None
         if self.return_per_step_costs and "per_step_costs" in crit_info:
             per_step_costs = crit_info["per_step_costs"]  # [B,K,T]
-            weights = torch.softmax(-Lk / self.tau, dim=1).unsqueeze(-1)
+            weights = torch.softmax(-Lk_sel / self.tau, dim=1).unsqueeze(-1)
             weighted_per_step_costs = (weights * per_step_costs).sum(dim=1)  # [B,T]
 
         info = {
@@ -819,7 +895,14 @@ class BestOfK(nn.Module):
             "Lk_mean": Lk.detach().mean(dim=1).mean(),
             "starts": starts.detach(),
             "best_idx": Lk.argmin(dim=1).detach(),
+            # effective number of candidates, 1 / sum_k w_k^2 (1 = hard argmin, K = plain average)
+            "k_eff": (1.0 / (w**2).sum(dim=1)).mean(),
         }
+        if "row_mass" in crit_info:
+            rm = (w.unsqueeze(-1) * crit_info["row_mass"]).sum(dim=1)  # [B,T], selected-candidate row masses
+            info["row_mass_min"] = rm.min()
+            info["row_mass_max"] = rm.max()
+            info["row_mass_cv"] = (rm.std(dim=1, unbiased=False) / rm.mean(dim=1).clamp_min(1e-12)).mean()
         if weighted_per_step_costs is not None and self.return_per_step_costs:
             info["per_step_costs"] = weighted_per_step_costs
         if expert.dim() == 3 and expert.shape[0] != B:

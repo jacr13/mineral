@@ -56,6 +56,20 @@ class FOCUS(SHAC):
         # suggested for the fragmented plans in Figs. 3(c)/9(f)(h).
         _rho = self.focus_config.get("loss_ot_marginal_rho", None)
         self.loss_ot_marginal_rho = None if _rho in (None, "null", "none") else float(_rho)
+        # "both" relaxes both marginals; "expert" relaxes only the expert side, so every agent step keeps its mass.
+        self.loss_ot_marginal_side = self.focus_config.get("loss_ot_marginal_side", "both")
+        # Units of the per-step cost (the input of the reward map) and of the window score (the input of the
+        # best-of-K softmin). "legacy": as in the reported runs (OT / soft-DTW per-step costs carry a factor 1/T,
+        # the L2 ground cost is summed over feature dimensions, the window score sums over steps). "expected":
+        # every criterion reports the expected ground cost of each step's match, with the L2 cost averaged over
+        # feature dimensions, and the window score is the mean over steps (index-wise matching is the special case
+        # of the identity coupling).
+        self.loss_cost_units = self.focus_config.get("loss_cost_units", "legacy")
+        # Softmin over candidates on scores relative to their mean (scale-free temperature).
+        self.loss_best_of_k_relative = bool(self.focus_config.get("loss_best_of_k_relative", False))
+        # Reward = phi(c) - c. null: only for the mappings of the reported runs (neg, log_exp, 1_over_1_plus_loss,
+        # not exp); true: for every mapping; false: for none.
+        self.critic_reward_minus_cost = self.focus_config.get("critic_reward_minus_cost", None)
         # "pathwise"       : differentiate the return through the simulator -- FOCUS as published.
         # "score_function" : identical objective, reward, critic, architecture and
         #                    horizon, but the gradient is estimated with REINFORCE
@@ -76,6 +90,7 @@ class FOCUS(SHAC):
         self.loss_orca_lam = float(self.focus_config.get("loss_orca_lam", 0.25))
         self.loss_orca_cost_mode = self.focus_config.get("loss_orca_cost_mode", "neg_log_r")
         self.loss_orca_normalize_p = bool(self.focus_config.get("loss_orca_normalize_p", False))
+        self.loss_orca_normalize_cost = bool(self.focus_config.get("loss_orca_normalize_cost", True))
         self.loss_ot_cost_type = self.focus_config.get("loss_ot_cost_type", "l2")
         self.loss_use_huber_speedup = self.focus_config.get("loss_use_huber_speedup", True)
         self.loss_mlp_features_dim = self.focus_config.get("loss_mlp_features_dim", None)
@@ -90,6 +105,10 @@ class FOCUS(SHAC):
         if self.save_plan_heatmaps and (not self.multi_gpu or self.rank == 0):
             os.makedirs(self.plan_heatmap_dir, exist_ok=True)
 
+        if self.imitation_loss_type == "index":
+            # no alignment: step t of the agent window is matched to step t of the candidate segment, with the
+            # configured ground cost (the same cost as the aligned variants)
+            self.imitation_loss_type = "cosine" if self.loss_ot_cost_type == "cosine" else "l2"
         if self.imitation_loss_type in ["ot", "l2", "cosine", "softdtw", "softdtw_subseq", "orca"]:
             if self.imitation_loss_type == "ot":
                 ot_params = dict(
@@ -100,6 +119,8 @@ class FOCUS(SHAC):
                     use_huber_speedup=self.loss_use_huber_speedup,
                     detach_plan=self.loss_ot_detach_plan,
                     marginal_rho=self.loss_ot_marginal_rho,
+                    marginal_side=self.loss_ot_marginal_side,
+                    step_cost=self.loss_cost_units,
                 )
                 criterion = OTSinkhornCriterion(**ot_params)
             elif self.imitation_loss_type in ("softdtw", "softdtw_subseq"):
@@ -113,6 +134,7 @@ class FOCUS(SHAC):
                     subsequence=subseq,
                     open_end=subseq,
                     normalize=self.loss_dtw_normalize,
+                    step_cost=self.loss_cost_units,
                 )
             elif self.imitation_loss_type == "orca":
                 criterion = ORCACriterion(
@@ -121,6 +143,7 @@ class FOCUS(SHAC):
                     huber_delta=self.loss_ot_huber_delta,
                     normalize_p=self.loss_orca_normalize_p,
                     cost_mode=self.loss_orca_cost_mode,
+                    normalize_cost=self.loss_orca_normalize_cost,
                 )
             elif self.imitation_loss_type == "l2":
                 criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
@@ -143,6 +166,7 @@ class FOCUS(SHAC):
                 feature_dim=obs_dim,
                 return_per_step_costs=True,
                 device=self.device,
+                relative=self.loss_best_of_k_relative,
             )
             self.loss_fn = BestOfK(**bok_params, criterion=criterion)
         elif self.imitation_loss_type == "chamfer":
@@ -197,6 +221,13 @@ class FOCUS(SHAC):
                 "imitation_loss",
                 "returns_mean",
                 "expert_return",
+                "per_step_cost_mean",
+                "per_step_cost_std",
+                "reward_dead_frac",
+                "k_eff",
+                "row_mass_min",
+                "row_mass_max",
+                "row_mass_cv",
             )
             for key in stat_keys:
                 if key in info:
@@ -396,6 +427,8 @@ class FOCUS(SHAC):
         info["imitation_loss"] = loss.detach()
         info["per_step_cost_mean"] = per_step_costs.detach().mean()
         info["per_step_cost_std"] = per_step_costs.detach().std(unbiased=False)
+        # share of steps where exp(-c) has underflowed to nothing (no learning signal from an exp-type map)
+        info["reward_dead_frac"] = (per_step_costs.detach() > 13.8).float().mean()
 
         step_rewards = per_step_rewards.transpose(0, 1)  # [T,B]
         # step_cost = per_step_costs.transpose(0, 1)  # [T,B]
@@ -600,11 +633,15 @@ class FOCUS(SHAC):
 
         # allows gradients to flow through cost when loss is high and exp goes to 0.
         # NOTE: this makes the reward phi(L) - L, not phi(L), for these mappings.
-        if self.critic_reward_shapping and self.critic_reward_mapping in [
-            "neg",
-            "log_exp",
-            "1_over_1_plus_loss",
-        ]:
+        if self.critic_reward_minus_cost is None:
+            minus_cost = self.critic_reward_shapping and self.critic_reward_mapping in [
+                "neg",
+                "log_exp",
+                "1_over_1_plus_loss",
+            ]
+        else:
+            minus_cost = bool(self.critic_reward_minus_cost)
+        if minus_cost:
             rewards = rewards - per_step_costs
 
         if self.critic_reward_normalize:

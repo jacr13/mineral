@@ -4,6 +4,12 @@ defaults:
 
 algo: FOCUS
 
+# Evaluation protocol (see SHAC.__init__): deterministic final score, periodic deterministic evaluations every
+# eval_every_steps agent steps (0 = off), no dump of evaluation rollouts.
+eval_deterministic: false
+eval_every_steps: 0
+save_eval_rollouts: true
+
 focus:
   demos:
     path: ""
@@ -26,6 +32,15 @@ focus:
   # null = balanced OT (uniform marginals). A float relaxes them
   # (unbalanced OT), so unmatched agent states need not be coupled.
   loss_ot_marginal_rho: null
+  # both | expert: with "expert" only the expert-side marginal is relaxed (every agent step keeps its mass)
+  loss_ot_marginal_side: both
+  # legacy | expected: units of the per-step cost and window score (see focus.py). "expected" = expected ground
+  # cost of each step's match, L2 averaged over feature dims, window score = mean over steps.
+  loss_cost_units: legacy
+  # true = best-of-K softmin on scores relative to their mean over the K candidates (scale-free temperature)
+  loss_best_of_k_relative: false
+  # reward = phi(c) - c: null = for neg / log_exp / 1_over_1_plus_loss only (reported runs), true = every map
+  critic_reward_minus_cost: null
   loss_ot_huber_delta: 1.0
   loss_use_huber_speedup: false
   loss_mlp_features_dim: null
@@ -57,4 +72,5 @@ focus:
   loss_orca_lam: 0.25
   loss_orca_cost_mode: neg_log_r
   loss_orca_normalize_p: false
+  loss_orca_normalize_cost: true
   actor_value_return_type: min
