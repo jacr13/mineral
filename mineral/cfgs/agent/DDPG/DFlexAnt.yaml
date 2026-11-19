@@ -66,3 +66,7 @@ ddpg:
     std_min: 0.1
     tgt_pol_std: 0.2
     tgt_pol_noise_bound: 0.5
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

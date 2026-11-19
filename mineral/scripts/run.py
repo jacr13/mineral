@@ -166,7 +166,7 @@ def main(config: DictConfig):
             agent.train()
         elif config.run == 'eval':
             set_seed(seeds['eval'] + rank)
-            agent.eval()
+            agent.protocol_final() if agent.protocol_eval else agent.eval()
         elif config.run == 'train_eval':
             set_seed(seeds['train'] + rank)
             agent.train()
@@ -174,7 +174,7 @@ def main(config: DictConfig):
             agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))
 
             set_seed(seeds['eval'] + rank)
-            agent.eval()
+            agent.protocol_final() if agent.protocol_eval else agent.eval()
         else:
             raise NotImplementedError(config.run)
     except (KeyboardInterrupt, Exception) as e:

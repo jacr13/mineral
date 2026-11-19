@@ -20,3 +20,7 @@ bc:
   batch_size: 1024
   lr: 1e-3
   eval_episodes_per_env: 2
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

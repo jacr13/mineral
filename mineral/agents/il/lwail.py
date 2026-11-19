@@ -323,12 +323,16 @@ class LWAIL(DDPG):
         self.agent_steps += steps
         self._pretrain_discriminator()
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
 
             self.set_eval()
@@ -372,6 +376,8 @@ class LWAIL(DDPG):
                     f"ep_lengths {episode_metrics['train_scores/episode_lengths']:.2f},",
                     f"Expert return: {self.demos['expert_return']:.2f}",
                 )
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, "final.pth"))
 

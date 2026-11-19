@@ -196,6 +196,11 @@ class OOPS(Agent):
             parts.append(match)
         return torch.cat(parts, dim=-1)
 
+    def protocol_act(self, obs, sample=False, t=None):
+        # the actor is conditioned on the time to the horizon, as in training: (horizon - t) / horizon
+        tth = ((self.horizon - t.float()) / float(self.horizon)).clamp_min(0.0).view(-1, 1)
+        return self.get_actions(obs, tth, sample=sample)
+
     def get_actions(self, obs, t_to_horizon, sample=True):
         x = self._augmented_state(obs, t_to_horizon)
         mu, _, _ = self.actor(x)
@@ -331,12 +336,16 @@ class OOPS(Agent):
         self.memory.add_to_buffer(trajectory)
         self.agent_steps += steps
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
             self.set_eval()
             trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, sample=True)
@@ -378,6 +387,8 @@ class OOPS(Agent):
                     f"ep_rewards {episode_metrics['train_scores/episode_rewards']:.2f} |",
                     f"Expert return: {self.demos['expert_return']:.2f}",
                 )
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, "final.pth"))
 

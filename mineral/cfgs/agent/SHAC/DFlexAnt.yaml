@@ -50,3 +50,7 @@ shac:
   no_target_critic: False
   max_grad_norm: 1.0
   truncate_grads: True
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

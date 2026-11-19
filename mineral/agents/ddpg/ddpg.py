@@ -101,6 +101,9 @@ class DDPG(Agent):
         else:
             self.noise_scheduler = None
 
+    def protocol_act(self, obs, sample=False, t=None):
+        return self.get_actions(obs, sample=sample)  # deterministic actor; sample adds the exploration noise
+
     def get_actions(self, obs, sample=True):
         if self.normalize_input:
             obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
@@ -216,12 +219,16 @@ class DDPG(Agent):
         self.memory.add_to_buffer(trajectory)
         self.agent_steps += steps
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
             self.set_eval()
             trajectory, steps = self.explore_env(self.env, self.ddpg_config.horizon_len, sample=True)
@@ -256,6 +263,8 @@ class DDPG(Agent):
 
             self.writer.add(self.agent_steps, metrics)
             self.writer.write()
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

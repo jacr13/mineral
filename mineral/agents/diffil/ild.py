@@ -59,7 +59,10 @@ class ILD(SHAC):
         """Earlier variant: SHAC-style windows of horizon_len steps, Chamfer against the pooled expert states."""
         self.initialize_env()
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.max_epochs > 0 and self.epoch >= self.max_epochs:
                 print("Reached max epochs. Exiting cleanly.")
@@ -68,6 +71,7 @@ class ILD(SHAC):
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
 
             if self.shac_config.lr_schedule == "linear":
@@ -142,6 +146,8 @@ class ILD(SHAC):
 
         timings = self.timer.stats(step=self.agent_steps)
         print(timings)
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, "final.pth"))
         self.episode_rewards_hist = np.array(self.episode_rewards_hist)
@@ -433,7 +439,16 @@ class ILD(SHAC):
         lr0, lr1 = float(cfg.get("lr", 1e-3)), float(cfg.get("min_lr", 1e-5))
         clip = float(cfg.get("max_grad_norm", 0.3))
         step_clip = float(cfg.get("step_grad_norm", 1.0))
-        iters = max(1, int(self.max_agent_steps) // (B * T))
+        # count_all_sim_steps: each iteration simulates 2 * B * T steps (a rollout without gradient for the targets,
+        # then the rollout that is differentiated); count both, as every other method counts every simulated step,
+        # and round the iteration count up so the run reaches its budget. False keeps the earlier count (B * T per
+        # iteration, budget rounded down).
+        count_all = bool(cfg.get("count_all_sim_steps", False))
+        per_it = (2 if count_all else 1) * B * T
+        if count_all:
+            iters = max(1, -(-int(self.max_agent_steps) // per_it))
+        else:
+            iters = max(1, int(self.max_agent_steps) // per_it)
         print(f"[ILD] paper mode: {B} envs x {T} steps, truncation {trunc}, {iters} iterations")
 
         # demo trajectories (first T states), features and validity
@@ -452,12 +467,15 @@ class ILD(SHAC):
             n = g.norm()
             return torch.where(n > step_clip, g * (step_clip / n), g)
 
+        self.protocol_begin()
         for it in range(iters):
+            self.protocol_step()
             self.epoch = it + 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another iteration. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
             lr = lr0 + (lr1 - lr0) * it / max(1, iters)
             for g in optim.param_groups:
@@ -569,7 +587,7 @@ class ILD(SHAC):
                 optim.step()
             else:
                 print("non-finite gradient, skipping the update")
-            self.agent_steps += B * T
+            self.agent_steps += per_it
             self.sim_steps += 2 * B * T
             self.timer.end("train/iteration")
 
@@ -598,6 +616,7 @@ class ILD(SHAC):
                     f"grad {gn.item():.3f} | drift {drift:.2e} | ep_rewards {mean_rew:.1f}"
                 )
 
+        self.protocol_end(self.max_agent_steps)
         self.save(os.path.join(self.ckpt_dir, "final.pth"))
         np.save(open(os.path.join(self.logdir, "ep_rewards_hist.npy"), "wb"), np.array(self.episode_rewards_hist))
         np.save(open(os.path.join(self.logdir, "ep_lengths_hist.npy"), "wb"), np.array(self.episode_lengths_hist))

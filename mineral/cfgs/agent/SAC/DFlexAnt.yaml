@@ -67,3 +67,7 @@ sac:
   actor_optim_kwargs: {lr: 5e-4}
   critic_optim_kwargs: {lr: 5e-4}
   max_grad_norm: 0.5
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

@@ -130,6 +130,10 @@ class PPO(DAPGMixin, Agent):
             model_out['values'] = self.value_rms.unnormalize(model_out['values'])
         return model_out
 
+    def protocol_act(self, obs, sample=False, t=None):
+        out = self.model_act(obs, sample=sample)
+        return out['actions'] if sample else out  # model.act(sample=False) returns the mean
+
     @torch.no_grad()
     def play_steps(self):
         for n in range(self.horizon_len):
@@ -187,12 +191,16 @@ class PPO(DAPGMixin, Agent):
         self.obs = self._convert_obs(obs)
         self.dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
 
             self.set_eval()
@@ -248,6 +256,8 @@ class PPO(DAPGMixin, Agent):
 
         timings = self.timer.stats(step=self.agent_steps)
         print(timings)
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

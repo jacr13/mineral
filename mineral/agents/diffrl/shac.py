@@ -23,6 +23,7 @@ from ...common import normalizers
 from ...common.reward_shaper import RewardShaper
 from ...common.timer import Timer
 from ...common.tracker import Tracker
+from ...nets.distributions import SquashedNormal
 from ..agent import Agent
 from . import models
 from .utils import CriticDataset, adaptive_scheduler, grad_norm, policy_kl, soft_update
@@ -196,11 +197,10 @@ class SHAC(Agent):
 
         # --- Evaluation protocol ---
         # eval_deterministic: the final evaluation (scores.json) uses the policy mean; the stochastic one is kept
-        # in scores_stochastic.json. eval_every_steps > 0: deterministic evaluations of the current policy at fixed
-        # step intervals (eval_curve.jsonl), the source of learning curves; the environments are reset afterwards.
+        # in scores_stochastic.json.
         # save_eval_rollouts: dump the evaluation episodes (observations, actions) to logdir/demos.
+        # (eval_every_steps, the periodic evaluation, is handled by Agent.protocol_* on a dedicated env.)
         self.eval_deterministic = bool(full_cfg.agent.get('eval_deterministic', False))
-        self.eval_every_steps = int(full_cfg.agent.get('eval_every_steps', 0) or 0)
         self.save_eval_rollouts = bool(full_cfg.agent.get('save_eval_rollouts', True))
 
         self.episode_rewards_hist = []
@@ -245,6 +245,10 @@ class SHAC(Agent):
         mu, sigma, distr = self.actor(z)
         if sample:
             actions = distr.rsample()
+        elif isinstance(distr, SquashedNormal):
+            # the deterministic action of a squashed normal is tanh(loc); mu is the pre-tanh loc, which the env
+            # would only clip to [-1, 1] (a different policy). mu itself is still returned for the KL terms.
+            actions = distr.mean
         else:
             actions = mu
 
@@ -256,6 +260,11 @@ class SHAC(Agent):
             return actions, mu, sigma, distr
         else:
             return actions
+
+    def protocol_act(self, obs, sample=False, t=None):
+        if self.obs_rms is not None:
+            obs = {k: self.obs_rms[k].normalize(v) for k, v in obs.items()}
+        return self.get_actions(obs, sample=sample)  # deterministic: tanh(loc) for a squashed normal
 
     @torch.no_grad()
     def evaluate_policy(self, num_episodes, sample=False, render=False):
@@ -379,47 +388,14 @@ class SHAC(Agent):
             print("Skipping clear_grad")
         self.env.reset()
 
-    @torch.no_grad()
-    def _periodic_eval(self):
-        """Deterministic evaluation of the current policy (128 episodes, first two of each env), appended to
-        eval_curve.jsonl. Evaluation steps are not counted in agent_steps; the environments and the training
-        episode statistics are reset afterwards, so training resumes from fresh episodes."""
-        t0 = time.time()
-        self.set_eval()
-        rew, lengths, _ = self.evaluate_policy(num_episodes=self.num_actors * 2, sample=False)
-        self.initialize_env()
-        self.episode_rewards.zero_()
-        self.episode_lengths.zero_()
-        self.episode_discounted_rewards.zero_()
-        self.episode_gamma.fill_(1.0)
-        dt = time.time() - t0
-        self._eval_seconds += dt
-        rec = {
-            'agent_steps': int(self.agent_steps),
-            'epoch': int(self.epoch),
-            'train_seconds': time.time() - self._train_t0 - self._eval_seconds,
-            'eval_seconds': dt,
-            'mean_return': float(np.mean(rew)),
-            'mean_length': float(np.mean(lengths)),
-            'episode_rewards': [float(x) for x in rew],
-            'episode_lengths': [int(x) for x in lengths],
-        }
-        with open(os.path.join(self.logdir, 'eval_curve.jsonl'), 'a') as f:
-            f.write(json.dumps(rec) + '\n')
-        self.writer.add(self.agent_steps, {'eval_curve/episode_rewards': rec['mean_return'],
-                                           'eval_curve/episode_lengths': rec['mean_length']})
-        print(f"periodic eval at {int(self.agent_steps):,} steps: return {rec['mean_return']:.1f} ({dt:.0f} s)")
-
     def train(self):
         # initializations
         self.initialize_env()
-        self._train_t0 = time.time()
-        self._eval_seconds = 0.0
-        next_eval = self.eval_every_steps if self.eval_every_steps > 0 else None
-        if next_eval is not None:
-            self._periodic_eval()  # the untrained policy: curves start at step 0
+
+        self.protocol_begin()
 
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.max_epochs > 0 and self.epoch >= self.max_epochs:
                 print("Reached max epochs. Exiting cleanly.")
@@ -428,6 +404,7 @@ class SHAC(Agent):
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
 
             # learning rate schedule
@@ -545,11 +522,6 @@ class SHAC(Agent):
 
             self._checkpoint_save(mean_episode_rewards)
 
-            if next_eval is not None and self.agent_steps >= next_eval and self.agent_steps < self.max_agent_steps:
-                self._periodic_eval()
-                while next_eval <= self.agent_steps:
-                    next_eval += self.eval_every_steps
-
             if self.print_every > 0 and (self.epoch + 1) % self.print_every == 0:
                 print(
                     f'Epochs: {self.epoch + 1} |',
@@ -569,15 +541,9 @@ class SHAC(Agent):
         timings = self.timer.stats(step=self.agent_steps)
         print(timings)
 
-        budget = {
-            'agent_steps': int(self.agent_steps),
-            'max_agent_steps': int(self.max_agent_steps),
-            'reached_budget': bool(self.agent_steps >= self.max_agent_steps),
-            'epochs': int(self.epoch),
-            'train_seconds': time.time() - self._train_t0 - self._eval_seconds,
-            'periodic_eval_seconds': self._eval_seconds,
-        }
-        json.dump(budget, open(os.path.join(self.logdir, 'budget.json'), 'w'), indent=2)
+
+        self.protocol_end(self.max_agent_steps)
+
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

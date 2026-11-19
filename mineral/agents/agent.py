@@ -1,5 +1,9 @@
+import copy
+import json
 import os
+import random
 import re
+import time
 from contextlib import contextmanager
 
 import numpy as np
@@ -100,6 +104,20 @@ class Agent:
         self.ckpt_every = full_cfg.agent.get('ckpt_every', -1)
         self.eval_every = full_cfg.agent.get('eval_every', -1)
         self.best_stat = None
+
+        # --- Rerun evaluation protocol (shared by every agent; off by default) ---
+        # protocol_eval: the final score is protocol_evaluate() of the final policy (scores.json, deterministic; the
+        # stochastic policy in scores_stochastic.json). eval_every_steps > 0: the same deterministic evaluation of
+        # the current policy every eval_every_steps agent steps, from step 0 (eval_curve.jsonl). All evaluations run
+        # on a dedicated environment built from the run's config with the task's standard settings, so training
+        # state (envs, buffers, RNG streams) is untouched. budget.json records the steps reached.
+        self.protocol_eval = bool(full_cfg.agent.get('protocol_eval', False))
+        self.eval_every_steps = int(full_cfg.agent.get('eval_every_steps', 0) or 0)
+        self._protocol_env = None
+        self._protocol_next = None
+        self._protocol_t0 = None
+        self._protocol_eval_seconds = 0.0
+        self._protocol_stopped_by_clock = False
 
         # --- Training ---
         self.epoch = -1
@@ -224,6 +242,186 @@ class Agent:
                     os.remove(prev_best_ckpt)
             self.best_stat = stat
             self.save(os.path.join(self.ckpt_dir, f'best_{stat_name}{sep}{self.best_stat:.2f}.pth'))
+
+    # ------------------------------------------------------------------
+    # Rerun evaluation protocol
+    # ------------------------------------------------------------------
+    def protocol_act(self, obs, sample=False, t=None):
+        """Action of the current policy for raw (converted, unnormalised) observations ``obs``.
+
+        ``sample=False`` is the deterministic policy (mean / mode), ``sample=True`` the stochastic one. ``t`` is the
+        step index within the episode per env (for time-conditioned policies). Implemented by each agent family.
+        """
+        raise NotImplementedError(f'{type(self).__name__} has no protocol_act')
+
+    @contextmanager
+    def _protocol_scope(self):
+        """Run with the evaluation env's global DFlex state and leave training's RNG streams untouched."""
+        state = (torch.get_rng_state(), torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+                 np.random.get_state(), random.getstate())
+        dfc = None
+        try:
+            import dflex
+
+            dfc = dflex.config.no_grad
+        except ImportError:
+            pass
+        try:
+            if dfc is not None and self._protocol_env is not None:
+                dflex.config.no_grad = bool(getattr(self._protocol_env, 'no_grad', True))
+            yield
+        finally:
+            if dfc is not None:
+                dflex.config.no_grad = dfc  # DFlex reads this global at every step of every env
+            torch.set_rng_state(state[0])
+            if state[1] is not None:
+                torch.cuda.set_rng_state_all(state[1])
+            np.random.set_state(state[2])
+            random.setstate(state[3])
+
+    def _protocol_get_env(self):
+        if self._protocol_env is None:
+            from .. import envs
+
+            cfg = copy.deepcopy(self.full_cfg)
+            OmegaConf.set_struct(cfg, False)
+            env_cfg = cfg.task.env
+            # the task's standard settings, as the expert's 128-episode pool: method-specific changes are undone
+            for k in ('early_termination', '+early_termination'):
+                if k in env_cfg:
+                    del env_cfg[k]
+            env_cfg.numEnvs = 64
+            env_cfg.no_grad = True
+            env_cfg.render = False
+            env_cfg.stochastic_init = True
+            cfg.seed = int(cfg.seed) + 12345
+            suite = getattr(envs, cfg.task.get('suite', 'isaacgymenvs'))
+            dfc = None
+            try:
+                import dflex
+
+                dfc = dflex.config.no_grad
+            except ImportError:
+                pass
+            with self._protocol_scope():
+                self._protocol_env = suite.make_envs(cfg)
+            if dfc is not None:
+                dflex.config.no_grad = dfc
+        return self._protocol_env
+
+    @torch.no_grad()
+    def protocol_evaluate(self, sample=False, per_env=2):
+        """First ``per_env`` episodes of each of the 64 evaluation envs; returns (returns, lengths)."""
+        env = self._protocol_get_env()
+        with self._protocol_scope():
+            obs = self._convert_obs(env.reset())
+            n = env.num_envs
+            ret = torch.zeros(n, device=self.device)
+            length = torch.zeros(n, dtype=torch.long, device=self.device)
+            counts = [0] * n
+            returns, lengths = [], []
+            max_len = int(getattr(env, 'episode_length', getattr(env, 'max_episode_length', 1000)))
+            for _ in range(per_env * max_len + 10):
+                actions = self.protocol_act(obs, sample=sample, t=length)
+                o, r, d, info = env.step(torch.as_tensor(actions, device=self.device).clamp(-1.0, 1.0))
+                obs = self._convert_obs(o)
+                ret += torch.as_tensor(r, device=self.device).float().view(-1)
+                length += 1
+                done = torch.as_tensor(d, device=self.device).view(-1).bool()
+                idx = done.nonzero(as_tuple=False).flatten().tolist()
+                for i in self._eval_keep(idx, counts, per_env):
+                    returns.append(float(ret[i]))
+                    lengths.append(int(length[i]))
+                ret[done] = 0.0
+                length[done] = 0
+                if min(counts) >= per_env:
+                    break
+        return returns, lengths
+
+    def _protocol_mode(self, train):
+        for name in ('actor', 'actor_encoder', 'encoder', 'model', 'policy'):
+            m = getattr(self, name, None)
+            if isinstance(m, torch.nn.Module):
+                m.train(train)
+
+    def protocol_begin(self):
+        """Call once before the training loop."""
+        self._protocol_t0 = time.time()
+        self._protocol_eval_seconds = 0.0
+        if self.eval_every_steps > 0:
+            self._protocol_next = 0
+            self.protocol_step()
+
+    def protocol_step(self):
+        """Call after every training iteration: periodic evaluation when the next multiple of eval_every_steps is reached."""
+        if self._protocol_next is None or self.agent_steps < self._protocol_next:
+            return
+        t0 = time.time()
+        modes = {n: m.training for n in ('actor', 'actor_encoder', 'encoder', 'model', 'policy')
+                 if isinstance(m := getattr(self, n, None), torch.nn.Module)}
+        self._protocol_mode(False)
+        rew, lengths = self.protocol_evaluate(sample=False)
+        for n, was in modes.items():
+            getattr(self, n).train(was)
+        dt = time.time() - t0
+        self._protocol_eval_seconds += dt
+        rec = {
+            'agent_steps': int(self.agent_steps),
+            'epoch': int(self.epoch),
+            'train_seconds': time.time() - self._protocol_t0 - self._protocol_eval_seconds,
+            'eval_seconds': dt,
+            'mean_return': float(np.mean(rew)),
+            'mean_length': float(np.mean(lengths)),
+            'episode_rewards': rew,
+            'episode_lengths': lengths,
+        }
+        with open(os.path.join(self.logdir, 'eval_curve.jsonl'), 'a') as f:
+            f.write(json.dumps(rec) + '\n')
+        self.writer.add(self.agent_steps, {'eval_curve/episode_rewards': rec['mean_return'],
+                                           'eval_curve/episode_lengths': rec['mean_length']})
+        print(f"[protocol] eval at {int(self.agent_steps):,} steps: return {rec['mean_return']:.1f} ({dt:.0f} s)")
+        while self._protocol_next <= self.agent_steps:
+            self._protocol_next += self.eval_every_steps
+
+    def protocol_clock_stop(self):
+        """Record that the job clock stopped training before the budget."""
+        self._protocol_stopped_by_clock = True
+
+    def protocol_end(self, max_agent_steps):
+        """Call after the training loop (before saving final.pth)."""
+        if self._protocol_t0 is None:
+            return
+        budget = {
+            'agent_steps': int(self.agent_steps),
+            'max_agent_steps': int(max_agent_steps),
+            'reached_budget': bool(self.agent_steps >= max_agent_steps),
+            'stopped_by_clock': self._protocol_stopped_by_clock,
+            'epochs': int(self.epoch),
+            'train_seconds': time.time() - self._protocol_t0 - self._protocol_eval_seconds,
+            'periodic_eval_seconds': self._protocol_eval_seconds,
+        }
+        json.dump(budget, open(os.path.join(self.logdir, 'budget.json'), 'w'), indent=2)
+
+    def protocol_final(self):
+        """Final score of the loaded (final) policy: deterministic scores.json, stochastic scores_stochastic.json."""
+        self._protocol_mode(False)
+        for sample, fname in ((True, 'scores_stochastic.json'), (False, 'scores.json')):
+            rew, lengths = self.protocol_evaluate(sample=sample)
+            scores = {
+                'epoch': int(self.epoch),
+                'agent_steps': int(self.agent_steps),
+                'eval_scores/protocol': True,
+                'eval_scores/sample': sample,
+                'eval_scores/num_episodes': len(rew),
+                'eval_scores/episode_rewards': rew,
+                'eval_scores/episode_lengths': lengths,
+            }
+            json.dump(scores, open(os.path.join(self.logdir, fname), 'w'), indent=4)
+            print(f'[protocol] final ({"stochastic" if sample else "deterministic"}): {np.mean(rew):.1f} '
+                  f'over {len(rew)} episodes')
+        self.writer.add(self.agent_steps, {'eval_scores/episode_rewards': float(np.mean(rew)),
+                                           'eval_scores/num_episodes': len(rew)})
+        self.writer.write()
 
     def _convert_obs(self, obs):
         if not isinstance(obs, dict):

@@ -140,6 +140,9 @@ class SAC(Agent):
         else:
             return actions
 
+    def protocol_act(self, obs, sample=False, t=None):
+        return self.get_actions(obs=obs, sample=sample)  # deterministic: distr.mean (tanh(loc))
+
     @torch.no_grad()
     def explore_env(self, env, timesteps: int, random: bool = False, sample: bool = False):
         traj_obs = {
@@ -205,12 +208,16 @@ class SAC(Agent):
         self.memory.add_to_buffer(trajectory)
         self.agent_steps += steps
 
+        self.protocol_begin()
+
         while self.agent_steps < self.max_agent_steps:
+            self.protocol_step()
             self.epoch += 1
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print("Not enough time left for another step. Exiting cleanly.")
+                    self.protocol_clock_stop()
                     break
             self.set_eval()
             trajectory, steps = self.explore_env(self.env, self.sac_config.horizon_len, sample=True)
@@ -259,6 +266,8 @@ class SAC(Agent):
 
         timings = self.timer.stats(step=self.agent_steps)
         print(timings)
+
+        self.protocol_end(self.max_agent_steps)
 
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

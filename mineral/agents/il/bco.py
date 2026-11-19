@@ -70,6 +70,7 @@ class BCO(BC):
 
     def train(self):
         cfg = self.bc_config
+        self.protocol_begin()
         self.collect(cfg.pre_steps, random=True)
         for self.epoch in range(int(cfg.rounds)):
             if self.epoch > 0 and int(cfg.alpha_steps) > 0:
@@ -82,4 +83,6 @@ class BCO(BC):
             loss = self.fit(self.expert_s, labels, cfg.steps_per_round)
             self._log_round({'train/bc_loss': loss, 'train/inverse_loss': inv_loss, 'audit/label_mse_vs_expert': label_err})
             self.obs = None  # evaluation reset the env
+            self.protocol_step()
+        self.protocol_end(self.agent_steps)  # interaction set by rounds / alpha_steps, not a step budget
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))

@@ -69,9 +69,12 @@ class BC(Agent):
 
     def train(self):
         cfg = self.bc_config
+        self.protocol_begin()
         for self.epoch in range(int(cfg.rounds)):
             loss = self.fit(self.expert_s, self.expert.act, cfg.steps_per_round)
             self._log_round({'train/bc_loss': loss})
+            self.protocol_step()
+        self.protocol_end(self.agent_steps)  # no environment-step budget: offline
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     # ---- evaluation / logging ----
@@ -129,6 +132,9 @@ class BC(Agent):
 
     def eval(self):
         self._log_round({})
+
+    def protocol_act(self, obs, sample=False, t=None):
+        return self.policy(self.vec(obs))  # deterministic policy
 
     def set_train(self):
         self.policy.train()

@@ -101,16 +101,27 @@ class DiffMimic(Agent):
     def train(self):
         cfg = self.dm_config
         stats = []
+        # max_agent_steps > 0: stop at this many simulated steps (the rerun's budget) instead of after `iters`
+        budget = int(float(cfg.get('max_agent_steps', 0) or 0))
+        self.protocol_begin()
         for self.epoch in range(int(cfg.iters)):
+            if budget > 0 and self.agent_steps >= budget:
+                break
+            self.protocol_step()
             if self.job_clock is not None:
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
+                    self.protocol_clock_stop()
                     break
             stats.append(self.update())
             if (self.epoch + 1) % int(cfg.eval_every) == 0:
                 self._log({k: float(np.mean([s[k] for s in stats])) for k in stats[0]})
                 stats = []
+        self.protocol_end(budget if budget > 0 else self.agent_steps)
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
+
+    def protocol_act(self, obs, sample=False, t=None):
+        return self.policy(obs['obs'][:, : self.spec.obs_dim])  # deterministic policy on the state part
 
     @torch.no_grad()
     def evaluate(self, episodes_per_env=2):

@@ -20,5 +20,11 @@ diffmimic:
   lr: 3e-4
   max_grad_norm: 1.0
   iters: 20000
+  # > 0: stop at this many simulated steps instead of after `iters` (the rerun budget)
+  max_agent_steps: 0
   eval_every: 500
   eval_episodes_per_env: 2
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

@@ -58,3 +58,7 @@ shac:
 
   no_target_critic: True
   actor_loss_avgcritics: True
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

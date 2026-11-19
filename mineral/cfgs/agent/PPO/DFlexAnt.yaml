@@ -64,3 +64,7 @@ ppo:
   kl_threshold: 0.008
   max_grad_norm: 0.5  # decreased from 1.0 b/c of SiLU & AdamW
   truncate_grads: True
+
+# Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
+protocol_eval: false
+eval_every_steps: 0

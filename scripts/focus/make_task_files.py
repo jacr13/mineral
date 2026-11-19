@@ -87,7 +87,7 @@ def task_file(batch, task, arm):
         agent=dict(
             name='FOCUS/DFlexAntSAPO',
             ckpt_every=-1,  # no periodic checkpoints: final.pth (= at budget) only
-            eval_deterministic=True,
+            protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
             eval_every_steps=EVAL_EVERY,
             save_eval_rollouts=False,
             shac=dict(max_epochs=50000, max_agent_steps=budget),
