@@ -1,0 +1,35 @@
+# Phase 0 port check (FOCUS brief item 7): the paper's otcos configuration on ant, settings copied from the
+# logged configuration of the reported runs (ICLR Reviews/audit/v2/runs.jsonl). Tuning seeds only, never reported.
+task:
+  name: DFlex
+  env: {env_name: ant}
+agent:
+  name: FOCUS/DFlexAntSAPO
+  shac: {max_epochs: 50000, max_agent_steps: 10000000}
+  focus:
+    demos: {path: experts/demos/DFlex_ant_demos128_return9318_len1000.pt, n_trajs: 8}
+    loss_best_of_k_k: 8
+    critic_disabled: false
+    critic_reward_shapping: true
+    critic_reward_normalize: false
+    loss_use_huber_speedup: false
+    loss_use_detached_prev_obs: false
+    input_type: state_state
+    imitation_loss_type: ot
+    loss_ot_cost_type: cosine
+    critic_reward_mapping: log_exp
+    loss_mlp_features_dim: null
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+logdir: workdir/focus-p0port-ant_otcos/$(date +%Y%m%d-%H%M%S.%2N)
+wandb: {mode: offline}
+run: train_eval
+seed: 10
+sweep:
+  seed: [10, 20, 30]
+spawner: {runtime: 8h}
