@@ -1,0 +1,9 @@
+# Batches of the FOCUS rerun. One batch = every arm and its control, launched together from one commit.
+# Arms are defined in make_task_files.py (the clean default plus at most one changed setting).
+# launch.py <batch> generates the task files, enqueues the runs and writes results/data/manifest.tsv.
+p0screen:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [ref_otcos, default, noalign, cost_l2, dtw]
+  skip: {hopper: [noalign, cost_l2, dtw]}
+  control: ref_otcos

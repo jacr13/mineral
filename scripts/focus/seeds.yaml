@@ -1,0 +1,4 @@
+# Seeds of the FOCUS rerun (brief section 5). Every method and every arm of a reported batch uses exactly the
+# reported list; tuning batches use the tuning list, which is never reported. A seed counts once.
+reported: [100, 110, 120, 1000, 1100, 1200, 1300, 1400, 1500, 1600]
+tuning: [10, 20, 30]
