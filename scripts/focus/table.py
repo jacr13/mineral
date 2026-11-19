@@ -53,6 +53,17 @@ def write_tsv(path, rows, cols):
 
 def run_record(row, snapshot):
     res = os.path.join(RESULTS_DIR, row['run_id'], 'results')
+    rv = os.path.join(DATA, 'reeval', row['run_id'] + '.json')
+    if os.path.exists(rv):  # re-evaluated from final.pth with the shared protocol (scripts/focus/reeval.py)
+        e = json.load(open(rv))
+        rew = e['deterministic']
+        bj = os.path.join(res, 'budget.json')
+        b = json.load(open(bj)) if os.path.exists(bj) else {}
+        steps, budget = int(e['agent_steps']), int(float(row['budget']))
+        return dict(
+            row, agent_steps=steps, reached=int(steps >= budget and b.get('reached_budget', True)), deterministic=1,
+            episodes=len(rew), return_raw=f'{np.mean(rew):.2f}', return_norm=f'{np.mean(rew) / EXPERT[row["task"]]:.4f}',
+            train_seconds=f'{b.get("train_seconds", float("nan")):.0f}', source=f'reeval {e["code_commit"]}')
     sc, bj = os.path.join(res, 'scores.json'), os.path.join(res, 'budget.json')
     if os.path.exists(sc):
         s = json.load(open(sc))
