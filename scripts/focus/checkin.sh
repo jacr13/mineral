@@ -23,3 +23,5 @@ print('port check (old code, stochastic final):')
 for k,v in sorted(out.items()):
     m=sum(x[1] for x in v)/len(v); print(f'  {k:20s} n={len(v)} mean={m:.3f} below0.5={sum(x[1]<0.5 for x in v)}', v)
 PY
+echo '--- p0screen2'; python3 scripts/focus/table.py p0screen2 --expect 3 --allow-incomplete --control default 2>&1 | sed -n '5,10p'
+echo '--- p2dry'; python3 scripts/focus/table.py p2dry --expect 2 --allow-incomplete 2>&1 | sed -n '5,24p'
