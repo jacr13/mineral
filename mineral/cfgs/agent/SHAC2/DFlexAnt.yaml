@@ -62,3 +62,6 @@ shac:
 # Rerun evaluation protocol (Agent.protocol_*): final score and periodic evaluations on a dedicated env
 protocol_eval: false
 eval_every_steps: 0
+# SHAC.eval (used when protocol_eval is false): deterministic final score, dump of evaluation rollouts
+eval_deterministic: false
+save_eval_rollouts: true

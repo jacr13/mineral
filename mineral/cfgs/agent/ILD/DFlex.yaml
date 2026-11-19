@@ -18,6 +18,8 @@ network:
 
 ild:
   mode: paper  # paper | window (earlier SHAC-window variant)
+  # paper mode: count both rollouts of an iteration (2 x envs x T simulated steps) and round iterations up
+  count_all_sim_steps: false
   demos:
     path: ""
     n_trajs: 8

@@ -58,6 +58,7 @@ def append_manifest(row):
 def cells(batch):
     design = yaml.safe_load(open(os.path.join(HERE, 'design.yaml')))[batch]
     seeds = yaml.safe_load(open(os.path.join(HERE, 'seeds.yaml')))[design['seeds']]
+    seeds = seeds[: int(design.get('n_seeds', len(seeds)))]
     skip = design.get('skip', {}) or {}
     for task in design['tasks']:
         for arm in design['arms']:
@@ -101,7 +102,8 @@ def main():
         sys.exit('uncommitted changes in mineral/: commit them first (the stored commit must be the code that ran)')
     # generate task files and check they are committed
     arms = sorted({a for _, a, _ in todo})
-    subprocess.run([sys.executable, os.path.join(HERE, 'make_task_files.py'), args.batch, *arms], check=True)
+    subprocess.run([sys.executable, os.path.join(HERE, 'make_task_files.py'), args.batch, *arms,
+                    '--tasks', *sorted({t for t, _, _ in todo})], check=True)
     if git('status', '--porcelain', f'tasks/focus/{args.batch}') and not args.dry_run:
         sys.exit(f'generated task files of {args.batch} differ from git: commit tasks/focus/{args.batch} first')
     commit = git('rev-parse', 'HEAD')
