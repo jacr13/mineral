@@ -366,6 +366,14 @@ class OOPS(Agent):
             metrics.update({"epoch": self.epoch, "mini_epoch": self.mini_epoch})
             metrics = {f"train_stats/{k}": v for k, v in metrics.items()}
             metrics.update({f"oops/{k}": v.item() for k, v in self._last_oops_stats.items()})
+            # host memory of this process (two cluster runs were killed for host memory / slowed to a crawl
+            # after 5-8 h with the replay buffer on the GPU; logged to find what grows)
+            try:
+                with open("/proc/self/status") as f:
+                    rss = next(int(line.split()[1]) for line in f if line.startswith("VmRSS:"))
+                metrics["sys/host_rss_gb"] = rss / 1024**2
+            except (OSError, StopIteration, ValueError):
+                pass
 
             episode_metrics = {
                 "train_scores/episode_rewards": self.metrics.episode_trackers["rewards"].mean(),
