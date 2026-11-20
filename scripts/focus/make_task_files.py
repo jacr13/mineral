@@ -100,7 +100,13 @@ F_ARMS = {
     # critic targets; none = no entropy and no bonus; sapo = SAPO's maximum-entropy objective
     'f_ent_none': dict(backbone_entropy='none'),
     'f_ent_sapo': dict(backbone_entropy='sapo'),
+    # SHAC-style backbone (Gaussian policy, ELU, single critic + target, Adam, no entropy), critic targets fixed (91a1a9d)
+    'f_shac': dict(_agent='FOCUS/DFlexAntSHAC'),
 }
+# expert-side unbalanced OT on the no-entropy backbone (control in the same batch: f_ent_none)
+for rho in (0.1, 0.3, 1.0):
+    F_ARMS[f'fn_uot_expert_rho{rho:g}'] = dict(backbone_entropy='none', loss_ot_marginal_rho=rho,
+                                               loss_ot_marginal_side='expert')
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     F_ARMS[f'f_uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
     F_ARMS[f'f_uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
@@ -118,12 +124,13 @@ def task_file(batch, task, arm):
         focus['input_type'] = 'state_state'
     change = dict(ARMS[arm])
     n_trajs = change.pop('_n_trajs', 8)
+    agent_name = change.pop('_agent', 'FOCUS/DFlexAntSAPO')
     focus.update(change)
     focus = dict(demos=dict(path='experts/demos/' + demo, n_trajs=n_trajs), **focus)
     return dict(
         task=dict(name='DFlex', env=dict(env_name=task)),
         agent=dict(
-            name='FOCUS/DFlexAntSAPO',
+            name=agent_name,
             ckpt_every=-1,  # no periodic checkpoints: final.pth (= at budget) only
             protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
             eval_every_steps=EVAL_EVERY,

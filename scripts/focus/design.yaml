@@ -66,3 +66,19 @@ p0screen6:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [f_default, f_ent_none, f_ent_sapo]
   control: f_default
+
+# Round 7 (Joao, 2026-11-21): which backbone. SAPO-style networks without entropy, SAPO's maximum-entropy objective,
+# and the SHAC-style backbone (critic targets fixed in 91a1a9d), with 6 tuning seeds so a per-task choice is not made
+# on noise. Control: f_ent_none.
+p0screen7:
+  seeds: tuning6
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_ent_none, f_ent_sapo, f_shac]
+  control: f_ent_none
+
+# Round 8 (Joao, 2026-11-21): rho of the expert-side unbalanced OT for the main table, on the no-entropy backbone.
+p0screen8:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_ent_none, fn_uot_expert_rho0.1, fn_uot_expert_rho0.3, fn_uot_expert_rho1]
+  control: f_ent_none
