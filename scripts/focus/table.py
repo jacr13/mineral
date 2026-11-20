@@ -30,10 +30,31 @@ FOCUS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 DATA = os.path.join(FOCUS, 'results/data')
 TABLES = os.path.join(FOCUS, 'results/tables')
 RESULTS_DIR = os.path.expanduser('~/docker/cluster-supervisor/results')
-EXPERT = {'hopper': 4812.0, 'ant': 9318.0, 'humanoid': 8116.0, 'snu_humanoid': 6246.0}  # 128-episode pool means
+# Normalisation (Joao, 2026-11-20): mean return of the 8 demonstrations used for training (first 8 of each file).
+# The 128-episode pool means (4812 / 9318 / 8116 / 6246) include the expert's failed episodes on the humanoids.
+# Demo-count arms (1, 2, 4 demos) are normalised by the same 8-demo mean, so they compare directly.
+EXPERT = {'hopper': 4813.0, 'ant': 9329.5, 'humanoid': 8225.2, 'snu_humanoid': 6748.9}
+EXPERT_POOL = {'hopper': 4812.1, 'ant': 9318.1, 'humanoid': 8116.5, 'snu_humanoid': 6246.7}
+THRESH = 0.9  # 'reached 0.9': first periodic deterministic evaluation at or above 0.9 of the expert
 TASK_NAMES = {'hopper': 'Hopper', 'ant': 'Ant', 'humanoid': 'Humanoid', 'snu_humanoid': 'SNU Humanoid'}
 SNAP_COLS = ['batch', 'task', 'arm', 'seed', 'run_id', 'commit', 'budget', 'agent_steps', 'reached', 'deterministic',
-             'episodes', 'return_raw', 'return_norm', 'train_seconds', 'source']
+             'episodes', 'return_raw', 'return_norm', 'train_seconds', 'steps_to_09', 'seconds_to_09', 'source']
+
+
+def time_to_threshold(run_id, task, batch=None):
+    """(steps, training seconds) of the first periodic evaluation at or above THRESH x expert, '' if never."""
+    f = os.path.join(RESULTS_DIR, run_id, 'results', 'eval_curve.jsonl')
+    pts = []
+    if os.path.exists(f):
+        pts = [json.loads(line) for line in open(f) if line.strip()]
+        pts = [(p['agent_steps'], p['train_seconds'], p['mean_return']) for p in pts]
+    elif batch is not None:  # run folder released: the batch's curve cache (raw returns), written by curves.py
+        pts = [(int(c['agent_steps']), float(c['train_seconds']), float(c['return_raw']))
+               for c in read_tsv(os.path.join(DATA, f'curves_{batch}.tsv')) if c['run_id'] == run_id]
+    for st, sec, ret in sorted(pts):
+        if ret / EXPERT[task] >= THRESH:
+            return st, round(sec)
+    return ('', '') if pts else (None, None)
 
 
 def read_tsv(path):
@@ -77,7 +98,9 @@ def run_record(row, snapshot):
             return_raw=f'{np.mean(rew):.2f}', return_norm=f'{np.mean(rew) / EXPERT[row["task"]]:.4f}',
             train_seconds=f'{b.get("train_seconds", float("nan")):.0f}', source='run files')
     if row['run_id'] in snapshot:
-        return dict(snapshot[row['run_id']], source='snapshot')
+        r = dict(snapshot[row['run_id']], source='snapshot')
+        r['return_norm'] = f'{float(r["return_raw"]) / EXPERT[row["task"]]:.4f}'
+        return r
     return None
 
 
@@ -119,6 +142,10 @@ def main():
     recs, missing = [], []
     for r in rows:
         rec = run_record(r, snapshot)
+        if rec is not None:
+            st, sec = time_to_threshold(r['run_id'], r['task'], args.batch)
+            if st is not None:
+                rec['steps_to_09'], rec['seconds_to_09'] = st, sec
         (recs if rec else missing).append(rec or r)
     write_tsv(snap_path, recs, SNAP_COLS)
 
@@ -175,6 +202,25 @@ def main():
             c = [f'{values[(t, arm)]["mean"] - values[(t, args.control)]["mean"]:+.3f}'
                  if (t, arm) in values and (t, args.control) in values else '–' for t in tasks]
             lines.append(f'| {arm} | ' + ' | '.join(c) + ' |')
+    lines += ['', f'Reaching {THRESH} of the expert (first periodic deterministic evaluation): runs reaching / runs · '
+              'median steps (M) · median training time (h, evaluation excluded), over the runs that reach it', '',
+              hdr, '|:-|' + '-:|' * len(tasks)]
+    for arm in arms:
+        cells = []
+        for t in tasks:
+            got = [x for x in recs if x['task'] == t and x['arm'] == arm and x.get('steps_to_09') not in (None,)]
+            known = [x for x in got if 'steps_to_09' in x]
+            hit = [x for x in known if str(x['steps_to_09']) != '']
+            if not known:
+                cells.append('–')
+                continue
+            if not hit:
+                cells.append(f'0/{len(known)}')
+                continue
+            ms = np.median([float(x['steps_to_09']) for x in hit]) / 1e6
+            mh = np.median([float(x['seconds_to_09']) for x in hit]) / 3600
+            cells.append(f'{len(hit)}/{len(known)} · {ms:.1f} M · {mh:.2f} h')
+        lines.append(f'| {arm} | ' + ' | '.join(cells) + ' |')
     lines += ['', '### Per seed', '', '| Arm | Task | seed: return / expert |', '|:-|:-|:-|'] + per_seed
     if missing:
         lines += ['', f'Runs without local files or snapshot ({len(missing)}): ' +

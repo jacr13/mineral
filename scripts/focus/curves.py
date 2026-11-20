@@ -30,9 +30,12 @@ def load_curves(rows, cache):
         f = os.path.join(RESULTS_DIR, r['run_id'], 'results', 'eval_curve.jsonl')
         if os.path.exists(f):
             pts = [json.loads(line) for line in open(f) if line.strip()]
-            out[r['run_id']] = [(p['agent_steps'], p['train_seconds'], p['mean_return'] / EXPERT[r['task']]) for p in pts]
+            out[r['run_id']] = [(p['agent_steps'], p['train_seconds'], p['mean_return']) for p in pts]
         elif r['run_id'] in cache:
             out[r['run_id']] = cache[r['run_id']]
+    # curves hold raw returns; normalised here (table.EXPERT) so a change of reference rebuilds exactly
+    tasks = {r['run_id']: r['task'] for r in rows}
+    out = {k: [(s, t, y / EXPERT[tasks[k]]) for s, t, y in v] for k, v in out.items()}
     return out
 
 
@@ -54,11 +57,19 @@ def main():
     cache_path = os.path.join(DATA, f'curves_{args.batch}.tsv')
     cache = {}
     for c in read_tsv(cache_path):
-        cache.setdefault(c['run_id'], []).append((int(c['agent_steps']), float(c['train_seconds']), float(c['return_norm'])))
+        cache.setdefault(c['run_id'], []).append((int(c['agent_steps']), float(c['train_seconds']), float(c['return_raw'])))
     curves = load_curves(rows, cache)
-    write_tsv(cache_path, [dict(run_id=k, agent_steps=s, train_seconds=f'{t:.1f}', return_norm=f'{y:.4f}')
-                           for k, pts in curves.items() for s, t, y in pts],
-              ['run_id', 'agent_steps', 'train_seconds', 'return_norm'])
+    raw = {}
+    for r in rows:
+        f = os.path.join(RESULTS_DIR, r['run_id'], 'results', 'eval_curve.jsonl')
+        if os.path.exists(f):
+            raw[r['run_id']] = [(p['agent_steps'], p['train_seconds'], p['mean_return'])
+                                for p in (json.loads(line) for line in open(f) if line.strip())]
+        elif r['run_id'] in cache:
+            raw[r['run_id']] = cache[r['run_id']]
+    write_tsv(cache_path, [dict(run_id=k, agent_steps=s, train_seconds=f'{t:.1f}', return_raw=f'{y:.2f}')
+                           for k, pts in raw.items() for s, t, y in pts],
+              ['run_id', 'agent_steps', 'train_seconds', 'return_raw'])
     tasks = args.tasks or [t for t in EXPERT if any(r['task'] == t for r in rows)]
     arms = args.arms or list(dict.fromkeys(r['arm'] for r in rows))
     colors = [plt.get_cmap('tab20')(i) for i in range(20)]
