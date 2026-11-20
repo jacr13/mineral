@@ -156,9 +156,14 @@ def bootstrap(repo, commit, run_id, inputs, docker, image=None):
         # failing on the leftovers of the first attempt.
         'if [ "${SLURM_RESTART_COUNT:-0}" -gt 0 ]; then echo "requeued (restart $SLURM_RESTART_COUNT): starting'
         ' again from a clean source and results folder" >&2; rm -rf "$RUN_ROOT/results"; fi',
-        'rm -rf "$RUN_ROOT/source"',
-        'mkdir "$RUN_ROOT/source"',
-        'git -C "$CLUSTER_REPO" archive "$MINERAL_GIT_COMMIT" | tar -x -C "$RUN_ROOT/source"',
+        # The per-branch clone is fetched (and may be repacked) while other jobs extract from it, which made
+        # `git archive` fail with "cannot read <object>" / truncated tar: retry the extraction a few times.
+        'for attempt in 1 2 3 4 5 6; do',
+        '  rm -rf "$RUN_ROOT/source" && mkdir "$RUN_ROOT/source"',
+        '  if git -C "$CLUSTER_REPO" archive "$MINERAL_GIT_COMMIT" | tar -x -C "$RUN_ROOT/source"; then break; fi',
+        '  [ "$attempt" = 6 ] && { echo "git archive failed 6 times" >&2; exit 1; }',
+        '  echo "git archive failed (attempt $attempt), retrying in 30 s" >&2; sleep 30',
+        'done',
         'mkdir -p "$RUN_ROOT/results"',
         'export MINERAL_RUN_RESULTS="$RUN_ROOT/results"',
     ]

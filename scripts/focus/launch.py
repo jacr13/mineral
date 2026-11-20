@@ -80,9 +80,14 @@ def main():
                     help='host memory for one arm, e.g. bl_oops_it1000=32 (OOPS was OOM-killed at 8 GB)')
     ap.add_argument('--relaunch', default=None, help='reason; allows enqueuing cells already in the manifest')
     ap.add_argument('--register-from-index', default=None)
+    ap.add_argument('--only', nargs='*', default=None, metavar='TASK:ARM:SEED', help='enqueue only these cells')
+    ap.add_argument('--commit', default=None, help='code commit (default HEAD); relaunches keep the batch commit')
     args = ap.parse_args()
 
     todo = list(cells(args.batch))
+    if args.only:
+        want = {tuple(x.split(':')) for x in args.only}
+        todo = [c for c in todo if (c[0], c[1], str(c[2])) in want]
     done = {(r['batch'], r['task'], r['arm'], r['seed']) for r in read_manifest()}
 
     if args.register_from_index:
@@ -101,7 +106,7 @@ def main():
         return
 
     os.chdir(os.path.join(FOCUS, 'code'))
-    if git('status', '--porcelain', 'mineral') and not args.dry_run:
+    if git('status', '--porcelain', 'mineral') and not args.dry_run and not args.commit:
         sys.exit('uncommitted changes in mineral/: commit them first (the stored commit must be the code that ran)')
     # generate task files and check they are committed
     arms = sorted({a for _, a, _ in todo})
@@ -109,7 +114,7 @@ def main():
                     '--tasks', *sorted({t for t, _, _ in todo})], check=True)
     if git('status', '--porcelain', f'tasks/focus/{args.batch}') and not args.dry_run:
         sys.exit(f'generated task files of {args.batch} differ from git: commit tasks/focus/{args.batch} first')
-    commit = git('rev-parse', 'HEAD')
+    commit = git('rev-parse', args.commit or 'HEAD')
 
     n = 0
     for task, arm, seed in todo:
