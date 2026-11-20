@@ -75,6 +75,9 @@ def main():
     ap.add_argument('--priority', type=int, default=50)
     ap.add_argument('--runtime', default='12h')
     ap.add_argument('--gpu_type', default=None)
+    ap.add_argument('--memory', default=None, help='host memory in GB per job (spawner default 8)')
+    ap.add_argument('--memory_arm', action='append', default=[], metavar='ARM=GB',
+                    help='host memory for one arm, e.g. bl_oops_it1000=32 (OOPS was OOM-killed at 8 GB)')
     ap.add_argument('--relaunch', default=None, help='reason; allows enqueuing cells already in the manifest')
     ap.add_argument('--register-from-index', default=None)
     args = ap.parse_args()
@@ -121,6 +124,9 @@ def main():
                '--git_commit', commit, '--git_branch', 'focus-wip', '--set', f'seed={seed}']
         if args.gpu_type:
             cmd += ['--gpu_type', args.gpu_type]
+        mem = dict(x.split('=') for x in args.memory_arm).get(arm, args.memory)
+        if mem:
+            cmd += ['--memory', str(mem)]
         if args.dry_run:
             print('DRY', ' '.join(cmd))
             n += 1
