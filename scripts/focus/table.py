@@ -132,6 +132,12 @@ def main():
     name = args.name or args.batch
 
     rows = [r for r in read_tsv(os.path.join(DATA, 'manifest.tsv')) if r['batch'] == args.batch]
+    # a seed counts once: a relaunch (manifest note 'relaunch: <reason>') replaces the earlier row of the same cell
+    latest = {}
+    for r in rows:
+        latest[(r['task'], r['arm'], r['seed'])] = r
+    replaced = [r for r in rows if latest[(r['task'], r['arm'], r['seed'])] is not r]
+    rows = list(latest.values())
     if not rows:
         sys.exit(f'no manifest rows for {args.batch}')
     snap_path = os.path.join(DATA, f'snapshot_{args.batch}.tsv')
@@ -225,6 +231,9 @@ def main():
     if missing:
         lines += ['', f'Runs without local files or snapshot ({len(missing)}): ' +
                   ', '.join(f'{r["task"]}/{r["arm"]}/{r["seed"]}' for r in missing)]
+    if replaced:
+        lines += ['', f'Relaunched (the latest launch of each seed is used): ' +
+                  ', '.join(f'{r["task"]}/{r["arm"]}/{r["seed"]}' for r in replaced)]
     if exceptions:
         lines += ['', 'Exceptions applied: ' + '; '.join(f'{k[1]}/{k[2]}/{k[3]}: {v}' for k, v in exceptions.items()
                                                        if k[0] == args.batch)]
