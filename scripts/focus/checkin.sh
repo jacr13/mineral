@@ -25,3 +25,6 @@ for k,v in sorted(out.items()):
 PY
 for b in p0screen5:f_default p0screen6:f_default; do echo "--- ${b%%:*}"; python3 scripts/focus/table.py ${b%%:*} --expect 3 --allow-incomplete --control ${b##*:} 2>&1 | sed -n '5,10p;/Reaching/,/### Per seed/p' | grep -v "Per seed"; done
 echo '--- p1tune'; python3 scripts/focus/table.py p1tune --expect 3 --allow-incomplete 2>&1 | sed -n '5,18p'
+# keep the per-batch curve data current (eval_curve.jsonl of every finished run -> results/data/curves_<batch>.tsv),
+# so curves rebuild after the run folders are released
+for b in p0screen5 p0screen6 p1tune; do (cd scripts/focus && ../../.venv/bin/python curves.py $b >/dev/null 2>&1); done
