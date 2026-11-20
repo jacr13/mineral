@@ -41,3 +41,19 @@ p0screen4:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [ref_otcos, no_minus_c]
   control: ref_otcos
+
+# Round 5 (Joao, 2026-11-20): the final default (no -c) against state pairs, and 1 / 2 demonstrations.
+p0screen5:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_default, f_statepairs, f_demos1, f_demos2]
+  control: f_default
+
+# Baseline tuning on the tuning seeds (Joao, 2026-11-20): the one knob per method of the shared protocol, plus ILD's
+# four variants (paper mode with truncation 10 / 32; the 32-step window variant on SAPO / SHAC). Best per task is
+# chosen here and used, unchanged, in Phase 3.
+p1tune:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
+         bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac]

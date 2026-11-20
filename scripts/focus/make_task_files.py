@@ -77,17 +77,45 @@ for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     ARMS[f'uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
     ARMS[f'uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
 
+# The method fixed after Phase 0 (Joao, 2026-11-20): the clean default without the -c term. Arms 'f_*' are this
+# default plus at most one changed setting; '_n_trajs' sets the number of demonstrations.
+FINAL = dict(DEFAULT, critic_reward_minus_cost=False)
+F_ARMS = {
+    'f_default': {},
+    'f_statepairs': dict(input_type='state_state'),
+    'f_demos1': dict(_n_trajs=1),
+    'f_demos2': dict(_n_trajs=2),
+    'f_demos4': dict(_n_trajs=4),
+    'f_noalign': dict(imitation_loss_type='index'),
+    'f_dtw': dict(imitation_loss_type='softdtw'),
+    'f_dtw_subseq': dict(imitation_loss_type='softdtw_subseq'),
+    'f_k1': dict(loss_best_of_k_k=1),
+    'f_noalign_k1': dict(imitation_loss_type='index', loss_best_of_k_k=1),
+    'f_cost_l2': dict(loss_ot_cost_type='l2'),
+    'f_feat64': dict(loss_mlp_features_dim=64),
+    'f_minus_c': dict(critic_reward_minus_cost=True),
+    'f_through_sinkhorn': dict(loss_ot_detach_plan=False),
+    'f_score_function': dict(actor_grad_estimator='score_function'),
+}
+for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
+    F_ARMS[f'f_uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
+    F_ARMS[f'f_uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
+ARMS.update({k: v for k, v in F_ARMS.items()})
+
 # Run-level settings, the same for every arm
 EVAL_EVERY = 500_000
 
 
 def task_file(batch, task, arm):
     demo, budget = TASKS[task]
-    focus = copy.deepcopy(REFERENCE if arm == 'ref_otcos' else DEFAULT)
+    base = REFERENCE if arm == 'ref_otcos' else FINAL if arm.startswith('f_') else DEFAULT
+    focus = copy.deepcopy(base)
     if arm == 'ref_otcos' and task == 'ant':
         focus['input_type'] = 'state_state'
-    focus.update(ARMS[arm])
-    focus = dict(demos=dict(path='experts/demos/' + demo, n_trajs=8), **focus)
+    change = dict(ARMS[arm])
+    n_trajs = change.pop('_n_trajs', 8)
+    focus.update(change)
+    focus = dict(demos=dict(path='experts/demos/' + demo, n_trajs=n_trajs), **focus)
     return dict(
         task=dict(name='DFlex', env=dict(env_name=task)),
         agent=dict(
@@ -128,7 +156,14 @@ BASELINES = {
     'lwail': ('lwail', 'ddpg', {}, False),
     'oops': ('oops', 'ddpg', {'it1000': {'agent.oops.sinkhorn_iters': 1000}}, False),
     # ILD as in its paper (whole episodes, truncated gradients); both rollouts of an iteration are counted
-    'ild': ('ild/paper', 'shac', {'paper': {'agent.ild.mode': 'paper', 'agent.ild.count_all_sim_steps': True}}, False),
+    'ild': ('ild/paper', 'shac', {
+        # as in its paper: whole episodes, gradient truncated every 10 (or 32) steps; both rollouts counted
+        'paper': {'agent.ild.mode': 'paper', 'agent.ild.count_all_sim_steps': True},
+        'paper_t32': {'agent.ild.mode': 'paper', 'agent.ild.count_all_sim_steps': True, 'agent.ild.trunc_len': 32},
+        # the earlier window variant: SHAC-style 32-step windows (FOCUS's horizon), SAPO or SHAC base
+        'win_sapo': {'_src': 'ild', 'agent.name': 'ILD/DFlexAntSAPO', 'agent.ild.mode': 'window'},
+        'win_shac': {'_src': 'ild', 'agent.name': 'ILD/DFlexAntSHAC', 'agent.ild.mode': 'window'},
+    }, False),
     'diffmimic': ('diffmimic', 'diffmimic', {}, False),
     'bco': ('bco', None, {}, False),
     'bc': ('bc', None, {}, True),
@@ -147,6 +182,8 @@ def baseline_task_file(batch, task, arm):
     _, rest = arm.split('_', 1)
     method, _, variant = rest.partition('_')
     src, fam, variants, _ = BASELINES[method]
+    vset = dict(variants.get(variant, {})) if variant else {}
+    src = vset.pop('_src', src)
     cfg = yaml.safe_load(open(os.path.join('tasks', src, f'dflex_{task}.yaml')))
     sweep = cfg.pop('sweep', {}) or {}
     for k, v in sweep.items():  # scalar sweep settings belong to the method: fold them into the body
@@ -158,7 +195,7 @@ def baseline_task_file(batch, task, arm):
             continue
         _set_dotted(cfg, k, v)
     if variant:
-        for k, v in variants[variant].items():
+        for k, v in vset.items():
             _set_dotted(cfg, k, v)
     elif variants and method not in ('oops', 'ild'):
         raise ValueError(f'{method}: choose a variant from {list(variants)}')

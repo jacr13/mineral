@@ -5,6 +5,10 @@ defaults:
 algo: ILD
 
 ild:
+  # these configs are the SHAC-window variant; ILD.train() defaults to "paper" when mode is unset, so every run on
+  # them since 3c08f7b silently ran paper mode
+  mode: window
+  count_all_sim_steps: false
   demos:
     path: ""
     n_trajs: 10
