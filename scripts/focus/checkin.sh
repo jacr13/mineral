@@ -28,3 +28,5 @@ echo '--- p1tune'; python3 scripts/focus/table.py p1tune --expect 3 --allow-inco
 # keep the per-batch curve data current (eval_curve.jsonl of every finished run -> results/data/curves_<batch>.tsv),
 # so curves rebuild after the run folders are released
 for b in p0screen7 p0screen8; do (cd scripts/focus && ../../.venv/bin/python curves.py $b >/dev/null 2>&1); done
+echo '--- p3main'; python3 scripts/focus/table.py p3main --expect 10 --allow-incomplete 2>&1 | sed -n '5,22p'
+(cd scripts/focus && ../../.venv/bin/python curves.py p3main >/dev/null 2>&1)
