@@ -1,0 +1,8 @@
+# Baseline variant per task, frozen from the tuning batch p1tune (tuning seeds 10/20/30, best mean per task;
+# REPORT.md, 2026-11-21). Used by arms bl_<method>_tuned in the main comparison. Not to be changed after Phase 3.
+gaifo: {hopper: gp1, ant: gp1, humanoid: gp10, snu_humanoid: gp10}
+maad: {hopper: gp10, ant: gp1, humanoid: gp10, snu_humanoid: gp10}
+gail: {hopper: gp1, ant: gp1, humanoid: gp1, snu_humanoid: gp1}
+pwil: {hopper: b2, ant: b5, humanoid: b2, snu_humanoid: b2}
+ild: {hopper: win_sapo, ant: win_shac, humanoid: win_shac, snu_humanoid: win_sapo}
+oops: {hopper: it1000, ant: it1000, humanoid: it1000, snu_humanoid: it1000}

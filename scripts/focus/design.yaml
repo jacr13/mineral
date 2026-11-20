@@ -82,3 +82,12 @@ p0screen8:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [f_ent_none, fn_uot_expert_rho0.1, fn_uot_expert_rho0.3, fn_uot_expert_rho1]
   control: f_ent_none
+
+# PHASE 3, main comparison (Joao, 2026-11-21): reported seeds, RTX 3090 only, one code commit for every arm.
+# Baselines first at low priority; the FOCUS variants are added to the same batch (same commit, --commit) once rounds
+# 7 and 8 have fixed the backbone and rho.
+p3main:
+  seeds: reported
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
+         bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc]

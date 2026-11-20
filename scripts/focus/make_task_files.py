@@ -189,9 +189,16 @@ def _set_dotted(cfg, key, value):
     d[parts[-1]] = value
 
 
+# OOPS cannot reach 10 / 15 M steps in 12 h (0.66 M steps/h): reported at this budget, marked with a dagger (Joao)
+OOPS_BUDGET = 4_000_000
+
+
 def baseline_task_file(batch, task, arm):
     _, rest = arm.split('_', 1)
     method, _, variant = rest.partition('_')
+    if variant == 'tuned':  # the variant frozen per task from the tuning batch
+        variant = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   'tuned_variants.yaml')))[method][task]
     src, fam, variants, _ = BASELINES[method]
     vset = dict(variants.get(variant, {})) if variant else {}
     src = vset.pop('_src', src)
@@ -210,7 +217,7 @@ def baseline_task_file(batch, task, arm):
             _set_dotted(cfg, k, v)
     elif variants and method not in ('oops', 'ild'):
         raise ValueError(f'{method}: choose a variant from {list(variants)}')
-    budget = TASKS[task][1]
+    budget = OOPS_BUDGET if method == 'oops' else TASKS[task][1]
     ag = cfg['agent']
     if fam is not None:
         ag.setdefault(fam, {})['max_agent_steps'] = budget
