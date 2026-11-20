@@ -70,6 +70,19 @@ class FOCUS(SHAC):
         # Reward = phi(c) - c. null: only for the mappings of the reported runs (neg, log_exp, 1_over_1_plus_loss,
         # not exp); true: for every mapping; false: for none.
         self.critic_reward_minus_cost = self.focus_config.get("critic_reward_minus_cost", None)
+        # Entropy terms of the SAPO backbone. FOCUS overrides the actor update, so with a SAPO config:
+        #   "legacy" (every earlier run): no entropy in the actor's return, the temperature never updated (alpha
+        #       stays at init_alpha), while the critic targets go through SHAC's entropy path with the entropy
+        #       buffer never filled (zeros) -> after the offset / scale of the SAPO config, a constant +0.5 bonus
+        #       per step in the critic targets.
+        #   "none": no entropy anywhere; critic targets are FOCUS's own (no constant bonus).
+        #   "sapo": SAPO's maximum-entropy objective: alpha * entropy in the actor's discounted return, the same
+        #       term in the critic targets, and the temperature learned towards the target entropy.
+        self.backbone_entropy = self.focus_config.get("backbone_entropy", "legacy")
+        if self.backbone_entropy not in ("legacy", "none", "sapo"):
+            raise ValueError(f"Invalid backbone_entropy: {self.backbone_entropy}")
+        if self.backbone_entropy == "sapo" and not (self.with_logprobs and self.with_autoent):
+            raise ValueError('backbone_entropy "sapo" needs a SAPO config (with_logprobs, with_autoent)')
         # "pathwise"       : differentiate the return through the simulator -- FOCUS as published.
         # "score_function" : identical objective, reward, critic, architecture and
         #                    horizon, but the gradient is estimated with REINFORCE
@@ -228,6 +241,7 @@ class FOCUS(SHAC):
                 "row_mass_min",
                 "row_mass_max",
                 "row_mass_cv",
+                "entropy",
             )
             for key in stat_keys:
                 if key in info:
@@ -244,6 +258,19 @@ class FOCUS(SHAC):
             return actor_loss
 
         self.actor_optim.step(actor_closure)
+
+        if self.backbone_entropy == "sapo":
+            # temperature update, as SHAC.update_actor
+            alpha = self.get_alpha(detach=False)
+            if self.unscale_entropy_alpha and self.scale_by_target_entropy:
+                alpha = alpha * abs(self.target_entropy)
+            alpha_loss = (alpha * (self._entropy - self.target_entropy).detach()).mean()
+            self.alpha_optim.zero_grad()
+            alpha_loss.backward()
+            if self.shac_config.max_grad_norm is not None:
+                nn.utils.clip_grad_norm_(self.alpha_optim.param_groups[0]["params"], self.shac_config.max_grad_norm)
+            self.alpha_optim.step()
+            results["entropy_alpha_loss"].append(alpha_loss.detach())
 
         with torch.no_grad():
             obs = {k: v.view(-1, *v.shape[2:]) for k, v in self.obs_buf.items()}
@@ -301,6 +328,8 @@ class FOCUS(SHAC):
 
         next_values = torch.zeros((self.horizon_len + 1, self.num_envs), dtype=torch.float32, device=self.device)
         avg_next_values = torch.zeros_like(next_values)
+        sapo = self.backbone_entropy == "sapo"
+        step_entropy = []
 
         if self.obs_rms is not None:
             with torch.no_grad():
@@ -315,6 +344,13 @@ class FOCUS(SHAC):
 
             z = self.actor_encoder(obs)
             actions, mu, sigma, distr = self.get_actions(obs, z=z, sample=True, dist=True)
+            if sapo:
+                logprob = distr.log_prob(actions).sum(dim=-1)
+                distr_ent = distr.entropy().sum(dim=-1)
+                step_entropy.append(distr_ent if self.use_distr_ent else -1.0 * logprob)
+                with torch.no_grad():
+                    self.logprobs[i] = logprob.detach()
+                    self.distr_ent[i] = distr_ent.detach()
 
             with torch.no_grad():
                 self.action_buf[i] = actions.clone()
@@ -438,8 +474,21 @@ class FOCUS(SHAC):
         # use live next_values for actor gradients; buffers stay detached for critic use
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
 
+        actor_rewards = step_rewards
+        if sapo:
+            # SAPO: alpha * (offset / scaled) entropy in the discounted return, as SHAC.compute_actor_loss does
+            ent = torch.stack(step_entropy)  # [T, B], differentiable
+            ent_t = ent
+            if self.offset_by_target_entropy:
+                ent_t = (ent_t + abs(self.target_entropy)) * 0.5
+            if self.scale_by_target_entropy:
+                ent_t = ent_t * (1.0 / abs(self.target_entropy))
+            actor_rewards = step_rewards + self.get_alpha(scalar=True) * ent_t
+            self._entropy = ent.detach().mean(dim=0)  # per env, as SHAC (sum over the horizon / horizon)
+            info["entropy"] = ent.detach().mean()
+
         returns = self._compute_returns_from_rewards(
-            step_rewards=step_rewards,
+            step_rewards=actor_rewards,
             next_vs=next_vs_live,
         )
         info["returns_mean"] = returns.detach().mean()
@@ -700,16 +749,19 @@ class FOCUS(SHAC):
         }
         return value_term, stats
 
+    def compute_target_values_with_entropy(self):
+        """SAPO configs route critic targets here (entropy_in_targets). See backbone_entropy."""
+        if self.backbone_entropy == "none":
+            return self.compute_target_values()
+        return super().compute_target_values_with_entropy()
+
     def compute_target_values(self):
-        """Override SHAC target computation to stop bootstrapping across episode boundaries."""
-        if self.critic_method == "one-step":
-            self.target_values = self.rew_buf + self.gamma * (1.0 - self.done_mask) * self.next_values
-        elif self.critic_method == "td-lambda":
-            lam_acc = torch.zeros(self.num_envs, dtype=torch.float32, device=self.device)
-            for i in reversed(range(self.horizon_len)):
-                mask = self.done_mask[i]
-                bootstrap = (1.0 - mask) * self.next_values[i]
-                lam_acc = self.rew_buf[i] + self.gamma * ((1.0 - mask) * (self.lam * lam_acc) + bootstrap)
-                self.target_values[i] = lam_acc
-        else:
-            raise NotImplementedError(self.critic_method)
+        """TD(lambda) critic targets: SHAC's recursion, which stops at episode ends through done_mask (the next value
+        is zero after a termination and the critic's value after a time-out, as set in the rollout).
+
+        The earlier override here computed r + gamma * (lambda * G' + V(s')) -- the full V(s') at every step instead of
+        (1 - lambda) * V(s') -- and dropped the bootstrap at the end of the window: on a constant-reward check it gives
+        156 where the lambda-return is 23 (tests/test_focus_criteria.py). It was used by every FOCUS run whose config
+        does not route targets through the entropy path, i.e. every SHAC-base run (SAPO-base runs never called it).
+        """
+        return SHAC.compute_target_values(self)

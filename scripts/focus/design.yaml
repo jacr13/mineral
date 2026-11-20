@@ -57,3 +57,12 @@ p1tune:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
          bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac]
+
+# Round 6: SAPO's entropy terms in FOCUS (found 2026-11-20): every earlier run had no entropy in the actor, alpha
+# fixed at 1 and, through SHAC's entropy path with an unfilled buffer, a constant +0.5 bonus in the critic targets.
+# legacy (= f_default) against none (no entropy, no bonus) and sapo (SAPO's maximum-entropy objective).
+p0screen6:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_default, f_ent_none, f_ent_sapo]
+  control: f_default

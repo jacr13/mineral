@@ -96,6 +96,10 @@ F_ARMS = {
     'f_minus_c': dict(critic_reward_minus_cost=True),
     'f_through_sinkhorn': dict(loss_ot_detach_plan=False),
     'f_score_function': dict(actor_grad_estimator='score_function'),
+    # SAPO entropy terms: legacy (default, every earlier run) = no actor entropy, alpha fixed, constant +0.5 in the
+    # critic targets; none = no entropy and no bonus; sapo = SAPO's maximum-entropy objective
+    'f_ent_none': dict(backbone_entropy='none'),
+    'f_ent_sapo': dict(backbone_entropy='sapo'),
 }
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     F_ARMS[f'f_uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')

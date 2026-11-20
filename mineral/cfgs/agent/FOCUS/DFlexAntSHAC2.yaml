@@ -41,6 +41,8 @@ focus:
   loss_best_of_k_relative: false
   # reward = phi(c) - c: null = for neg / log_exp / 1_over_1_plus_loss only (reported runs), true = every map
   critic_reward_minus_cost: null
+  # legacy | none | sapo: SAPO's entropy terms (see focus.py); legacy = every earlier run
+  backbone_entropy: legacy
   loss_ot_huber_delta: 1.0
   loss_use_huber_speedup: false
   loss_mlp_features_dim: null

@@ -115,3 +115,31 @@ class ORCAScale(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CriticTargets(unittest.TestCase):
+    def test_td_lambda_matches_the_lambda_return(self):
+        from types import SimpleNamespace
+
+        from mineral.agents.diffil.focus import FOCUS
+
+        H, B, g, lam = 32, 3, 0.99, 0.95
+        torch.manual_seed(0)
+        rew, nv = torch.rand(H, B), torch.rand(H, B) * 10
+        done = torch.zeros(H, B)
+        done[-1] = 1.0
+        done[10, 1] = 1.0  # an episode end inside the window for env 1 (next value is its terminal value)
+        agent = SimpleNamespace(critic_method='td-lambda', horizon_len=H, num_envs=B, gamma=g, lam=lam,
+                                rew_buf=rew, next_values=nv, done_mask=done, device='cpu',
+                                target_values=torch.zeros(H, B))
+        FOCUS.compute_target_values(agent)
+
+        def lam_return(t, b):
+            end = next(i for i in range(t, H) if done[i, b])  # last step of this episode segment
+            N = end - t + 1
+            nstep = lambda n: sum(g**k * rew[t + k, b] for k in range(n)) + g**n * nv[t + n - 1, b]
+            return (1 - lam) * sum(lam ** (n - 1) * nstep(n) for n in range(1, N)) + lam ** (N - 1) * nstep(N)
+
+        for b in range(B):
+            for t in (0, 5, 10, 11, 31):
+                self.assertAlmostEqual(agent.target_values[t, b].item(), float(lam_return(t, b)), places=3)
