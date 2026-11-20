@@ -23,8 +23,8 @@ print('port check (old code, stochastic final):')
 for k,v in sorted(out.items()):
     m=sum(x[1] for x in v)/len(v); print(f'  {k:20s} n={len(v)} mean={m:.3f} below0.5={sum(x[1]<0.5 for x in v)}', v)
 PY
-for b in p0screen5:f_default p0screen6:f_default; do echo "--- ${b%%:*}"; python3 scripts/focus/table.py ${b%%:*} --expect 3 --allow-incomplete --control ${b##*:} 2>&1 | sed -n '5,10p;/Reaching/,/### Per seed/p' | grep -v "Per seed"; done
+for b in p0screen7:f_ent_none p0screen8:f_ent_none; do echo "--- ${b%%:*}"; python3 scripts/focus/table.py ${b%%:*} --expect $([ ${b%%:*} = p0screen7 ] && echo 6 || echo 3) --allow-incomplete --control ${b##*:} 2>&1 | sed -n '5,10p;/Reaching/,/### Per seed/p' | grep -v "Per seed"; done
 echo '--- p1tune'; python3 scripts/focus/table.py p1tune --expect 3 --allow-incomplete 2>&1 | sed -n '5,18p'
 # keep the per-batch curve data current (eval_curve.jsonl of every finished run -> results/data/curves_<batch>.tsv),
 # so curves rebuild after the run folders are released
-for b in p0screen5 p0screen6 p1tune; do (cd scripts/focus && ../../.venv/bin/python curves.py $b >/dev/null 2>&1); done
+for b in p0screen7 p0screen8; do (cd scripts/focus && ../../.venv/bin/python curves.py $b >/dev/null 2>&1); done
