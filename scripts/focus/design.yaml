@@ -100,4 +100,25 @@ p3main:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
          bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc,
-         f_main_ot, f_main_dtw, f_main_noalign]
+         f_main_ot, f_main_dtw, f_main_noalign,
+         # Phase 4 ablations, control f_main_ot (same batch, same commit, same seeds): one setting changed each
+         f_ab_through_sinkhorn, f_ab_score_function,
+         f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq,
+         f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1,
+         f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo,
+         f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64]
+
+# Light tuning of the score-function arm (Phase 4 item 1: the weaker arm gets light tuning): actor lr, tuning seeds.
+p4sftune:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_sf_lr0.002, f_sf_lr0.0006, f_sf_lr0.0002]
+
+# Timing (Joao, 2026-11-21): every Phase 3 method on RTX 3090 for 5 % of its budget (make_task_files.BUDGET_SCALE);
+# full-run time = 3090 time per step x the method's own time profile over the full runs (REPORT, extrapolation).
+p3time:
+  seeds: reported
+  n_seeds: 1
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
+         bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc, f_main_ot, f_main_dtw, f_main_noalign]

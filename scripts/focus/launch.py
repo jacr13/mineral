@@ -141,7 +141,7 @@ def main():
         if not m:
             sys.exit(f'enqueue failed for {key}:\n{out.stdout[-2000:]}\n{out.stderr[-2000:]}')
         row = dict(batch=args.batch, task=task, arm=arm, seed=seed, run_id=m[1], commit=commit[:7], task_file=env_file,
-                   budget=mtf.OOPS_BUDGET if arm.startswith('bl_oops') else mtf.TASKS[task][1], enqueued_utc=datetime.datetime.utcnow().isoformat(timespec='seconds'),
+                   budget=mtf.budget_of(args.batch, task, arm), enqueued_utc=datetime.datetime.utcnow().isoformat(timespec='seconds'),
                    note=f'relaunch: {args.relaunch}' if key in done else '')
         append_manifest(row)
         with open(RUN_INDEX, 'a') as f:

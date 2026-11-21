@@ -119,6 +119,41 @@ for rho in (0.1, 0.3, 1.0):
 F_ARMS['f_main_ot'] = dict(backbone_entropy='none')
 F_ARMS['f_main_dtw'] = dict(backbone_entropy='none', imitation_loss_type='softdtw')
 F_ARMS['f_main_noalign'] = dict(backbone_entropy='none', imitation_loss_type='index')
+# Phase 4 ablations (in p3main, control f_main_ot): one setting changed against f_main_ot each
+_N = dict(backbone_entropy='none')
+F_ARMS.update({
+    # 1. gradient path
+    'f_ab_through_sinkhorn': dict(_N, loss_ot_detach_plan=False),
+    'f_ab_score_function': dict(_N, actor_grad_estimator='score_function'),
+    # 2. alignment objective at the default cost (soft-DTW and no alignment are f_main_dtw / f_main_noalign)
+    'f_ab_dtw_subseq': dict(_N, imitation_loss_type='softdtw_subseq'),
+    # 3. best-of-K (K = 8 is the control)
+    'f_ab_k1': dict(_N, loss_best_of_k_k=1),
+    'f_ab_k2': dict(_N, loss_best_of_k_k=2),
+    'f_ab_k4': dict(_N, loss_best_of_k_k=4),
+    'f_ab_k16': dict(_N, loss_best_of_k_k=16),
+    'f_ab_noalign_k1': dict(_N, imitation_loss_type='index', loss_best_of_k_k=1),
+    # 5. reward transform and critic; backbone
+    'f_ab_minus_c': dict(_N, critic_reward_minus_cost=True),
+    'f_ab_rew_neg': dict(_N, critic_reward_mapping='neg'),
+    'f_ab_rew_exp': dict(_N, critic_reward_mapping='exp'),
+    'f_ab_critic_off': dict(_N, critic_disabled=True),
+    'f_ab_shac': dict(_N, _agent='FOCUS/DFlexAntSHAC'),
+    'f_ab_ent_sapo': dict(backbone_entropy='sapo'),
+    # demonstrations, matched item, cost, feature map (phase-0 defaults kept, the alternatives as one-setting arms)
+    'f_ab_demos1': dict(_N, _n_trajs=1),
+    'f_ab_demos2': dict(_N, _n_trajs=2),
+    'f_ab_demos4': dict(_N, _n_trajs=4),
+    'f_ab_statepairs': dict(_N, input_type='state_state'),
+    'f_ab_cost_l2': dict(_N, loss_ot_cost_type='l2'),
+    'f_ab_feat64': dict(_N, loss_mlp_features_dim=64),
+})
+for rho in (0.3, 1.0, 3.0, 10.0, 100.0):
+    F_ARMS[f'f_ab_uot_rho{rho:g}'] = dict(_N, loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
+# light tuning of the score-function arm (batch p4sftune, tuning seeds): actor learning rate (default 2e-3)
+for lr in (2e-3, 6e-4, 2e-4):
+    F_ARMS[f'f_sf_lr{lr:g}'] = dict(_N, actor_grad_estimator='score_function',
+                                    _shac=dict(actor_optim_kwargs=dict(lr=lr, betas=[0.7, 0.95])))
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     F_ARMS[f'f_uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
     F_ARMS[f'f_uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
@@ -126,10 +161,18 @@ ARMS.update({k: v for k, v in F_ARMS.items()})
 
 # Run-level settings, the same for every arm
 EVAL_EVERY = 500_000
+# Timing batch: a fraction of the budget on one GPU model; full-run times are extrapolated from it (REPORT)
+BUDGET_SCALE = {'p3time': 0.05}
+
+
+def budget_of(batch, task, arm):
+    b = OOPS_BUDGET if arm.startswith('bl_oops') else TASKS[task][1]
+    return int(b * BUDGET_SCALE.get(batch, 1.0))
 
 
 def task_file(batch, task, arm):
-    demo, budget = TASKS[task]
+    demo, _ = TASKS[task]
+    budget = budget_of(batch, task, arm)
     base = REFERENCE if arm == 'ref_otcos' else FINAL if arm.startswith('f_') else DEFAULT
     # every F_ARMS entry must get FINAL (the p0screen8 'fn_' arms are the one recorded exception, see above)
     if arm in F_ARMS and base is not FINAL and arm not in FN_ON_DEFAULT_AS_RAN:
@@ -140,6 +183,7 @@ def task_file(batch, task, arm):
     change = dict(ARMS[arm])
     n_trajs = change.pop('_n_trajs', 8)
     agent_name = change.pop('_agent', 'FOCUS/DFlexAntSAPO')
+    shac_extra = change.pop('_shac', {})
     focus.update(change)
     focus = dict(demos=dict(path='experts/demos/' + demo, n_trajs=n_trajs), **focus)
     return dict(
@@ -150,7 +194,7 @@ def task_file(batch, task, arm):
             protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
             eval_every_steps=EVAL_EVERY,
             save_eval_rollouts=False,
-            shac=dict(max_epochs=50000, max_agent_steps=budget),
+            shac=dict(max_epochs=50000, max_agent_steps=budget, **shac_extra),
             focus=focus,
             network=dict(actor_kwargs=dict(mlp_kwargs=dict(units=[128, 64, 32])),
                          critic_kwargs=dict(mlp_kwargs=dict(units=[64, 64]))),
@@ -232,7 +276,7 @@ def baseline_task_file(batch, task, arm):
             _set_dotted(cfg, k, v)
     elif variants and method not in ('oops', 'ild'):
         raise ValueError(f'{method}: choose a variant from {list(variants)}')
-    budget = OOPS_BUDGET if method == 'oops' else TASKS[task][1]
+    budget = budget_of(batch, task, arm)
     ag = cfg['agent']
     if fam is not None:
         ag.setdefault(fam, {})['max_agent_steps'] = budget
