@@ -143,3 +143,37 @@ class CriticTargets(unittest.TestCase):
         for b in range(B):
             for t in (0, 5, 10, 11, 31):
                 self.assertAlmostEqual(agent.target_values[t, b].item(), float(lam_return(t, b)), places=3)
+
+
+def test_build_focus_loss_honours_every_objective_key():
+    """FOCUS, FOCUS-PPO and FOCUS-SAC share reward.build_focus_loss: each clean-method key reaches the objects."""
+    from mineral.agents.diffil.best_of_k import (OTSinkhornCriterion, SequenceCosineCriterion,
+                                                 SequenceRegressionCriterion, SoftDTWCriterion)
+    from mineral.agents.diffil.reward import build_focus_loss
+
+    base = dict(imitation_loss_type='ot', loss_ot_cost_type='cosine', loss_cost_units='expected',
+                loss_best_of_k_k=4, loss_best_of_k_relative=True, loss_best_of_k_tau=0.1, loss_ot_detach_plan=False,
+                loss_ot_marginal_rho=1.0, loss_ot_marginal_side='expert')
+    f = build_focus_loss(base, horizon_len=32, feature_dim=5, device='cpu')
+    c = f.criterion
+    assert isinstance(c, OTSinkhornCriterion)
+    assert (c.cost_type, c.step_cost, c.detach_plan, c.marginal_rho, c.marginal_side) == (
+        'cosine', 'expected', False, 1.0, 'expert')
+    assert (f.K, f.tau, f.relative) == (4, 0.1, True)
+    # defaults = the values FOCUS always read (reported runs)
+    d = build_focus_loss({}, horizon_len=32, feature_dim=5, device='cpu')
+    assert (d.criterion.cost_type, d.criterion.step_cost, d.criterion.detach_plan, d.criterion.marginal_rho) == (
+        'l2', 'legacy', True, None)
+    assert (d.K, d.tau, d.relative) == (8, 0.5, False)
+    # index-wise matching keeps the ground cost; soft-DTW keeps the cost units
+    assert isinstance(build_focus_loss(dict(base, imitation_loss_type='index'), 32, 5, 'cpu').criterion,
+                      SequenceCosineCriterion)
+    assert isinstance(build_focus_loss(dict(imitation_loss_type='index'), 32, 5, 'cpu').criterion,
+                      SequenceRegressionCriterion)
+    s = build_focus_loss(dict(base, imitation_loss_type='softdtw'), 32, 5, 'cpu').criterion
+    assert isinstance(s, SoftDTWCriterion) and s.step_cost == 'expected' and s.cost_type == 'cosine'
+
+
+class SharedLossBuilder(unittest.TestCase):
+    def test_build_focus_loss_honours_every_objective_key(self):
+        test_build_focus_loss_honours_every_objective_key()

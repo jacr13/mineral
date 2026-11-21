@@ -45,3 +45,16 @@ focus:
   critic_reward_mapping: log_exp
   critic_reward_scale: 1.0
   critic_reward_normalize: false
+  # objective and reward settings shared with FOCUS (reward.build_focus_loss); defaults as in FOCUS
+  loss_ot_detach_plan: true
+  loss_ot_marginal_rho: null
+  loss_ot_marginal_side: both
+  loss_cost_units: legacy
+  loss_best_of_k_relative: false
+  critic_reward_minus_cost: null
+  loss_dtw_gamma: 0.1
+  loss_dtw_normalize: rows # rows | total | none
+  loss_orca_lam: 0.25
+  loss_orca_cost_mode: neg_log_r
+  loss_orca_normalize_p: false
+  loss_orca_normalize_cost: true

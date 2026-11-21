@@ -10,6 +10,7 @@ from ...common.demos import get_demos
 from ...nets.multi_encoder import MultiEncoder
 from ..diffrl.shac import SHAC
 from ..diffrl.utils import grad_norm, policy_kl
+from .reward import build_focus_loss
 from .best_of_k import (
     BestOfK,
     ORCACriterion,
@@ -123,65 +124,13 @@ class FOCUS(SHAC):
             # configured ground cost (the same cost as the aligned variants)
             self.imitation_loss_type = "cosine" if self.loss_ot_cost_type == "cosine" else "l2"
         if self.imitation_loss_type in ["ot", "l2", "cosine", "softdtw", "softdtw_subseq", "orca"]:
-            if self.imitation_loss_type == "ot":
-                ot_params = dict(
-                    eps=self.loss_ot_eps,
-                    iters=self.loss_ot_iters,
-                    cost_type=self.loss_ot_cost_type,
-                    huber_delta=self.loss_ot_huber_delta,
-                    use_huber_speedup=self.loss_use_huber_speedup,
-                    detach_plan=self.loss_ot_detach_plan,
-                    marginal_rho=self.loss_ot_marginal_rho,
-                    marginal_side=self.loss_ot_marginal_side,
-                    step_cost=self.loss_cost_units,
-                )
-                criterion = OTSinkhornCriterion(**ot_params)
-            elif self.imitation_loss_type in ("softdtw", "softdtw_subseq"):
-                # Same ground cost and the same per-step cost scale as the OT
-                # criterion (see SoftDTWCriterion); only the alignment differs.
-                subseq = self.imitation_loss_type == "softdtw_subseq"
-                criterion = SoftDTWCriterion(
-                    gamma=self.loss_dtw_gamma,
-                    cost_type=self.loss_ot_cost_type,
-                    huber_delta=self.loss_ot_huber_delta,
-                    subsequence=subseq,
-                    open_end=subseq,
-                    normalize=self.loss_dtw_normalize,
-                    step_cost=self.loss_cost_units,
-                )
-            elif self.imitation_loss_type == "orca":
-                criterion = ORCACriterion(
-                    lam=self.loss_orca_lam,
-                    cost_type=self.loss_ot_cost_type,
-                    huber_delta=self.loss_ot_huber_delta,
-                    normalize_p=self.loss_orca_normalize_p,
-                    cost_mode=self.loss_orca_cost_mode,
-                    normalize_cost=self.loss_orca_normalize_cost,
-                )
-            elif self.imitation_loss_type == "l2":
-                criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
-            elif self.imitation_loss_type == "cosine":
-                criterion = SequenceCosineCriterion()
-            else:
-                raise NotImplementedError(self.imitation_loss_type)
-
             obs_dim = self.num_obs
             if self.network_config.get("encoder", None) is not None:
                 obs_dim = self.encoder.out_dim
-
-            bok_params = dict(
-                T=self.horizon_len if self.input_type == "state" else self.horizon_len + 1,
-                K=self.loss_best_of_k_k,
-                tau=self.loss_best_of_k_tau,
-                input_type=self.input_type,
-                detach_prev_obs=self.loss_use_detached_prev_obs,
-                mlp_features_dim=self.loss_mlp_features_dim,
-                feature_dim=obs_dim,
-                return_per_step_costs=True,
-                device=self.device,
-                relative=self.loss_best_of_k_relative,
-            )
-            self.loss_fn = BestOfK(**bok_params, criterion=criterion)
+            # one builder for FOCUS and its zeroth-order variants (reward.build_focus_loss)
+            cfg = dict(self.focus_config)
+            cfg["imitation_loss_type"] = self.imitation_loss_type
+            self.loss_fn = build_focus_loss(cfg, self.horizon_len, obs_dim, self.device)
         elif self.imitation_loss_type == "chamfer":
             from .chamfer_loss import ChamferImitationLoss
 

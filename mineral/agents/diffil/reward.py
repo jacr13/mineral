@@ -5,6 +5,7 @@ import torch
 from ...common.demos import get_demos
 from .best_of_k import (
     BestOfK,
+    ORCACriterion,
     OTSinkhornCriterion,
     SequenceCosineCriterion,
     SequenceRegressionCriterion,
@@ -13,45 +14,73 @@ from .best_of_k import (
 
 
 def build_focus_loss(config, horizon_len, feature_dim, device):
-    """Build a detached sequence objective with the same settings as FOCUS."""
-    imitation_loss_type = config.get("imitation_loss_type", "ot")
-    if imitation_loss_type == "ot":
+    """The FOCUS sequence objective (criterion inside best-of-K) from a ``focus`` config.
+
+    The one builder of FOCUS (first order) and of its zeroth-order variants (FOCUS-PPO, FOCUS-SAC), so that the
+    objective cannot drift between them. Keys and defaults are those FOCUS has always read (defaults = the values of
+    the reported runs). ``imitation_loss_type: index`` (no alignment) is step t against step t of the candidate with
+    the configured ground cost.
+    """
+    get = config.get
+    loss_type = get("imitation_loss_type", "ot")
+    cost_type = get("loss_ot_cost_type", "l2")
+    if loss_type == "index":
+        loss_type = "cosine" if cost_type == "cosine" else "l2"
+    huber_delta = float(get("loss_ot_huber_delta", 1.0))
+    step_cost = get("loss_cost_units", "legacy")
+    if loss_type == "ot":
+        rho = get("loss_ot_marginal_rho", None)
         criterion = OTSinkhornCriterion(
-            eps=float(config.get("loss_ot_eps", 0.1)),
-            iters=int(config.get("loss_ot_iters", 60)),
-            cost_type=config.get("loss_ot_cost_type", "l2"),
-            huber_delta=float(config.get("loss_ot_huber_delta", 1.0)),
-            use_huber_speedup=config.get("loss_use_huber_speedup", True),
+            eps=float(get("loss_ot_eps", 0.1)),
+            iters=int(get("loss_ot_iters", 60)),
+            cost_type=cost_type,
+            huber_delta=huber_delta,
+            use_huber_speedup=get("loss_use_huber_speedup", True),
+            detach_plan=bool(get("loss_ot_detach_plan", True)),
+            marginal_rho=None if rho in (None, "null", "none") else float(rho),
+            marginal_side=get("loss_ot_marginal_side", "both"),
+            step_cost=step_cost,
         )
-    elif imitation_loss_type in ("softdtw", "softdtw_subseq"):
-        subseq = imitation_loss_type == "softdtw_subseq"
+    elif loss_type in ("softdtw", "softdtw_subseq"):
+        subseq = loss_type == "softdtw_subseq"
         criterion = SoftDTWCriterion(
-            gamma=float(config.get("loss_dtw_gamma", 0.1)),
-            cost_type=config.get("loss_ot_cost_type", "l2"),
-            huber_delta=float(config.get("loss_ot_huber_delta", 1.0)),
+            gamma=float(get("loss_dtw_gamma", 0.1)),
+            cost_type=cost_type,
+            huber_delta=huber_delta,
             subsequence=subseq,
             open_end=subseq,
-            normalize=config.get("loss_dtw_normalize", "rows"),
+            normalize=get("loss_dtw_normalize", "rows"),
+            step_cost=step_cost,
         )
-    elif imitation_loss_type == "l2":
+    elif loss_type == "orca":
+        criterion = ORCACriterion(
+            lam=float(get("loss_orca_lam", 0.25)),
+            cost_type=cost_type,
+            huber_delta=huber_delta,
+            normalize_p=bool(get("loss_orca_normalize_p", False)),
+            cost_mode=get("loss_orca_cost_mode", "neg_log_r"),
+            normalize_cost=bool(get("loss_orca_normalize_cost", True)),
+        )
+    elif loss_type == "l2":
         criterion = SequenceRegressionCriterion(use_huber=False, reduction="mean")
-    elif imitation_loss_type == "cosine":
+    elif loss_type == "cosine":
         criterion = SequenceCosineCriterion()
     else:
-        raise NotImplementedError(f"Unsupported FOCUS imitation loss: {imitation_loss_type}")
+        raise NotImplementedError(f"Unsupported FOCUS imitation loss: {loss_type}")
 
-    input_type = config.get("input_type", "state")
+    input_type = get("input_type", "state")
     return BestOfK(
         T=horizon_len if input_type == "state" else horizon_len + 1,
-        K=int(config.get("loss_best_of_k_k", 8)),
-        tau=float(config.get("loss_best_of_k_tau", 0.5)),
+        K=get("loss_best_of_k_k", 8),
+        tau=float(get("loss_best_of_k_tau", 0.5)),
         input_type=input_type,
-        detach_prev_obs=config.get("loss_use_detached_prev_obs", True),
-        mlp_features_dim=config.get("loss_mlp_features_dim", None),
+        detach_prev_obs=get("loss_use_detached_prev_obs", True),
+        mlp_features_dim=get("loss_mlp_features_dim", None),
         feature_dim=feature_dim,
         return_per_step_costs=True,
-        criterion=criterion,
         device=device,
+        relative=bool(get("loss_best_of_k_relative", False)),
+        criterion=criterion,
     )
 
 
@@ -76,6 +105,7 @@ class DetachedOTRewardMixin:
         self.critic_reward_shapping = self.focus_config.get("critic_reward_shapping", True)
         self.critic_reward_normalize = self.focus_config.get("critic_reward_normalize", False)
         self.critic_reward_scale = self.focus_config.get("critic_reward_scale", 1.0)
+        self.critic_reward_minus_cost = self.focus_config.get("critic_reward_minus_cost", None)
 
         self.demos = get_demos(self.device, **self.focus_config.get("demos", {}))
         with torch.no_grad():

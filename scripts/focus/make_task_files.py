@@ -209,7 +209,8 @@ def task_file(batch, task, arm):
         eval_every_steps=EVAL_EVERY,
         save_eval_rollouts=False,
     )
-    if zo:  # their own networks (actor 128-64-32, as FOCUS)
+    if zo:  # their own networks (actor 128-64-32, as FOCUS); save_eval_rollouts is a SHAC-family key
+        agent.pop('save_eval_rollouts')
         agent.update({zo: dict(max_agent_steps=budget), 'focus': focus})
     else:  # key order as in every earlier task file
         agent['shac'] = dict(max_epochs=50000, max_agent_steps=budget, **shac_extra)
