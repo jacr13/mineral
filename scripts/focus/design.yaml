@@ -83,7 +83,8 @@ p0screen8:
   arms: [f_ent_none, fn_uot_expert_rho0.1, fn_uot_expert_rho0.3, fn_uot_expert_rho1]
   control: f_ent_none
 
-# PHASE 3, main comparison (Joao, 2026-11-21): reported seeds, RTX 3090 only, one code commit for every arm.
+# PHASE 3, main comparison (Joao, 2026-11-21): reported seeds, one code commit for every arm. The RTX 3090 pin was
+# removed the same day (none free); timings come from a separate RTX 3090 batch (~10 epochs per method, extrapolated).
 # Baselines first at low priority; the FOCUS variants are added to the same batch (same commit, --commit) once rounds
 # 7 and 8 have fixed the backbone and rho.
 p3main:
