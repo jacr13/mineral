@@ -103,10 +103,22 @@ F_ARMS = {
     # SHAC-style backbone (Gaussian policy, ELU, single critic + target, Adam, no entropy), critic targets fixed (91a1a9d)
     'f_shac': dict(_agent='FOCUS/DFlexAntSHAC'),
 }
-# expert-side unbalanced OT on the no-entropy backbone (control in the same batch: f_ent_none)
+# p0screen8 as it ran: these 'fn_' names do not start with 'f_', so task_file() gave them the DEFAULT base, i.e. WITH
+# the -c reward term, while their control f_ent_none has none (found 2026-11-21: round 8 confounded). Kept unchanged
+# so the files match the runs; the corrected screen is p0screen8b (f_n_uot_* below).
+FN_ON_DEFAULT_AS_RAN = set()
 for rho in (0.1, 0.3, 1.0):
+    FN_ON_DEFAULT_AS_RAN.add(f'fn_uot_expert_rho{rho:g}')
     F_ARMS[f'fn_uot_expert_rho{rho:g}'] = dict(backbone_entropy='none', loss_ot_marginal_rho=rho,
                                                loss_ot_marginal_side='expert')
+# corrected round 8 (p0screen8b): expert-side UOT on the clean FINAL config with the no-entropy backbone
+for rho in (0.1, 0.3, 1.0):
+    F_ARMS[f'f_n_uot_rho{rho:g}'] = dict(backbone_entropy='none', loss_ot_marginal_rho=rho,
+                                         loss_ot_marginal_side='expert')
+# Phase 3 FOCUS variants (p3main): clean FINAL config, no-entropy backbone (round 7); UOT added once p0screen8b fixes rho
+F_ARMS['f_main_ot'] = dict(backbone_entropy='none')
+F_ARMS['f_main_dtw'] = dict(backbone_entropy='none', imitation_loss_type='softdtw')
+F_ARMS['f_main_noalign'] = dict(backbone_entropy='none', imitation_loss_type='index')
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):
     F_ARMS[f'f_uot_expert_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
     F_ARMS[f'f_uot_both_rho{rho:g}'] = dict(loss_ot_marginal_rho=rho, loss_ot_marginal_side='both')
@@ -119,6 +131,9 @@ EVAL_EVERY = 500_000
 def task_file(batch, task, arm):
     demo, budget = TASKS[task]
     base = REFERENCE if arm == 'ref_otcos' else FINAL if arm.startswith('f_') else DEFAULT
+    # every F_ARMS entry must get FINAL (the p0screen8 'fn_' arms are the one recorded exception, see above)
+    if arm in F_ARMS and base is not FINAL and arm not in FN_ON_DEFAULT_AS_RAN:
+        raise ValueError(f'{arm}: F_ARMS entry would not use the FINAL base; name it f_...')
     focus = copy.deepcopy(base)
     if arm == 'ref_otcos' and task == 'ant':
         focus['input_type'] = 'state_state'
