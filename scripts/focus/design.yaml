@@ -122,3 +122,10 @@ p3time:
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
          bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc, f_main_ot, f_main_dtw, f_main_noalign]
+
+# Phase 4 item 4 (2026-11-21): zeroth-order FOCUS. New code commit (one loss builder for FOCUS, FOCUS-PPO and
+# FOCUS-SAC), so the batch has its own control f_main_ot at that commit.
+p4zo:
+  seeds: reported
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [f_main_ot, f_zo_ppo, f_zo_sac]

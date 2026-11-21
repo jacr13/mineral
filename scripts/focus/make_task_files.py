@@ -150,6 +150,9 @@ F_ARMS.update({
 })
 for rho in (0.3, 1.0, 3.0, 10.0, 100.0):
     F_ARMS[f'f_ab_uot_rho{rho:g}'] = dict(_N, loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
+# 4. zeroth-order FOCUS (batch p4zo, control f_main_ot): the same objective and reward with PPO / SAC
+F_ARMS['f_zo_ppo'] = dict(_N, _agent='FOCUS/DFlexAntPPO')
+F_ARMS['f_zo_sac'] = dict(_N, _agent='FOCUS/DFlexAntSAC')
 # light tuning of the score-function arm (batch p4sftune, tuning seeds): actor learning rate (default 2e-3)
 for lr in (2e-3, 6e-4, 2e-4):
     F_ARMS[f'f_sf_lr{lr:g}'] = dict(_N, actor_grad_estimator='score_function',
@@ -170,6 +173,10 @@ def budget_of(batch, task, arm):
     return int(b * BUDGET_SCALE.get(batch, 1.0))
 
 
+ZO_AGENTS = {'FOCUS/DFlexAntPPO': 'ppo', 'FOCUS/DFlexAntSAC': 'sac'}
+FIRST_ORDER_ONLY = dict(actor_grad_estimator='pathwise', critic_disabled=False, backbone_entropy='none')
+
+
 def task_file(batch, task, arm):
     demo, _ = TASKS[task]
     budget = budget_of(batch, task, arm)
@@ -185,20 +192,33 @@ def task_file(batch, task, arm):
     agent_name = change.pop('_agent', 'FOCUS/DFlexAntSAPO')
     shac_extra = change.pop('_shac', {})
     focus.update(change)
+    zo = ZO_AGENTS.get(agent_name)
+    if zo:
+        # zeroth-order FOCUS: same objective and reward (reward.build_focus_loss), PPO / SAC actor-critic. The
+        # first-order-only settings must hold FOCUS's values here and are then dropped (not keys of these agents).
+        for k, v in FIRST_ORDER_ONLY.items():
+            if focus.pop(k, v) != v:
+                raise ValueError(f'{arm}: {k} is a first-order setting and cannot change in a zeroth-order arm')
+        if shac_extra:
+            raise ValueError(f'{arm}: _shac settings do not apply to {agent_name}')
     focus = dict(demos=dict(path='experts/demos/' + demo, n_trajs=n_trajs), **focus)
+    agent = dict(
+        name=agent_name,
+        ckpt_every=-1,  # no periodic checkpoints: final.pth (= at budget) only
+        protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
+        eval_every_steps=EVAL_EVERY,
+        save_eval_rollouts=False,
+    )
+    if zo:  # their own networks (actor 128-64-32, as FOCUS)
+        agent.update({zo: dict(max_agent_steps=budget), 'focus': focus})
+    else:  # key order as in every earlier task file
+        agent['shac'] = dict(max_epochs=50000, max_agent_steps=budget, **shac_extra)
+        agent['focus'] = focus
+        agent['network'] = dict(actor_kwargs=dict(mlp_kwargs=dict(units=[128, 64, 32])),
+                                critic_kwargs=dict(mlp_kwargs=dict(units=[64, 64])))
     return dict(
         task=dict(name='DFlex', env=dict(env_name=task)),
-        agent=dict(
-            name=agent_name,
-            ckpt_every=-1,  # no periodic checkpoints: final.pth (= at budget) only
-            protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
-            eval_every_steps=EVAL_EVERY,
-            save_eval_rollouts=False,
-            shac=dict(max_epochs=50000, max_agent_steps=budget, **shac_extra),
-            focus=focus,
-            network=dict(actor_kwargs=dict(mlp_kwargs=dict(units=[128, 64, 32])),
-                         critic_kwargs=dict(mlp_kwargs=dict(units=[64, 64]))),
-        ),
+        agent=agent,
         logdir=f'workdir/focus-{batch}-{task}-{arm}/$(date +%Y%m%d-%H%M%S.%2N)',
         wandb=dict(mode='offline'),
         run='train_eval',
