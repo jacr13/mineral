@@ -48,6 +48,40 @@ class _FixedHorizonHumanoid:
         self.reset_buf = (invalid | (self.progress_buf >= self.episode_length)).to(self.reset_buf.dtype)
 
 
+def _release_dangling_sim_nodes(env):
+    """DFlex Anymal leaks GPU memory (~0.46 GB per 32-step window at 16 envs, ~2 GB at 64; 2026-11-22).
+
+    DFlex's ``SimulateFunc`` keeps each step's tape, inputs and outputs on its autograd node and frees them only in
+    its backward (``ctx.tape.reset()``); node and outputs form a reference cycle otherwise. In AnymalEnv the reward is
+    computed from the observation *before* the step, so the last simulation step of a window can stay off the
+    backward path; its node then keeps the whole window's tapes alive, and every window adds to that. Fix: when a new
+    trajectory starts (``clear_grad``), release the previous window's last node (already used or never usable: the
+    graph is cut there anyway), so gradients are unchanged. Applied to AnymalEnv only.
+    """
+    orig = env.clear_grad
+
+    def release(roots):
+        # walk the finished window's graph (from the env's state / observation tensors; an auto-reset in the last
+        # step puts copy nodes in front of the simulation node) and release every simulation node reached
+        seen, stack = set(), [getattr(t, 'grad_fn', None) for t in roots if torch.is_tensor(t)]
+        while stack:
+            gf = stack.pop()
+            if gf is None or id(gf) in seen:
+                continue
+            seen.add(id(gf))
+            if type(gf).__name__ == 'SimulateFuncBackward':
+                gf.tape.reset()
+                gf.inputs = ()
+                gf.outputs = []
+            stack.extend(f for f, _ in getattr(gf, 'next_functions', ()))
+
+    def clear_grad(checkpoint=None):
+        release([env.state.joint_q, env.state.joint_qd, env.state.joint_act, getattr(env, 'obs_buf', None)])
+        return orig(checkpoint)
+
+    env.clear_grad = clear_grad
+
+
 def make_envs(config):
     env = config.task.env
     env_kwargs = OmegaConf.to_container(env, resolve=True)
@@ -85,6 +119,8 @@ def make_envs(config):
         **env_kwargs,
     )
     _keep_obs_before_reset(env)
+    if env_name == 'AnymalEnv':
+        _release_dangling_sim_nodes(env)
     return env
 
 
