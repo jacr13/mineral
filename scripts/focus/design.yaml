@@ -138,3 +138,10 @@ p5jumper:
   seeds: tuning
   tasks: [jumper]
   arms: [f_main_ot, f_main_noalign, f_ab_k1, f_ab_noalign_k1, f_main_dtw]
+
+# Phase 5 ordering test, option b (Joao, 2026-11-22): imitation cost on positions only, so that order is the only cue
+# for the direction of motion. Screen on tuning seeds; HalfCheetah joins once its demonstrations exist.
+p5order:
+  seeds: tuning
+  tasks: [hopper, ant]
+  arms: [f_main_ot, f_pos_ot, f_pos_dtw, f_pos_noalign, f_pos_k1]

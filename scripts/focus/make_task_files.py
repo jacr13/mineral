@@ -31,6 +31,15 @@ JUMPER_AGENT = dict(
     shac=dict(critic_optim_kwargs=dict(lr=5e-4), target_critic_alpha=0.995),
 )
 
+# Ordering test (Phase 5, option b, Joao 2026-11-22): the imitation cost on positions only (dflex/envs/<task>.py
+# observation layouts). Without velocities, a gait and the same gait played backwards visit the same postures, so the
+# order of the states is the only cue for the direction of motion. Actor and critic still see the full observation.
+POSITION_DIMS = {
+    'hopper': [0, 1, 2, 3, 4],  # joint_q[1:]: height, pitch, 3 joints (5:11 = joint_qd)
+    'cheetah': [0, 1, 2, 3, 4, 5, 6, 7],  # joint_q[1:]: height, pitch, 6 joints (8:17 = joint_qd)
+    'ant': [0, 1, 2, 3, 4] + list(range(11, 19)) + [27, 28],  # height, rotation, 8 joints, up, heading
+}
+
 # The clean default: one setting per line, the same for every task and every variant.
 DEFAULT = dict(
     imitation_loss_type='ot',  # alignment: ot | index (no alignment) | softdtw | softdtw_subseq
@@ -165,6 +174,11 @@ for rho in (0.3, 1.0, 3.0, 10.0, 100.0):
 # 1b. score-function arm with its tuned actor learning rate (p4sftune: 2e-4 best of 2e-3 ... 2e-5, 2026-11-22)
 F_ARMS['f_ab_score_function_lr2e-4'] = dict(_N, actor_grad_estimator='score_function',
                                             _shac=dict(actor_optim_kwargs=dict(lr=2e-4, betas=[0.7, 0.95])))
+# ordering test (p5order): positions-only matching; f_main_ot (all features) is the control
+F_ARMS['f_pos_ot'] = dict(_N, _positions=True)
+F_ARMS['f_pos_dtw'] = dict(_N, _positions=True, imitation_loss_type='softdtw')
+F_ARMS['f_pos_noalign'] = dict(_N, _positions=True, imitation_loss_type='index')
+F_ARMS['f_pos_k1'] = dict(_N, _positions=True, loss_best_of_k_k=1)
 # 4. zeroth-order FOCUS (batch p4zo, control f_main_ot): the same objective and reward with PPO / SAC
 F_ARMS['f_zo_ppo'] = dict(_N, _agent='FOCUS/DFlexAntPPO')
 F_ARMS['f_zo_sac'] = dict(_N, _agent='FOCUS/DFlexAntSAC')
@@ -206,6 +220,8 @@ def task_file(batch, task, arm):
     n_trajs = change.pop('_n_trajs', 8)
     agent_name = change.pop('_agent', 'FOCUS/DFlexAntSAPO')
     shac_extra = change.pop('_shac', {})
+    if change.pop('_positions', False):
+        change['loss_feature_dims'] = POSITION_DIMS[task]
     focus.update(change)
     zo = ZO_AGENTS.get(agent_name)
     if zo:

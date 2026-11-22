@@ -94,6 +94,10 @@ class FOCUS(SHAC):
         #                    Simply detaching observations is NOT an option: the
         #                    objective depends on the policy only through the
         #                    dynamics, so the actor would receive no gradient.
+        # Feature dimensions the imitation cost is computed on (null = all). E.g. positions only, without
+        # velocities: then the order of the states is the only cue for the direction of motion (ordering test).
+        _dims = self.focus_config.get("loss_feature_dims", None)
+        self.loss_feature_dims = None if _dims in (None, "null", "none") else [int(d) for d in _dims]
         self.actor_grad_estimator = self.focus_config.get("actor_grad_estimator", "pathwise")
         if self.actor_grad_estimator not in ("pathwise", "score_function"):
             raise ValueError(f"Invalid actor_grad_estimator: {self.actor_grad_estimator}")
@@ -127,6 +131,8 @@ class FOCUS(SHAC):
             obs_dim = self.num_obs
             if self.network_config.get("encoder", None) is not None:
                 obs_dim = self.encoder.out_dim
+            if self.loss_feature_dims is not None:
+                obs_dim = len(self.loss_feature_dims)
             # one builder for FOCUS and its zeroth-order variants (reward.build_focus_loss)
             cfg = dict(self.focus_config)
             cfg["imitation_loss_type"] = self.imitation_loss_type
@@ -397,6 +403,9 @@ class FOCUS(SHAC):
 
         obs_z = self._encode_window(obs_window)
         exp_z = self._encode_window(obs_exp).detach()
+        if self.loss_feature_dims is not None:  # match on these feature dimensions only (actor and critic see all)
+            obs_z = obs_z[..., self.loss_feature_dims]
+            exp_z = exp_z[..., self.loss_feature_dims]
 
         self.timer.start("train/compute_actor_loss/loss_fn")
         loss, info = self.loss_fn(obs_z, exp_z, sim_is_window=True)
