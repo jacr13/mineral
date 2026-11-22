@@ -125,6 +125,23 @@ class HopperSpec(EnvSpec):
         return torch.cat([q[:, 1:], qd], -1)
 
 
+class CheetahSpec(EnvSpec):
+    """HalfCheetah: the same layout as Hopper (joint_q = x, z, pitch, 6 joints; obs = joint_q[1:] + joint_qd)."""
+
+    env_name, obs_dim, act_dim, act_offset = 'cheetah', 17, 6, 3
+
+    def act_scale(self, env, n):
+        return env.action_strength
+
+    def to_state(self, env, obs):
+        n = obs.shape[0]
+        q = torch.cat([torch.zeros(n, 1, device=obs.device, dtype=obs.dtype), obs[:, :8]], 1)
+        return q, obs[:, 8:17]
+
+    def from_state(self, env, q, qd):
+        return torch.cat([q[:, 1:], qd], -1)
+
+
 class CartPoleSpec(EnvSpec):
     """Cart-pole swing-up: obs = [x, xdot, sin(theta), cos(theta), theta_dot], one force on the cart.
 
@@ -287,6 +304,7 @@ class SynergySpec(EnvSpec):
 SPECS = {
     'cartpoleswingup': CartPoleSpec,
     'hopper': HopperSpec,
+    'cheetah': CheetahSpec,
     'ant': AntSpec,
     'humanoid': HumanoidSpec,
     'snu_humanoid': SNUHumanoidSpec,
