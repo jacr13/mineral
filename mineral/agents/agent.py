@@ -293,7 +293,8 @@ class Agent:
             env_cfg.numEnvs = 64
             env_cfg.no_grad = True
             env_cfg.render = False
-            env_cfg.stochastic_init = True
+            if cfg.task.name == 'DFlex':  # a DFlex option (Rewarped envs do not take it)
+                env_cfg.stochastic_init = True
             cfg.seed = int(cfg.seed) + 12345
             suite = getattr(envs, cfg.task.get('suite', 'isaacgymenvs'))
             dfc = None

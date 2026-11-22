@@ -33,10 +33,12 @@ RESULTS_DIR = os.path.expanduser('~/docker/cluster-supervisor/results')
 # Normalisation (Joao, 2026-11-20): mean return of the 8 demonstrations used for training (first 8 of each file).
 # The 128-episode pool means (4812 / 9318 / 8116 / 6246) include the expert's failed episodes on the humanoids.
 # Demo-count arms (1, 2, 4 demos) are normalised by the same 8-demo mean, so they compare directly.
-EXPERT = {'hopper': 4813.0, 'ant': 9329.5, 'humanoid': 8225.2, 'snu_humanoid': 6748.9}
-EXPERT_POOL = {'hopper': 4812.1, 'ant': 9318.1, 'humanoid': 8116.5, 'snu_humanoid': 6246.7}
+EXPERT = {'hopper': 4813.0, 'ant': 9329.5, 'humanoid': 8225.2, 'snu_humanoid': 6748.9,
+          'jumper': 2073.9}  # Rewarped soft Jumper (Phase 5): first 8 of 64 demonstrations
+EXPERT_POOL = {'hopper': 4812.1, 'ant': 9318.1, 'humanoid': 8116.5, 'snu_humanoid': 6246.7, 'jumper': 2046.4}
 THRESH = 0.9  # 'reached 0.9': first periodic deterministic evaluation at or above 0.9 of the expert
-TASK_NAMES = {'hopper': 'Hopper', 'ant': 'Ant', 'humanoid': 'Humanoid', 'snu_humanoid': 'SNU Humanoid'}
+TASK_NAMES = {'hopper': 'Hopper', 'ant': 'Ant', 'humanoid': 'Humanoid', 'snu_humanoid': 'SNU Humanoid',
+              'jumper': 'Soft Jumper'}
 SNAP_COLS = ['batch', 'task', 'arm', 'seed', 'run_id', 'commit', 'budget', 'agent_steps', 'reached', 'deterministic',
              'episodes', 'return_raw', 'return_norm', 'train_seconds', 'steps_to_09', 'seconds_to_09', 'source']
 

@@ -131,3 +131,10 @@ p4zo:
   seeds: reported
   tasks: [hopper, ant, humanoid, snu_humanoid]
   arms: [f_main_ot, f_zo_ppo, f_zo_sac]
+
+# Phase 5, ordering task (2026-11-22): Rewarped soft Jumper. Brief: first show that no alignment and K = 1 do worse
+# there; if they do not, the task does not answer the reviewers. Tuning seeds; reported seeds only if it does.
+p5jumper:
+  seeds: tuning
+  tasks: [jumper]
+  arms: [f_main_ot, f_main_noalign, f_ab_k1, f_ab_noalign_k1, f_main_dtw]

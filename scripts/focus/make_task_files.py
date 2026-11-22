@@ -18,6 +18,18 @@ TASKS = {
     'humanoid': ('DFlex_humanoid_demos128_return8116_len984.pt', 15_000_000),
     'snu_humanoid': ('DFlex_snu_demos128_return6246_len929.pt', 15_000_000),
 }
+# Phase 5 ordering task (Rewarped soft Jumper, gradsim): kept apart from TASKS so DFlex batches never include it.
+# Network, encoder keys, env count and critic settings as in the earlier FOCUS Jumper runs
+# (tasks/focus/rewarped_soft_jumper.yaml); the objective is the clean FOCUS config like every DFlex task.
+REWARPED_TASKS = {
+    'jumper': ('Rewarped_Jumper_demos64_return2046_len300.pt', 6_200_000),
+}
+JUMPER_AGENT = dict(
+    network=dict(encoder_kwargs=dict(mlp_keys='com_q|com_qd|actions'),
+                 actor_kwargs=dict(mlp_kwargs=dict(units=[512, 256])),
+                 critic_kwargs=dict(mlp_kwargs=dict(units=[256, 256]))),
+    shac=dict(critic_optim_kwargs=dict(lr=5e-4), target_critic_alpha=0.995),
+)
 
 # The clean default: one setting per line, the same for every task and every variant.
 DEFAULT = dict(
@@ -172,7 +184,7 @@ BUDGET_SCALE = {'p3time': 0.05}
 
 
 def budget_of(batch, task, arm):
-    b = OOPS_BUDGET if arm.startswith('bl_oops') else TASKS[task][1]
+    b = OOPS_BUDGET if arm.startswith('bl_oops') else {**TASKS, **REWARPED_TASKS}[task][1]
     return int(b * BUDGET_SCALE.get(batch, 1.0))
 
 
@@ -181,7 +193,7 @@ FIRST_ORDER_ONLY = dict(actor_grad_estimator='pathwise', critic_disabled=False, 
 
 
 def task_file(batch, task, arm):
-    demo, _ = TASKS[task]
+    demo, _ = {**TASKS, **REWARPED_TASKS}[task]
     budget = budget_of(batch, task, arm)
     base = REFERENCE if arm == 'ref_otcos' else FINAL if arm.startswith('f_') else DEFAULT
     # every F_ARMS entry must get FINAL (the p0screen8 'fn_' arms are the one recorded exception, see above)
@@ -220,9 +232,18 @@ def task_file(batch, task, arm):
         agent['focus'] = focus
         agent['network'] = dict(actor_kwargs=dict(mlp_kwargs=dict(units=[128, 64, 32])),
                                 critic_kwargs=dict(mlp_kwargs=dict(units=[64, 64])))
+    if task in REWARPED_TASKS:
+        if zo or agent_name != 'FOCUS/DFlexAntSAPO':
+            raise ValueError(f'{arm}: only the default FOCUS agent is set up for {task}')
+        agent['name'] = 'FOCUS/RewarpedJumperSAPO'
+        agent['network'] = copy.deepcopy(JUMPER_AGENT['network'])
+        agent['shac'].update(copy.deepcopy(JUMPER_AGENT['shac']))
+        cfg = dict(task=dict(name='Rewarped', env=dict(env_name='Jumper', env_suite='gradsim')), agent=agent,
+                   num_envs=32)
+    else:
+        cfg = dict(task=dict(name='DFlex', env=dict(env_name=task)), agent=agent)
     return dict(
-        task=dict(name='DFlex', env=dict(env_name=task)),
-        agent=agent,
+        **cfg,
         logdir=f'workdir/focus-{batch}-{task}-{arm}/$(date +%Y%m%d-%H%M%S.%2N)',
         wandb=dict(mode='offline'),
         run='train_eval',
