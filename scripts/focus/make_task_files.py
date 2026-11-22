@@ -17,6 +17,9 @@ TASKS = {
     'ant': ('DFlex_ant_demos128_return9318_len1000.pt', 10_000_000),
     'humanoid': ('DFlex_humanoid_demos128_return8116_len984.pt', 15_000_000),
     'snu_humanoid': ('DFlex_snu_demos128_return6246_len929.pt', 15_000_000),
+    # added 2026-11-22 (Joao: the other SHAC-paper tasks); expert: SAPO seed 5020 (tasks/focus/experts), not on the
+    # cluster's input folder: launch its cells with --attach_input experts/demos=<dir holding this file>
+    'cheetah': ('DFlex_cheetah_demos128_return8078_len1000.pt', 10_000_000),
 }
 # Phase 5 ordering task (Rewarped soft Jumper, gradsim): kept apart from TASKS so DFlex batches never include it.
 # Network, encoder keys, env count and critic settings as in the earlier FOCUS Jumper runs

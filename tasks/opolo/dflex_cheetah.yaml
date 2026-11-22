@@ -1,0 +1,34 @@
+task:
+  name: DFlex
+  env:
+    env_name: cheetah
+    no_grad: true
+agent:
+  name: OPOLO/DFlex
+  sac:
+    max_agent_steps: 10000000
+    +target_entropy_scalar: 0.5
+    tau: 0.005
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  il:
+    demos:
+      path: "experts/demos/DFlex_cheetah_demos128_return8078_len1000.pt"
+      n_trajs: 8
+    discriminator:
+      mlp_kwargs:
+        units: [128, 128]
+logdir: "workdir/DFlexCheetah-OPOLO/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "5h"

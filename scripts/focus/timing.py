@@ -24,7 +24,7 @@ RES = os.path.expanduser('~/docker/cluster-supervisor/results')
 sys.path.insert(0, HERE)
 import table  # noqa: E402  (EXPERT normalisation)
 
-TASKS = ['hopper', 'ant', 'humanoid', 'snu_humanoid']
+TASKS = ['hopper', 'ant', 'humanoid', 'snu_humanoid', 'cheetah']
 
 
 def manifest(batch):

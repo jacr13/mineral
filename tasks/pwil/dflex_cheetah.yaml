@@ -1,0 +1,48 @@
+task:
+  name: DFlex
+  env:
+    env_name: cheetah
+    no_grad: true
+agent:
+  name: PWIL/DFlexAnt
+  sac:
+    max_agent_steps: 10000000
+    +target_entropy_scalar: 0.5
+    tau: 0.005
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  pwil:
+    demos:
+      path: "experts/demos/DFlex_cheetah_demos128_return8078_len1000.pt"
+      n_trajs: 8
+      subsample_factor: 20 # 0 means no subsampling, >1 means subsample by this factor
+    observation_only: true
+    alpha: 5.0
+    beta: 5.0
+logdir: "workdir/DFlexCheetah10M-PWIL/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+  # agent.pwil.demos.subsample_factor: [1, 20]
+  agent.pwil.demos.subsample_factor: 20
+  # agent.pwil.alpha: [1.0, 5.0, 10.0]  (5.0 matches Dadashi et al.'s own default)
+  agent.pwil.alpha: 5.0
+  # beta=5.0 is Dadashi et al.'s default, tuned for low-dimensional (s, a) MuJoCo tasks with one demo. On these
+  # 37-76-dim state-only DFlex tasks with 8 demos it is too sharp: held-out expert episodes score <= 0.2-1.8 of
+  # the maximum alpha=5 and pwil/reward_mean is ~0, so nothing is learned. Sweep a wider kernel instead.
+  agent.pwil.beta: [1.0, 2.0, 3.0]
+  # agent.pwil.observation_only: [true, false]
+  agent.pwil.observation_only: true
+
+spawner:
+  runtime: "3h30m"

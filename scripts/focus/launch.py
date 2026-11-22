@@ -82,6 +82,8 @@ def main():
     ap.add_argument('--register-from-index', default=None)
     ap.add_argument('--only', nargs='*', default=None, metavar='TASK:ARM:SEED', help='enqueue only these cells')
     ap.add_argument('--commit', default=None, help='code commit (default HEAD); relaunches keep the batch commit')
+    ap.add_argument('--attach_input', action='append', default=[], metavar='DEST=LOCAL_DIR',
+                    help='input shipped with each run (spawner --attach_input), e.g. demos not on the cluster')
     args = ap.parse_args()
 
     todo = list(cells(args.batch))
@@ -129,6 +131,8 @@ def main():
                '--git_commit', commit, '--git_branch', 'focus-wip', '--set', f'seed={seed}']
         if args.gpu_type:
             cmd += ['--gpu_type', args.gpu_type]
+        for a in args.attach_input:
+            cmd += ['--attach_input', a]
         mem = dict(x.split('=') for x in args.memory_arm).get(arm, args.memory)
         if mem:
             cmd += ['--memory', str(mem)]

@@ -145,3 +145,11 @@ p5order:
   seeds: tuning
   tasks: [hopper, ant]
   arms: [f_main_ot, f_pos_ot, f_pos_dtw, f_pos_noalign, f_pos_k1]
+
+# HalfCheetah (Joao, 2026-11-22: the other SHAC-paper tasks). Baseline tuning as p1tune (same variants, tuning
+# seeds) plus a FOCUS-OT sanity arm; then HalfCheetah joins p3main with the variants chosen here.
+p1tune_cheetah:
+  seeds: tuning
+  tasks: [cheetah]
+  arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
+         bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac, f_main_ot]
