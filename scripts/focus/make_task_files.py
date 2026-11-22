@@ -154,7 +154,7 @@ for rho in (0.3, 1.0, 3.0, 10.0, 100.0):
 F_ARMS['f_zo_ppo'] = dict(_N, _agent='FOCUS/DFlexAntPPO')
 F_ARMS['f_zo_sac'] = dict(_N, _agent='FOCUS/DFlexAntSAC')
 # light tuning of the score-function arm (batch p4sftune, tuning seeds): actor learning rate (default 2e-3)
-for lr in (2e-3, 6e-4, 2e-4):
+for lr in (2e-3, 6e-4, 2e-4, 6e-5, 2e-5):
     F_ARMS[f'f_sf_lr{lr:g}'] = dict(_N, actor_grad_estimator='score_function',
                                     _shac=dict(actor_optim_kwargs=dict(lr=lr, betas=[0.7, 0.95])))
 for rho in (0.03, 0.1, 0.3, 1.0, 3.0):

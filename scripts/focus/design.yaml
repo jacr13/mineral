@@ -112,7 +112,9 @@ p3main:
 p4sftune:
   seeds: tuning
   tasks: [hopper, ant, humanoid, snu_humanoid]
-  arms: [f_sf_lr0.002, f_sf_lr0.0006, f_sf_lr0.0002]
+  arms: [f_sf_lr0.002, f_sf_lr0.0006, f_sf_lr0.0002,
+         # extension (2026-11-22): the best rate of the first grid was its smallest
+         f_sf_lr6e-05, f_sf_lr2e-05]
 
 # Timing (Joao, 2026-11-21): every Phase 3 method on RTX 3090 for 5 % of its budget (make_task_files.BUDGET_SCALE);
 # full-run time = 3090 time per step x the method's own time profile over the full runs (REPORT, extrapolation).
