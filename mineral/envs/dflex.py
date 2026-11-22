@@ -82,6 +82,36 @@ def _release_dangling_sim_nodes(env):
     env.clear_grad = clear_grad
 
 
+def _reset_returns_obs(env):
+    """AnymalEnv.reset() returns (obs, extras); every other DFlex env, and the agents, expect the observation alone
+    (otherwise the evaluation gets {'obs': (obs, extras)} and the policy NaN actions). Its internal reset(env_ids)
+    calls ignore the return value."""
+    reset = env.reset
+
+    def reset_obs(*args, **kwargs):
+        out = reset(*args, **kwargs)
+        return out[0] if isinstance(out, tuple) else out
+
+    env.reset = reset_obs
+
+
+def _terminate_any_nonfinite(env):
+    """AnymalEnv.compute_termination is meant to reset environments whose simulation blew up, but its mask
+    ``~(isfinite(x).sum(-1) > 0)`` only flags an environment when *every* entry is non-finite; a partly-NaN state
+    (seen in the evaluation after ~10 steps of an untrained policy) is then not reset and reaches the policy. Also
+    terminate environments with any non-finite observation or joint state; step() then resets them as usual."""
+    orig = env.compute_termination
+
+    def compute_termination(obs, act):
+        term = orig(obs, act)
+        q = env.state.joint_q.view(env.num_envs, -1)
+        qd = env.state.joint_qd.view(env.num_envs, -1)
+        bad = ~(torch.isfinite(obs).all(-1) & torch.isfinite(q).all(-1) & torch.isfinite(qd).all(-1))
+        return term | bad
+
+    env.compute_termination = compute_termination
+
+
 def make_envs(config):
     env = config.task.env
     env_kwargs = OmegaConf.to_container(env, resolve=True)
@@ -121,6 +151,8 @@ def make_envs(config):
     _keep_obs_before_reset(env)
     if env_name == 'AnymalEnv':
         _release_dangling_sim_nodes(env)
+        _reset_returns_obs(env)
+        _terminate_any_nonfinite(env)
     return env
 
 
@@ -139,6 +171,11 @@ def _keep_obs_before_reset(env):
         extras = getattr(env, 'extras', None)
         if env_ids is not None and isinstance(extras, dict) and 'obs_before_reset' not in extras:
             extras['obs_before_reset'] = env.obs_buf.clone()
-        return reset(env_ids, force_reset)
+        # Resetting given envs: no flag. The other DFlex envs are reset(env_ids, force_reset=True) and only use the
+        # flag when env_ids is None (unchanged); AnymalEnv.reset(env_ids, grads, force_reset) would take a positional
+        # flag as `grads` (skipping the reset) and, given force_reset, reset every env.
+        if env_ids is not None:
+            return reset(env_ids)
+        return reset(env_ids, force_reset=force_reset)
 
     env.reset = reset_keeping_obs
