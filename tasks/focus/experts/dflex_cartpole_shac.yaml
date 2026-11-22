@@ -1,0 +1,29 @@
+# CartPole Swing-Up expert, second round (2026-11-22): the SAPO experts at 4 M steps solve the swing-up from some
+# starting states only (deterministic mean -287 to -299, episodes -72 to -613). SHAC, the SHAC paper's own method,
+# with the same settings as tasks/sapo/dflex_cartpole.yaml.
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+    stochastic_init: True
+agent:
+  name: SHAC/DFlexAnt
+  shac:
+    max_epochs: 2000
+    max_agent_steps: 4000000
+    horizon_len: 32
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  save_eval_rollouts: true
+logdir: "workdir/focus-expert-DFlexCartpole4M-SHAC/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 5000
+spawner:
+  runtime: "12h"

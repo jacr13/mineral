@@ -1,0 +1,28 @@
+# CartPole Swing-Up expert, second round (2026-11-22): SAPO trained 3x longer (12 M steps) than the first round,
+# whose experts solve the swing-up from some starting states only (deterministic mean -287 to -299).
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+    stochastic_init: True
+agent:
+  name: SAPO/DFlexAnt
+  shac:
+    max_epochs: 10000
+    max_agent_steps: 12000000
+    horizon_len: 32
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  save_eval_rollouts: true
+logdir: "workdir/focus-expert-DFlexCartpole12M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 5000
+spawner:
+  runtime: "12h"
