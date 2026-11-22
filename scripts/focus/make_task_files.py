@@ -150,6 +150,9 @@ F_ARMS.update({
 })
 for rho in (0.3, 1.0, 3.0, 10.0, 100.0):
     F_ARMS[f'f_ab_uot_rho{rho:g}'] = dict(_N, loss_ot_marginal_rho=rho, loss_ot_marginal_side='expert')
+# 1b. score-function arm with its tuned actor learning rate (p4sftune: 2e-4 best of 2e-3 ... 2e-5, 2026-11-22)
+F_ARMS['f_ab_score_function_lr2e-4'] = dict(_N, actor_grad_estimator='score_function',
+                                            _shac=dict(actor_optim_kwargs=dict(lr=2e-4, betas=[0.7, 0.95])))
 # 4. zeroth-order FOCUS (batch p4zo, control f_main_ot): the same objective and reward with PPO / SAC
 F_ARMS['f_zo_ppo'] = dict(_N, _agent='FOCUS/DFlexAntPPO')
 F_ARMS['f_zo_sac'] = dict(_N, _agent='FOCUS/DFlexAntSAC')

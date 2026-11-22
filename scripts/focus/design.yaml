@@ -102,7 +102,7 @@ p3main:
          bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc,
          f_main_ot, f_main_dtw, f_main_noalign,
          # Phase 4 ablations, control f_main_ot (same batch, same commit, same seeds): one setting changed each
-         f_ab_through_sinkhorn, f_ab_score_function,
+         f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4,
          f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq,
          f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1,
          f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo,
