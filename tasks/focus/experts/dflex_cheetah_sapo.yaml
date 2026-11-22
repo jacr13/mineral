@@ -1,0 +1,27 @@
+# HalfCheetah expert for the demonstration pool (SHAC benchmark task added on Joao's request, 2026-11-22): SAPO as
+# tasks/sapo/dflex_cheetah.yaml, 10 M steps, final checkpoint kept; the final evaluation (64 envs x 2 episodes,
+# deterministic) dumps its rollouts, which experts/experts.py converts to the 128-episode demo format.
+task:
+  name: DFlex
+  env:
+    env_name: cheetah
+agent:
+  name: SAPO/DFlexAnt
+  shac:
+    max_epochs: 5000
+    max_agent_steps: 10000000
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  save_eval_rollouts: true
+logdir: "workdir/focus-expert-DFlexCheetah10M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 5000
+spawner:
+  runtime: "12h"
