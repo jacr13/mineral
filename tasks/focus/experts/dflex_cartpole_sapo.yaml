@@ -1,0 +1,30 @@
+# CartPole Swing-Up expert for a new demonstration pool (Joao, 2026-11-22). The existing pool
+# (DFlex_cartpoleswingup_demos128_return-286_len240.pt) is weak: median -237, first 8 demos -409 on average, below a
+# uniform-random policy (-374 over 128 episodes). SAPO as tasks/sapo/dflex_cartpole.yaml (4 M steps), final
+# checkpoint kept; the final evaluation dumps 64 x 2 episodes for experts/experts.py.
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+    stochastic_init: True
+agent:
+  name: SAPO/DFlexAnt
+  shac:
+    max_epochs: 2000
+    max_agent_steps: 4000000
+    horizon_len: 32
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  save_eval_rollouts: true
+logdir: "workdir/focus-expert-DFlexCartpole4M-SAPO/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 5000
+spawner:
+  runtime: "12h"
