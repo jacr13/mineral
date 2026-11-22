@@ -60,6 +60,25 @@ def time_to_threshold(run_id, task, batch=None):
     return ('', '') if pts else (None, None)
 
 
+def curve_points(run_id, batch=None):
+    """(agent steps, raw mean return) of the periodic deterministic evaluations, from the run or the curve cache."""
+    f = os.path.join(RESULTS_DIR, run_id, 'results', 'eval_curve.jsonl')
+    if os.path.exists(f):
+        return sorted((json.loads(line)['agent_steps'], json.loads(line)['mean_return']) for line in open(f) if line.strip())
+    if batch is not None:
+        return sorted((int(c['agent_steps']), float(c['return_raw']))
+                      for c in read_tsv(os.path.join(DATA, f'curves_{batch}.tsv')) if c['run_id'] == run_id)
+    return []
+
+
+def last_k_mean(rec, batch, k=3):
+    """Secondary measure (Joao, 2026-11-22): mean of the final score and the k - 1 periodic evaluations before it."""
+    pts = [r for st, r in curve_points(rec['run_id'], batch) if st < int(rec['agent_steps'])]
+    if len(pts) < k - 1:
+        return None
+    return (sum(pts[-(k - 1):]) + float(rec['return_raw'])) / k
+
+
 def read_tsv(path):
     if not os.path.exists(path):
         return []
@@ -131,6 +150,9 @@ def main():
     ap.add_argument('--control', default=None)
     ap.add_argument('--name', default=None)
     ap.add_argument('--allow-incomplete', action='store_true')
+    ap.add_argument('--measure', choices=['final', 'last3'], default='final',
+                    help='final: score at the budget (primary); last3: mean of the final score and the two periodic '
+                         'evaluations before it (secondary, against single-checkpoint dips)')
     args = ap.parse_args()
     name = args.name or args.batch
 
@@ -157,12 +179,24 @@ def main():
                 rec['steps_to_09'], rec['seconds_to_09'] = st, sec
         (recs if rec else missing).append(rec or r)
     write_tsv(snap_path, recs, SNAP_COLS)
+    if args.measure == 'last3':  # after the snapshot, which always holds the final score
+        out = []
+        for x in recs:
+            m = last_k_mean(x, args.batch)
+            if m is None:
+                missing.append(x)
+                continue
+            out.append(dict(x, return_norm=f'{m / EXPERT[x["task"]]:.4f}'))
+        recs = out
+        name = f'{name}_last3'
+    measure_note = ('' if args.measure == 'final' else
+                    ' — secondary measure: mean of the final score and the two periodic evaluations before it')
 
     tasks = args.tasks or [t for t in EXPERT if any(r['task'] == t for r in rows)]
     arms = args.arms or list(dict.fromkeys(r['arm'] for r in rows))
     lines, values, complete = [], {}, True
     hdr = '| Arm | ' + ' | '.join(TASK_NAMES[t] for t in tasks) + ' |'
-    lines += [f'## {name}', '', 'Mean [95 % bootstrap CI] · IQM · share of seeds < 0.5 · n runs @ read step', '',
+    lines += [f'## {name}{measure_note}', '', 'Mean [95 % bootstrap CI] · IQM · share of seeds < 0.5 · n runs @ read step', '',
               hdr, '|:-|' + '-:|' * len(tasks)]
     per_seed = []
     for arm in arms:
