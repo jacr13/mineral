@@ -97,10 +97,12 @@ p0screen8b:
 # 7 and 8 have fixed the backbone and rho.
 p3main:
   seeds: reported
-  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah]
-  # HalfCheetah (added 2026-11-22): main FOCUS arms and baselines only; ablations stay on the four original tasks
+  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah, cartpoleswingup]
+  # HalfCheetah (2026-11-22) and CartPole (2026-11-23): main FOCUS arms and baselines only; ablations stay on the four
+  # original tasks
   skip:
     cheetah: [f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4, f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq, f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1, f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo, f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64]
+    cartpoleswingup: [f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4, f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq, f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1, f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo, f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64]
   arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
          bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc,
          f_main_ot, f_main_dtw, f_main_noalign,
@@ -124,7 +126,7 @@ p4sftune:
 p3time:
   seeds: reported
   n_seeds: 1
-  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah]
+  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah, cartpoleswingup]
   arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
          bl_diffmimic, bl_bco, bl_gail_tuned, bl_bc, f_main_ot, f_main_dtw, f_main_noalign]
 
@@ -132,7 +134,7 @@ p3time:
 # FOCUS-SAC), so the batch has its own control f_main_ot at that commit.
 p4zo:
   seeds: reported
-  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah]
+  tasks: [hopper, ant, humanoid, snu_humanoid, cheetah, cartpoleswingup]
   arms: [f_main_ot, f_zo_ppo, f_zo_sac]
 
 # Phase 5, ordering task (2026-11-22): Rewarped soft Jumper. Brief: first show that no alignment and K = 1 do worse
