@@ -19,7 +19,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from table import DATA, EXPERT, FOCUS, RESULTS_DIR, TASK_NAMES, bootstrap_ci, read_tsv, write_tsv  # noqa: E402
+from table import DATA, EXPERT, FOCUS, RESULTS_DIR, TASK_NAMES, bootstrap_ci, norm, read_tsv, write_tsv  # noqa: E402
 
 FIG = os.path.join(FOCUS, 'results/figures')
 
@@ -35,7 +35,7 @@ def load_curves(rows, cache):
             out[r['run_id']] = cache[r['run_id']]
     # curves hold raw returns; normalised here (table.EXPERT) so a change of reference rebuilds exactly
     tasks = {r['run_id']: r['task'] for r in rows}
-    out = {k: [(s, t, y / EXPERT[tasks[k]]) for s, t, y in v] for k, v in out.items()}
+    out = {k: [(s, t, norm(tasks[k], y)) for s, t, y in v] for k, v in out.items()}
     return out
 
 

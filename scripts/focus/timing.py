@@ -110,7 +110,7 @@ def main():
                 if not ts5:
                     continue
                 ratios.append(cv[-1][1] / ts5)
-                hit = next(((s, tt) for s, tt, ret in cv if ret >= 0.9 * table.EXPERT[task]), None)
+                hit = next(((s, tt) for s, tt, ret in cv if table.norm(task, ret) >= 0.9), None)
                 if hit:
                     to90.append(t5 * hit[1] / ts5)
             if full_steps is not None and s5 >= full_steps:

@@ -37,9 +37,24 @@ EXPERT = {'hopper': 4813.0, 'ant': 9329.5, 'humanoid': 8225.2, 'snu_humanoid': 6
           'jumper': 2073.9}  # Rewarped soft Jumper (Phase 5): first 8 of 64 demonstrations
 EXPERT_POOL = {'hopper': 4812.1, 'ant': 9318.1, 'humanoid': 8116.5, 'snu_humanoid': 6246.7, 'cheetah': 8078.6,
                'jumper': 2046.4}
+# CartPole Swing-Up (Joao, 2026-11-23): returns are negative and set mostly by the starting state, so the score is
+# (R - R_random) / (R_expert - R_random). R_expert: the 128-episode pool mean (random starting states, as the
+# evaluation; the first 8 demos had hard starts, -409, below random); R_random: uniform-random actions, 384 episodes
+# on the protocol's starting-state seeds (runs 100 / 200 / 300). Other tasks: R / R_expert (R_random = 0).
+EXPERT['cartpoleswingup'] = -285.5
+EXPERT_POOL['cartpoleswingup'] = -285.5
+RANDOM = {'cartpoleswingup': -387.1}
+
+
+def norm(task, ret):
+    r0 = RANDOM.get(task, 0.0)
+    return (ret - r0) / (EXPERT[task] - r0)
+
+
 THRESH = 0.9  # 'reached 0.9': first periodic deterministic evaluation at or above 0.9 of the expert
 TASK_NAMES = {'hopper': 'Hopper', 'ant': 'Ant', 'humanoid': 'Humanoid', 'snu_humanoid': 'SNU Humanoid',
               'cheetah': 'HalfCheetah', 'jumper': 'Soft Jumper'}
+TASK_NAMES['cartpoleswingup'] = 'CartPole Swing-Up'
 SNAP_COLS = ['batch', 'task', 'arm', 'seed', 'run_id', 'commit', 'budget', 'agent_steps', 'reached', 'deterministic',
              'episodes', 'return_raw', 'return_norm', 'train_seconds', 'steps_to_09', 'seconds_to_09', 'source']
 
@@ -55,7 +70,7 @@ def time_to_threshold(run_id, task, batch=None):
         pts = [(int(c['agent_steps']), float(c['train_seconds']), float(c['return_raw']))
                for c in read_tsv(os.path.join(DATA, f'curves_{batch}.tsv')) if c['run_id'] == run_id]
     for st, sec, ret in sorted(pts):
-        if ret / EXPERT[task] >= THRESH:
+        if norm(task, ret) >= THRESH:
             return st, round(sec)
     return ('', '') if pts else (None, None)
 
@@ -105,7 +120,7 @@ def run_record(row, snapshot):
         steps, budget = int(e['agent_steps']), int(float(row['budget']))
         return dict(
             row, agent_steps=steps, reached=int(steps >= budget and b.get('reached_budget', True)), deterministic=1,
-            episodes=len(rew), return_raw=f'{np.mean(rew):.2f}', return_norm=f'{np.mean(rew) / EXPERT[row["task"]]:.4f}',
+            episodes=len(rew), return_raw=f'{np.mean(rew):.2f}', return_norm=f'{norm(row["task"], np.mean(rew)):.4f}',
             train_seconds=f'{b.get("train_seconds", float("nan")):.0f}', source=f'reeval {e["code_commit"]}')
     sc, bj = os.path.join(res, 'scores.json'), os.path.join(res, 'budget.json')
     if os.path.exists(sc):
@@ -117,11 +132,11 @@ def run_record(row, snapshot):
         return dict(
             row, agent_steps=steps, reached=int(steps >= budget and b.get('reached_budget', True)),
             deterministic=int(s.get('eval_scores/sample') is False), episodes=len(rew),
-            return_raw=f'{np.mean(rew):.2f}', return_norm=f'{np.mean(rew) / EXPERT[row["task"]]:.4f}',
+            return_raw=f'{np.mean(rew):.2f}', return_norm=f'{norm(row["task"], np.mean(rew)):.4f}',
             train_seconds=f'{b.get("train_seconds", float("nan")):.0f}', source='run files')
     if row['run_id'] in snapshot:
         r = dict(snapshot[row['run_id']], source='snapshot')
-        r['return_norm'] = f'{float(r["return_raw"]) / EXPERT[row["task"]]:.4f}'
+        r['return_norm'] = f'{norm(row["task"], float(r["return_raw"])):.4f}'
         return r
     return None
 
@@ -186,7 +201,7 @@ def main():
             if m is None:
                 missing.append(x)
                 continue
-            out.append(dict(x, return_norm=f'{m / EXPERT[x["task"]]:.4f}'))
+            out.append(dict(x, return_norm=f'{norm(x["task"], m):.4f}'))
         recs = out
         name = f'{name}_last3'
     measure_note = ('' if args.measure == 'final' else

@@ -1,0 +1,46 @@
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+    no_grad: true
+agent:
+  name: LWAIL/DFlexAnt
+  ddpg:
+    max_agent_steps: 10000000
+  network:
+    actor_kwargs:
+      mlp_kwargs:
+        units: [128, 64, 32]
+    critic_kwargs:
+      mlp_kwargs:
+        units: [64, 64]
+  lwail:
+    demos:
+      path: "experts/demos/DFlex_cartpoleswingup_demos128_return-286_len240.pt"
+      n_trajs: 8
+      subsample_factor: 1 # upstream does no subsampling; 1 = no subsampling, >1 keeps every nth step
+    input_type: state_state
+    discriminator:
+      mlp_kwargs:
+        units: [64, 64]
+    expert_batch_size: 4000
+    policy_batch_size: 4000
+
+logdir: "workdir/DFlexCartpole10M-LWAIL/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: online
+  project: rewarped
+run: train_eval
+seed: 130
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+  agent.lwail.demos.subsample_factor: 1
+  agent.lwail.expert_batch_size: 4000
+  agent.lwail.discriminator.iters: 40
+  agent.lwail.gp_coef: 10
+  agent.lwail.minus: true
+
+spawner:
+  runtime: "12h" # capped at the shared-GPU 12h max; slowest seed only reached 2.7M/10M steps in 3h (extrapolated need ~11h) so this may still fall a bit short
+  gpu_constraint: "COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE" # avoid older Pascal-class GPUs

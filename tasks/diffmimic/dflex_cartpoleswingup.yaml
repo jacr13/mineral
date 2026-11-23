@@ -1,0 +1,21 @@
+task:
+  name: DFlex
+  env:
+    env_name: cartpoleswingup
+agent:
+  name: DiffMimic/DFlex
+  network:
+    units: [256, 256]
+  diffmimic:
+    demos:
+      path: "experts/demos/DFlex_cartpoleswingup_demos128_return-286_len240.pt"
+      n_trajs: 8
+logdir: "workdir/DFlexCartpole-DiffMimic/$(date +%Y%m%d-%H%M%S.%2N)"
+run: train_eval
+seed: 100
+
+sweep:
+  seed: [100, 110, 120, 1000, 1100, 1200]
+
+spawner:
+  runtime: "4h"

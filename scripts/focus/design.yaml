@@ -156,3 +156,10 @@ p1tune_cheetah:
   tasks: [cheetah]
   arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
          bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac, f_main_ot]
+
+# CartPole Swing-Up (Joao, 2026-11-23; scored random-referenced): baseline tuning as p1tune + FOCUS-OT sanity arm.
+p1tune_cartpole:
+  seeds: tuning
+  tasks: [cartpoleswingup]
+  arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
+         bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac, f_main_ot]
