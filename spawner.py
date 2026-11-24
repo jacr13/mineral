@@ -59,6 +59,7 @@ CALIBERS = [
 SBATCH_GPU = "#SBATCH --gres=gpu:{gpu_type}1{extra_gpu_params}"
 SBATCH_GPU_MEMORY = ",VramPerGpu:{gpu_memory}G"
 SBATCH_CONSTRAINT = "#SBATCH --constraint={gpu_constraint}"
+BAOBAB_EXCLUDE = "#SBATCH --exclude=gpu047,gpu051"
 
 _SHELL_QUOTE_CHARS = {"|", "&", ";", ">", "<"}
 
@@ -74,7 +75,7 @@ SBATCH_FILE_CONTENT = """#!/usr/bin/env bash
 #SBATCH --ntasks={num_workers}
 #SBATCH --time={duration}
 #SBATCH --mem={memory}000
-#SBATCH --exclude=gpu047,gpu051
+{exclude_line}
 #SBATCH --output=./out/run_%j.out
 #SBATCH --error=./out/run_e%j.out
 {extra_params}
@@ -419,7 +420,12 @@ def _write_slurm_script(script_path, name, command, args):
     if args.gpu_constraint:
         extra_params += "\n" + SBATCH_CONSTRAINT.format(gpu_constraint=args.gpu_constraint)
 
+    # Node exclusions are Baobab node names; another cluster would reject them (unknown node).
+    cluster = getattr(args, 'cluster', None)
+    exclude_line = (BAOBAB_EXCLUDE if cluster in (None, 'baobab')
+                    else f'# no node exclusions on {cluster}')
     script_content = SBATCH_FILE_CONTENT.format(
+        exclude_line=exclude_line,
         name=name,
         partition=partition,
         num_workers=num_workers,
@@ -581,7 +587,7 @@ def run(args):
                 continue
             setattr(effective_args, key, value)
         if supervisor_dir:
-            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'attach_input', 'priority', 'uv_update'):
+            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'attach_input', 'priority', 'uv_update', 'cluster'):
                 if getattr(effective_args, key) != getattr(args, key):
                     raise ValueError(f'Supervisor option {key} must be supplied on the command line, not overridden by the task')
         if effective_args.runtime is None:
@@ -691,6 +697,8 @@ def run(args):
                     priority=effective_args.priority, seed=effective_config.get('seed'),
                     task_file=str(config_path), training_outputs='results/', slurm_logs='out/',
                 )
+                if effective_args.cluster:
+                    metadata['cluster'] = effective_args.cluster
                 exported = write_export(supervisor_dir, submission_name, run_id, script_path.read_text(),
                                         effective_config, metadata, enqueue=args.enqueue, attachments=attachments)
                 print(f'{"Enqueued" if args.enqueue else "Preview"} run {run_id}: {exported}')
@@ -768,6 +776,8 @@ if __name__ == "__main__":
                         'option: experts/demos')
     parser.add_argument('--attach_input', action='append', default=[], help='Read-only input shipped with the run: '
                         'relative/path=local/path is copied into the export and bound at /workspace/relative/path')
+    parser.add_argument('--cluster', default=None, help='Supervisor cluster for the run (e.g. bamboo, yggdrasil); '
+                        'default: the supervisor\'s default cluster (baobab)')
     parser.add_argument('--priority', type=int, default=40, help='Supervisor submission priority, 0–100')
     boolean_flag(parser, 'enqueue', default=False, help='Publish supervisor exports to incoming instead of inert previews')
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")

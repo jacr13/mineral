@@ -75,6 +75,10 @@ def main():
     ap.add_argument('--priority', type=int, default=50)
     ap.add_argument('--runtime', default='12h')
     ap.add_argument('--gpu_type', default=None)
+    ap.add_argument('--cluster', default=None, help='supervisor cluster (bamboo, yggdrasil); default baobab')
+    ap.add_argument('--gpu_constraint', default='COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE',
+                    help='Slurm --constraint; Bamboo: COMPUTE_TYPE_AMPERE (RTX 3090, A100), Yggdrasil: '
+                    'COMPUTE_TYPE_TURING (Titan RTX)')
     ap.add_argument('--memory', default=None, help='host memory in GB per job (spawner default 8)')
     ap.add_argument('--memory_arm', action='append', default=[], metavar='ARM=GB',
                     help='host memory for one arm, e.g. bl_oops_it1000=32 (OOPS was OOM-killed at 8 GB)')
@@ -126,11 +130,13 @@ def main():
         env_file = f'{args.batch}/{task}_{arm}.yaml'
         cmd = ['uv', 'run', '--locked', 'python', 'spawner.py', '--task_name', 'focus', '--env_files', env_file,
                '--deployment', 'slurm', '--docker', '--docker_image', IMAGE,
-               '--gpu_constraint', 'COMPUTE_TYPE_TURING|COMPUTE_TYPE_AMPERE', '--supervisor_dir', SUPERVISOR,
+               '--gpu_constraint', args.gpu_constraint, '--supervisor_dir', SUPERVISOR,
                '--no-deploy_now', '--priority', str(args.priority), '--runtime', args.runtime,
                '--git_commit', commit, '--git_branch', 'focus-wip', '--set', f'seed={seed}']
         if args.gpu_type:
             cmd += ['--gpu_type', args.gpu_type]
+        if args.cluster:
+            cmd += ['--cluster', args.cluster]
         for a in args.attach_input:
             cmd += ['--attach_input', a]
         mem = dict(x.split('=') for x in args.memory_arm).get(arm, args.memory)
