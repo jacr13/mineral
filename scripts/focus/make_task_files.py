@@ -183,6 +183,14 @@ F_ARMS['f_ab_score_function_lr2e-4'] = dict(_N, actor_grad_estimator='score_func
 # against the relative softmin tau = 0.1 of f_main_ot
 F_ARMS['f_ab_kmin'] = dict(_N, loss_best_of_k_tau=0.001)
 F_ARMS['f_ab_kmean'] = dict(_N, loss_best_of_k_tau=100.0)
+# Sinkhorn entropy and iterations (Joao, 2026-11-25), FOCUS-OT is eps 0.1 / 60 iterations. Measured on demo windows
+# (cosine cost, T = 32): eps 0.1 / 60 it. is converged (row-marginal error 2e-2 Hopper, 1e-6 Humanoid); eps 0.03 / 60 it.
+# is not (0.19 / 0.03), so eps 0.03 is also run at 200 iterations, whose one-setting control is f_ab_iters200.
+for _eps in (0.03, 0.3, 1.0):
+    F_ARMS[f'f_ab_eps{_eps:g}'] = dict(_N, loss_ot_eps=_eps)
+for _it in (20, 200):
+    F_ARMS[f'f_ab_iters{_it}'] = dict(_N, loss_ot_iters=_it)
+F_ARMS['f_ab_eps0.03_iters200'] = dict(_N, loss_ot_eps=0.03, loss_ot_iters=200)
 # ordering test (p5order): positions-only matching; f_main_ot (all features) is the control
 F_ARMS['f_pos_ot'] = dict(_N, _positions=True)
 F_ARMS['f_pos_dtw'] = dict(_N, _positions=True, imitation_loss_type='softdtw')
