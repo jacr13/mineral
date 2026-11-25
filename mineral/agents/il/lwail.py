@@ -214,6 +214,8 @@ class LWAIL(DDPG):
         # each raw component separately with a shared per-sample coefficient
         # (equivalent to interpolating the concatenated vector upstream does),
         # then penalize the critic's input gradient norm for deviating from 1.
+        if self.gp_coef == 0:  # no penalty: skip its double backward (and its random interpolation)
+            return torch.zeros((), device=self.device)
         batch_size = exp_input_1["obs"].shape[0]
         eps = torch.rand(batch_size, 1, device=self.device)
 

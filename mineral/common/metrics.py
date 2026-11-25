@@ -203,11 +203,12 @@ class Metrics(nn.Module):
 
     def state_dict(self):
         state = {
-            # 'current_scores': self.current_scores,
-            'episode_trackers': {k: v.window for k, v in self.episode_trackers.items()},
+            # per-env running scores of the episodes in progress (resume checkpoints continue them)
+            'current_scores': {k: v.detach().clone() for k, v in self.current_scores.items()},
+            'episode_trackers': {k: collections.deque(v.window, maxlen=v.window.maxlen)
+                                 for k, v in self.episode_trackers.items()},
             'num_episodes': self.num_episodes,
             # '_current_info': self._current_info,
-            '_episode_info': self._episode_info,
             # '_extras': self._extras,
             # '_current_video': self._current_video,
             # '_episode_video': self._episode_video,
@@ -215,12 +216,17 @@ class Metrics(nn.Module):
         return state
 
     def load_state_dict(self, state_dict):
-        # self.current_scores = state_dict['current_scores']
-        for k, v in self.episode_trackers.items():
-            v.window = state_dict['episode_trackers'][k]
+        with torch.no_grad():
+            for k, v in state_dict.get('current_scores', {}).items():
+                if k in self.current_scores:
+                    self.current_scores[k].copy_(v.to(self.current_scores[k].device))
+        # the trackers of the checkpoint, created here if this run has none yet (they are made on first use); the
+        # episode info is the same dict as the trackers
+        for k, w in state_dict['episode_trackers'].items():
+            self.episode_trackers[k].window = collections.deque(w, maxlen=w.maxlen)
         self.num_episodes = state_dict['num_episodes']
+        self._episode_info = self.episode_trackers
         # self._current_info = state_dict['_current_info']
-        self._episode_info = state_dict['_episode_info']
         # self._extras = state_dict['_extras']
         # self._current_video = state_dict['_current_video']
         # self._episode_video = state_dict['_episode_video']

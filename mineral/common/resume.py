@@ -15,6 +15,7 @@ intervals), and a resumed run may change them, e.g. a larger ``max_agent_steps``
 packages (configs, writers, the job clock, the evaluation env, closures) are not saved.
 """
 import collections
+import os
 import pickle
 import random
 
@@ -216,12 +217,17 @@ def _decode(cur, enc, path, missing):
 def agent_state(agent, marks):
     seen = set()
     out = {}
+    skipped = []
     for k, v in vars(agent).items():
         if k in AGENT_SKIP or k.startswith('_resume'):
             continue
         e = _encode(v, k, marks, 0, seen)
         if e is not SKIP:
             out[k] = e
+        else:
+            skipped.append(f'{k}:{type(v).__name__}')
+    if os.environ.get('MINERAL_RESUME_DEBUG'):  # what is not saved (settings unchanged since construction, services)
+        print('[resume] not saved:', ' '.join(skipped))
     return out
 
 

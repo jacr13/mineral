@@ -477,6 +477,10 @@ class Agent:
         if stop or due:
             self.resume_save()
         self._resume_saved_at_stop = stop
+        dump = os.environ.get('MINERAL_RESUME_DUMP')  # debugging: a snapshot at every iteration, kept
+        if dump:
+            os.makedirs(dump, exist_ok=True)
+            self.resume_save(os.path.join(dump, f'steps{int(self.agent_steps):09d}.pth'))
 
     def resume_save(self, path=None):
         path = path or self.resume_path

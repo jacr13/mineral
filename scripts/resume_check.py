@@ -2,13 +2,20 @@
 
 usage (from the checkout): python scripts/resume_check.py OUT_ROOT TOTAL_STEPS SPLIT_STEPS TRAIN_SECONDS TASK_FILE...
 
+RESUME_CHECK_SET (environment, space-separated Hydra overrides) is added to every run. The methods with a gradient
+penalty on their discriminator (GAIfO, MAAD, GAIL, DAC, OPOLO, LWAIL) are checked with it set to 0: PyTorch's double
+backward differs in the last bit with the process's history (measured 2026-11-25:
+identical parameters, inputs and RNG give a different gradient after earlier backward passes in the same process), so
+a resumed run of those drifts from the uninterrupted one by rounding, then by chaos; without the penalty everything
+else they train is checked bitwise.
+
 For each task file (its settings, with the step budget set to TOTAL_STEPS and a periodic evaluation every
 TOTAL_STEPS / 4 steps), five runs with the same seed:
   full     uninterrupted, TOTAL_STEPS
   part     SPLIT_STEPS, writes ckpt/resume.pth at the end            -> extend: resume_from=part, TOTAL_STEPS
   timed    stopped by a TRAIN_SECONDS training-time budget (the job-clock stop path), writes ckpt/resume.pth
            -> cont: resume_from=timed, TOTAL_STEPS, no time budget
-and compares extend and cont with full: every tensor of final.pth, the final evaluation (scores.json) and the
+and compares extend and cont with full (all runs with torch_deterministic=true and DISABLE_ADDMM_CUDA_LT=1): every tensor of final.pth, the final evaluation (scores.json) and the
 evaluation curve (eval_curve.jsonl, without its timing fields). PASS = all bitwise equal.
 """
 import json
@@ -30,10 +37,16 @@ def run(cfg, d, extra=()):
         return 0
     os.makedirs(d, exist_ok=True)
     cfg = dict(cfg, logdir=d)
-    ov = [o.strip() for o in spawner._build_overrides(cfg, 'local', indent='')] + list(extra)
+    # deterministic algorithms: GPU atomics (e.g. in a discriminator's backward) otherwise differ in the last bits
+    # between any two runs, sporadically, and training amplifies that; resuming must be exact up to that
+    ov = [o.strip() for o in spawner._build_overrides(cfg, 'local', indent='')] + ['torch_deterministic=true'] + os.environ.get('RESUME_CHECK_SET', '').split() + list(extra)
     with open(os.path.join(d, 'stdout.txt'), 'w') as f:
+        # DISABLE_ADDMM_CUDA_LT: cuBLASLt's fused bias kernel (F.linear on CUDA) picks its algorithm differently in
+        # different processes for some shapes (LWAIL's discriminator, batch 4000 x 512 inputs: the same weights and
+        # inputs give different last bits in two processes, 2026-11-25); the plain cuBLAS path is reproducible
+        env = dict(os.environ, DISABLE_ADDMM_CUDA_LT='1')
         return subprocess.run(['uv', 'run', '--locked', 'python', '-m', 'mineral.scripts.run'] + ov, stdout=f,
-                              stderr=subprocess.STDOUT).returncode
+                              stderr=subprocess.STDOUT, env=env).returncode
 
 
 def curve(d):
