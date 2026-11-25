@@ -182,6 +182,9 @@ F_ARMS['f_ab_score_function_lr2e-4'] = dict(_N, actor_grad_estimator='score_func
                                             _shac=dict(actor_optim_kwargs=dict(lr=2e-4, betas=[0.7, 0.95])))
 # best-of-K selection (Joao, 2026-11-23): hard min (tau -> 0, k_eff ~ 1) and plain average (tau large, k_eff ~ K)
 # against the relative softmin tau = 0.1 of f_main_ot
+# actor bootstrap fixed (writer request R19, 2026-11-25): FOCUS-OT with the value after the last action, zero after a
+# fall; every other FOCUS arm ran with actor_bootstrap 'as_run'. Paired check against f_main_ot on the six tasks.
+F_ARMS['f_fix_ot'] = dict(_N, actor_bootstrap='next_state')
 F_ARMS['f_ab_kmin'] = dict(_N, loss_best_of_k_tau=0.001)
 F_ARMS['f_ab_kmean'] = dict(_N, loss_best_of_k_tau=100.0)
 # Sinkhorn entropy and iterations (Joao, 2026-11-25), FOCUS-OT is eps 0.1 / 60 iterations. Measured on demo windows

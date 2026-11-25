@@ -120,6 +120,8 @@ p3main:
          # noisy demonstrations, sigma 0.1 / 0.3 of the per-dimension std (2026-11-23): Hopper, Ant, Humanoid
          f_main_ot__n0.1, bl_lwail__n0.1, bl_ild_tuned__n0.1, bl_opolo__n0.1,
          f_main_ot__n0.3, bl_lwail__n0.3, bl_ild_tuned__n0.3, bl_opolo__n0.3,
+         # actor bootstrap fixed (R19, Joao 2026-11-25): paired check against f_main_ot, six tasks
+         f_fix_ot,
          # few-demonstration study (R16, Joao 2026-11-25: minimal set, without DAC): Hopper, Ant, Humanoid, SNU
          f_ab_demos16, bl_lwail__d1, bl_opolo__d1, bl_ild_tuned__d1, bl_lwail__d16, bl_opolo__d16, bl_ild_tuned__d16]
 

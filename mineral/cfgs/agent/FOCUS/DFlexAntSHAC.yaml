@@ -29,6 +29,7 @@ focus:
   # pathwise = FOCUS as published (gradient through the simulator);
   # score_function = same objective/reward/critic, REINFORCE estimator.
   actor_grad_estimator: pathwise
+  actor_bootstrap: next_state # value after the last action (SHAC); as_run = the objective of the runs up to 22e2055
   # null = balanced OT (uniform marginals). A float relaxes them
   # (unbalanced OT), so unmatched agent states need not be coupled.
   loss_ot_marginal_rho: null
