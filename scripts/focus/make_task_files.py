@@ -257,6 +257,7 @@ def task_file(batch, task, arm):
     agent = dict(
         name=agent_name,
         ckpt_every=-1,  # no periodic checkpoints: final.pth (= at budget) only
+        **RESUME,
         protocol_eval=True,  # shared evaluation of every method (Agent.protocol_*), on a dedicated env
         eval_every_steps=EVAL_EVERY,
         save_eval_rollouts=False,
@@ -363,6 +364,7 @@ def baseline_task_file(batch, task, arm):
     if fam is not None:
         ag.setdefault(fam, {})['max_agent_steps'] = budget
     ag['ckpt_every'] = -1
+    ag.update(RESUME)
     ag['protocol_eval'] = True
     ag['eval_every_steps'] = EVAL_EVERY
     if method == 'ild':
@@ -428,6 +430,12 @@ def demos_task_file(batch, task, arm):
         raise ValueError(f'{arm}: no demonstration block in the task file')
     body['logdir'] = f'workdir/focus-{batch}-{task}-{arm}/$(date +%Y%m%d-%H%M%S.%2N)'
     return body
+
+
+# ckpt/resume.pth at the end of training (step budget or job clock), to extend a run or continue a stopped one exactly
+# with resume_from=<file> (Joao, 2026-11-26). Results are unchanged by it (scripts/resume_check.py). '+': the key is not
+# in the agent configs.
+RESUME = {'+resume_ckpt': True}
 
 
 def main():
