@@ -133,6 +133,8 @@ def run_record(row, snapshot):
     if os.path.exists(sc):
         s = json.load(open(sc))
         b = json.load(open(bj)) if os.path.exists(bj) else {}
+        if not b and row['run_id'] in snapshot:  # partial download (scores only): keep the recorded training time
+            b = dict(train_seconds=float(snapshot[row['run_id']].get('train_seconds') or 'nan'))
         rew = s['eval_scores/episode_rewards']
         steps = int(s['agent_steps'])
         budget = int(float(row['budget']))
