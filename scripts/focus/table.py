@@ -30,7 +30,7 @@ FOCUS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 DATA = os.path.join(FOCUS, 'results/data')
 TABLES = os.path.join(FOCUS, 'results/tables')
 RESULTS_DIR = os.path.expanduser('~/docker/cluster-supervisor/results')
-# Normalisation (Joao, 2026-11-20): mean return of the 8 demonstrations used for training (first 8 of each file).
+# Normalisation until 2026-11-25 (Joao, 2026-11-20): mean return of the 8 demonstrations used for training (first 8).
 # The 128-episode pool means (4812 / 9318 / 8116 / 6246) include the expert's failed episodes on the humanoids.
 # Demo-count arms (1, 2, 4 demos) are normalised by the same 8-demo mean, so they compare directly.
 EXPERT = {'hopper': 4813.0, 'ant': 9329.5, 'humanoid': 8225.2, 'snu_humanoid': 6748.9, 'cheetah': 8075.5,
@@ -46,9 +46,16 @@ EXPERT_POOL['cartpoleswingup'] = -285.5
 RANDOM = {'cartpoleswingup': -387.1}
 
 
+# Reference (Joao, 2026-11-25): the expert's own score, i.e. the mean return of its 128-episode pool (random starting
+# states, falls included), not the 8 demonstrations used for training. On SNU the 8 demos are all full-length while
+# the expert falls in 44 of 128 episodes, so the 8-demo mean (6749) overstates the expert by 8 %; on the other tasks
+# the two agree within 1.4 %. EXPERT (8-demo means) is kept for the record.
+REFERENCE = EXPERT_POOL
+
+
 def norm(task, ret):
     r0 = RANDOM.get(task, 0.0)
-    return (ret - r0) / (EXPERT[task] - r0)
+    return (ret - r0) / (REFERENCE[task] - r0)
 
 
 THRESH = 0.9  # 'reached 0.9': first periodic deterministic evaluation at or above 0.9 of the expert
