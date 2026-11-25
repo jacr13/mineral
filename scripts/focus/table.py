@@ -53,6 +53,11 @@ RANDOM = {'cartpoleswingup': -387.1}
 REFERENCE = EXPERT_POOL
 
 
+def score(rec):
+    """The normalised score of a snapshot record: from return_raw (or the last-3 mean when set), unrounded."""
+    return rec['_score'] if '_score' in rec else norm(rec['task'], float(rec['return_raw']))
+
+
 def norm(task, ret):
     r0 = RANDOM.get(task, 0.0)
     return (ret - r0) / (REFERENCE[task] - r0)
@@ -217,7 +222,7 @@ def main():
             if m is None:
                 missing.append(x)
                 continue
-            out.append(dict(x, return_norm=f'{norm(x["task"], m):.4f}'))
+            out.append(dict(x, return_norm=f'{norm(x["task"], m):.4f}', _score=norm(x['task'], m)))
         recs = out
         name = f'{name}_last3'
     measure_note = ('' if args.measure == 'final' else
@@ -254,7 +259,9 @@ def main():
             if n_ok == 0:
                 cells.append(f'(0/{len(exp_rows)})')
                 continue
-            v = np.array([float(x['return_norm']) for x in ok])
+            # one rule with paired.py (R22): the score is normalised from the unrounded mean return, not read back
+            # from the 4-decimal return_norm column
+            v = np.array([score(x) for x in ok])
             lo, hi = bootstrap_ci(v)
             step = min(int(x['agent_steps']) for x in ok)
             st = dict(mean=v.mean(), lo=lo, hi=hi, iqm=iqm(v), median=float(np.median(v)), fail=float((v < 0.5).mean()),
@@ -264,7 +271,7 @@ def main():
             cells.append(f'{st["mean"]:.3f} [{lo:.3f}, {hi:.3f}] · {st["iqm"]:.3f} · {st["fail"]:.0%} · '
                          f'n={n_ok} @ {step / 1e6:.1f}M{mark}')
             per_seed.append(f'| {arm} | {TASK_NAMES[t]} | ' + ', '.join(
-                f'{x["seed"]}: {float(x["return_norm"]):.3f}' for x in sorted(ok, key=lambda x: int(x['seed']))) + ' |')
+                f'{x["seed"]}: {score(x):.3f}' for x in sorted(ok, key=lambda x: int(x['seed']))) + ' |')
         lines.append(f'| {arm} | ' + ' | '.join(cells) + ' |')
     if args.control:
         lines += ['', f'Difference to `{args.control}` (mean, same batch):', '']
