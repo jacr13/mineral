@@ -161,6 +161,8 @@ def main(config: DictConfig):
     # resume_from: continue training from a resume checkpoint (agent.resume_ckpt=true writes ckpt/resume.pth);
     # 'auto' = this run's own ckpt/resume.pth if it exists (a restarted job), else start from scratch
     resume_from = config.get('resume_from', None)
+    if not resume_from and os.environ.get('MCP_RESUME') == '1':
+        resume_from = 'auto'  # the cluster supervisor continues a resumable run in its kept results/ folder
     if resume_from == 'auto':
         resume_from = agent.resume_path if os.path.exists(agent.resume_path) else None
     elif resume_from:
@@ -206,6 +208,12 @@ def main(config: DictConfig):
 
     agent.writer.close()  # flushes every logger and finishes their runs
     # env.close()
+
+    # stopped by the job clock before the step budget, with a resume checkpoint: tell the supervisor to continue it
+    code = int(config.get('resume_exit_code', 0) or 0)
+    if code and agent.resume_ckpt and agent._protocol_stopped_by_clock and os.path.exists(agent.resume_path):
+        print(f'[resume] stopped by the job clock at {int(agent.agent_steps):,} steps: exit {code} (to be continued)')
+        sys.exit(code)
 
 
 if __name__ == '__main__':

@@ -71,6 +71,7 @@ run: 'train'  # train | eval | train_eval
 ckpt: ''  # ckpt file to load
 ckpt_keys: ''  # set to '' to load all ckpt keys
 resume_from: null  # continue training from a resume checkpoint: a path, or 'auto' (logdir/ckpt/resume.pth if present)
+resume_exit_code: 0  # exit status when the job clock stopped training before its budget (75 for the supervisor's resumable runs)
 max_runtime: null  # e.g. "2-00:00:00" or "6h"
 
 seed: 42

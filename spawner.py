@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import random
 import re
@@ -593,7 +594,10 @@ def run(args):
         if effective_args.runtime is None:
             effective_args.runtime = "12h"
 
-        cli_overrides = _parse_cli_overrides(effective_args.overrides)
+        overrides = list(effective_args.overrides)
+        if effective_args.resumable:  # write the resume checkpoint and exit 75 when the job clock stops the run
+            overrides += ['agent.+resume_ckpt=true', 'resume_exit_code=75']
+        cli_overrides = _parse_cli_overrides(overrides)
 
         if effective_args.sweep:
             if not sweep_spec:
@@ -699,6 +703,15 @@ def run(args):
                 )
                 if effective_args.cluster:
                     metadata['cluster'] = effective_args.cluster
+                if effective_args.packable:
+                    metadata['packable'] = True
+                    for key in ('gpu_share', 'gpu_mem_gb'):
+                        if getattr(effective_args, key) is not None:
+                            metadata[key] = getattr(effective_args, key)
+                    if effective_args.expected_seconds is not None:
+                        metadata['expected_seconds'] = json.loads(str(effective_args.expected_seconds))
+                if effective_args.resumable:
+                    metadata['resumable'] = True
                 exported = write_export(supervisor_dir, submission_name, run_id, script_path.read_text(),
                                         effective_config, metadata, enqueue=args.enqueue, attachments=attachments)
                 print(f'{"Enqueued" if args.enqueue else "Preview"} run {run_id}: {exported}')
@@ -779,6 +792,16 @@ if __name__ == "__main__":
     parser.add_argument('--cluster', default=None, help='Supervisor cluster for the run (e.g. bamboo, yggdrasil); '
                         'default: the supervisor\'s default cluster (baobab)')
     parser.add_argument('--priority', type=int, default=40, help='Supervisor submission priority, 0–100')
+    # supervisor pilots (several runs on one GPU) and resumable runs: written to the run's metadata
+    boolean_flag(parser, 'packable', default=False, help='the run may share a GPU in a supervisor pilot')
+    parser.add_argument('--gpu_share', type=float, default=None,
+                        help='fraction of a GPU the run keeps busy alone (pilots pack runs while shares add up)')
+    parser.add_argument('--gpu_mem_gb', type=float, default=None, help='GPU memory the run needs, GB (pilots)')
+    parser.add_argument('--expected_seconds', default=None,
+                        help='expected run time: seconds, or JSON {"GPU name": seconds, "default": seconds} (pilots)')
+    boolean_flag(parser, 'resumable', default=False,
+                 help='the supervisor continues the run from ckpt/resume.pth after a time limit, a node failure or a '
+                 'stop by its job clock (exit code 75); needs agent.resume_ckpt (set by --resumable via resume_exit_code)')
     boolean_flag(parser, 'enqueue', default=False, help='Publish supervisor exports to incoming instead of inert previews')
     boolean_flag(parser, "deploy_now", default=False, help="deploy immediately?")
     boolean_flag(parser, "sweep", default=False, help="hp search?")
