@@ -99,6 +99,14 @@ class FOCUS(SHAC):
         _dims = self.focus_config.get("loss_feature_dims", None)
         self.loss_feature_dims = None if _dims in (None, "null", "none") else [int(d) for d in _dims]
         self.actor_grad_estimator = self.focus_config.get("actor_grad_estimator", "pathwise")
+        # Bootstrap of the actor's return (writer request R19, 2026-11-25). "next_state": the value of s_{i+1} after the
+        # action of step i, zero after a fall and the critic's value of the terminal state at a time-out, for the min
+        # and the average of the critics alike (as SHAC.compute_actor_loss). "as_run": the objective of the runs up to
+        # commit 22e2055, which indexed the (H+1)-row value tensor with the H-row index, so it bootstrapped from the
+        # value of s_i (the state before the last action), and never zeroed the average-critic value after a fall.
+        self.actor_bootstrap = self.focus_config.get("actor_bootstrap", "next_state")
+        if self.actor_bootstrap not in ("next_state", "as_run"):
+            raise ValueError(f"Invalid actor_bootstrap: {self.actor_bootstrap}")
         if self.actor_grad_estimator not in ("pathwise", "score_function"):
             raise ValueError(f"Invalid actor_grad_estimator: {self.actor_grad_estimator}")
         # Ordered-alignment (soft-DTW) alternative to the Sinkhorn coupling.
@@ -377,10 +385,22 @@ class FOCUS(SHAC):
                             break
                     if nan_obs or self.episode_lengths[done_env_id] < self.max_episode_length:
                         next_values[i + 1, done_env_id] = 0.0
+                        if self.actor_bootstrap == "next_state":
+                            avg_next_values[i + 1, done_env_id] = 0.0
                     else:
                         real_z_target = self.encoder_target(real_obs_term)
-                        real_next_values = self.critic_target(real_z_target, return_type="min").squeeze(-1)
-                        next_values[i + 1, done_env_id] = real_next_values
+                        if self.actor_bootstrap == "next_state":
+                            real_next_values, avg_real_next_values = self.critic_target(
+                                real_z_target, return_type="min_and_avg"
+                            )
+                            next_values[i + 1, done_env_id] = real_next_values.squeeze(-1)
+                            avg_next_values[i + 1, done_env_id] = (
+                                avg_real_next_values.squeeze(-1) if self.actor_loss_avgcritics
+                                else real_next_values.squeeze(-1)
+                            )
+                        else:
+                            real_next_values = self.critic_target(real_z_target, return_type="min").squeeze(-1)
+                            next_values[i + 1, done_env_id] = real_next_values
                     self.episode_rewards[done_env_id] = 0.0
                     self.episode_discounted_rewards[done_env_id] = 0.0
                     self.episode_lengths[done_env_id] = 0
@@ -431,6 +451,9 @@ class FOCUS(SHAC):
             self.rew_buf.copy_(step_rewards.detach())
         # use live next_values for actor gradients; buffers stay detached for critic use
         next_vs_live = avg_next_values if self.actor_loss_avgcritics else next_values
+        if self.actor_bootstrap == "next_state":
+            # row i = value after the action of step i, the indexing of the H-row buffers (done_mask, next_values)
+            next_vs_live = next_vs_live[1:]
 
         actor_rewards = step_rewards
         if sapo:
