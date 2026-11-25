@@ -83,3 +83,26 @@ class ReplayBuffer:
             next_obs,
             self.buf_done[indices].to(device).float(),
         )
+
+    # resume checkpoints (mineral/common/resume.py): only the filled part is saved
+    def resume_state(self):
+        n = self.cur_capacity
+        return {
+            'next_p': self.next_p, 'if_full': self.if_full, 'cur_capacity': n, 'capacity': self.capacity,
+            'obs': {k: v[:n].clone() for k, v in self.buf_obs.items()},
+            'next_obs': {k: v[:n].clone() for k, v in self.buf_next_obs.items()},
+            'action': self.buf_action[:n].clone(), 'reward': self.buf_reward[:n].clone(), 'done': self.buf_done[:n].clone(),
+        }
+
+    @torch.no_grad()
+    def resume_load(self, s):
+        if s['capacity'] != self.capacity:
+            raise ValueError(f"resume: replay buffer capacity {s['capacity']} in the checkpoint, {self.capacity} here")
+        n = s['cur_capacity']
+        for k in self.buf_obs:
+            self.buf_obs[k][:n] = s['obs'][k].to(self.buf_obs[k].device)
+            self.buf_next_obs[k][:n] = s['next_obs'][k].to(self.buf_next_obs[k].device)
+        self.buf_action[:n] = s['action'].to(self.buf_action.device)
+        self.buf_reward[:n] = s['reward'].to(self.buf_reward.device)
+        self.buf_done[:n] = s['done'].to(self.buf_done.device)
+        self.next_p, self.if_full, self.cur_capacity = s['next_p'], s['if_full'], n

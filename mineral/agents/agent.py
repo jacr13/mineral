@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
+from ..common import resume
 from ..common.metrics import Metrics
 from ..common.writer import AtalayaWriter, TensorboardWriter, WandbWriter, Writer
 
@@ -123,6 +124,22 @@ class Agent:
         # as at the step budget). Time-matched baseline runs (writer request R25, 2026-11-25); 0 = off.
         self.protocol_max_train_seconds = float(full_cfg.agent.get('protocol_max_train_seconds', 0) or 0)
         self._protocol_stopped_by_train_time = False
+
+        # --- Resumable checkpoints (off by default; mineral/common/resume.py) ---
+        # resume_ckpt: write ckpt/resume.pth, the whole training state (networks, optimizers, replay buffers, env
+        # state, RNG streams, evaluation curve), when training stops (step budget, job clock, training-time budget)
+        # and, with resume_every_minutes > 0, also that often. The run (or a new one, e.g. with a larger
+        # max_agent_steps) continues from it with resume_from=auto / resume_from=<path> exactly as if never stopped.
+        self.resume_ckpt = bool(full_cfg.agent.get('resume_ckpt', False))
+        self.resume_every_minutes = float(full_cfg.agent.get('resume_every_minutes', 0) or 0)
+        self._resumed = False
+        self._resume_marks = {}
+        self._resume_env_marks = {}
+        self._resume_last_save = time.time()
+        self._resume_saved_at_stop = False
+        self._resume_wall = 0.0
+        self._resume_history = []  # agent steps at which this run was resumed
+        self._resume_save_seconds = 0.0
 
         # --- Training ---
         self.epoch = -1
@@ -352,6 +369,9 @@ class Agent:
 
     def protocol_begin(self):
         """Call once before the training loop."""
+        if self._resumed:  # the curve, the next evaluation step and the training time continue
+            self._protocol_t0 = time.time() - self._resume_wall
+            return
         self._protocol_t0 = time.time()
         self._protocol_eval_seconds = 0.0
         curve = os.path.join(self.logdir, 'eval_curve.jsonl')
@@ -371,8 +391,11 @@ class Agent:
                   f"{int(self.agent_steps):,} steps: stopping")
             if self.job_clock is not None:
                 self.job_clock.request_stop()
-        if self._protocol_next is None or self.agent_steps < self._protocol_next:
-            return
+        if self._protocol_next is not None and self.agent_steps >= self._protocol_next:
+            self._protocol_periodic_eval()
+        self._resume_point()
+
+    def _protocol_periodic_eval(self):
         t0 = time.time()
         modes = {n: m.training for n in ('actor', 'actor_encoder', 'encoder', 'model', 'policy')
                  if isinstance(m := getattr(self, n, None), torch.nn.Module)}
@@ -409,6 +432,8 @@ class Agent:
         """Call after the training loop (before saving final.pth)."""
         if self._protocol_t0 is None:
             return
+        if self.resume_ckpt and not self._resume_saved_at_stop:
+            self.resume_save()  # the loop ended at its top (step budget reached): a state to continue from
         budget = {
             'agent_steps': int(self.agent_steps),
             'max_agent_steps': int(max_agent_steps),
@@ -420,7 +445,92 @@ class Agent:
             'train_seconds': time.time() - self._protocol_t0 - self._protocol_eval_seconds,
             'periodic_eval_seconds': self._protocol_eval_seconds,
         }
+        if self.resume_ckpt or self._resume_history:
+            budget['resumed_at_steps'] = list(self._resume_history)
+            budget['resume_save_seconds'] = self._resume_save_seconds
         json.dump(budget, open(os.path.join(self.logdir, 'budget.json'), 'w'), indent=2)
+
+    # ------------------------------------------------------------------
+    # Resumable checkpoints
+    # ------------------------------------------------------------------
+    def resume_mark(self):
+        """Record the plain settings at construction (run.py calls this right after building the agent).
+
+        Values still equal to these when a resume checkpoint is written are settings, not training state: a resumed
+        run takes them from its own configuration (e.g. a larger step budget).
+        """
+        self._resume_marks = resume.plain_marks(self)
+        self._resume_env_marks = resume.plain_marks(self.env, skip=resume.ENV_SKIP)
+
+    @property
+    def resume_path(self):
+        return os.path.join(self.ckpt_dir, 'resume.pth')
+
+    def _resume_point(self):
+        """Called at the top of every training iteration (from protocol_step): the only place a resume checkpoint is
+        written, so that resuming re-enters the loop exactly there. Saved when the next stop check will stop
+        training (the decision is taken now and kept by the job clock), and every resume_every_minutes."""
+        if not self.resume_ckpt or self.rank > 0:
+            return
+        stop = bool(self.job_clock.decide()) if self.job_clock is not None else False
+        due = self.resume_every_minutes > 0 and time.time() - self._resume_last_save >= 60 * self.resume_every_minutes
+        if stop or due:
+            self.resume_save()
+        self._resume_saved_at_stop = stop
+
+    def resume_save(self, path=None):
+        path = path or self.resume_path
+        t0 = time.time()
+        curve = os.path.join(self.logdir, 'eval_curve.jsonl')
+        ckpt = {
+            'format': 1,
+            'agent_class': type(self).__name__,
+            'agent_steps': int(self.agent_steps),
+            'epoch': int(self.epoch),
+            'rng': resume.rng_state(),  # first: nothing below draws random numbers, but keep it obvious
+            'agent': resume.agent_state(self, self._resume_marks),
+            'env': resume.env_state(self.env, self._resume_env_marks),
+            'protocol': {
+                'wall': (t0 - self._protocol_t0) if self._protocol_t0 is not None else 0.0,
+                'eval_curve': open(curve).read() if os.path.exists(curve) else '',
+                'resumed_at_steps': list(self._resume_history),
+                'save_seconds': self._resume_save_seconds,
+            },
+        }
+        tmp = path + '.tmp'
+        torch.save(ckpt, tmp)
+        os.replace(tmp, path)
+        dt = time.time() - t0
+        self._resume_save_seconds += dt
+        if self._protocol_t0 is not None:
+            self._protocol_t0 += dt  # writing the checkpoint is not training time
+        self._resume_last_save = time.time()
+        print(f'[resume] saved {path} at {int(self.agent_steps):,} steps '
+              f'({os.path.getsize(path) / 2**20:.0f} MB, {dt:.1f} s)')
+
+    def resume_load(self, path):
+        """Restore the whole training state from a resume checkpoint; train() then continues where it stopped."""
+        dev = str(self.device)
+        loc = {f'cuda:{i}': dev for i in range(16)} if dev.startswith('cuda') else 'cpu'
+        ckpt = torch.load(path, map_location=loc, weights_only=False)
+        if ckpt.get('agent_class') != type(self).__name__:
+            raise ValueError(f"resume: {path} is a {ckpt.get('agent_class')} checkpoint, not {type(self).__name__}")
+        missing = resume.load_agent_state(self, ckpt['agent'])
+        if missing:
+            print(f'[resume] Warning: not restored (no such object in this agent): {missing}')
+        resume.load_env_state(self.env, ckpt['env'])
+        resume.load_rng_state(ckpt['rng'])
+        p = ckpt['protocol']
+        self._resume_wall = float(p['wall'])
+        self._resume_save_seconds = float(p.get('save_seconds', 0.0))
+        self._resume_history = list(p.get('resumed_at_steps', [])) + [int(self.agent_steps)]
+        curve = os.path.join(self.logdir, 'eval_curve.jsonl')
+        with open(curve, 'w') as f:  # the curve up to the checkpoint (later records of a crashed job are redone)
+            f.write(p['eval_curve'])
+        self._protocol_stopped_by_clock = False
+        self._protocol_stopped_by_train_time = False
+        self._resumed = True
+        print(f'[resume] loaded {path}: continuing at {int(self.agent_steps):,} steps, epoch {int(self.epoch)}')
 
     def protocol_final(self):
         """Final score of the loaded (final) policy: deterministic scores.json, stochastic scores_stochastic.json."""

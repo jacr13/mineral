@@ -210,14 +210,15 @@ class DDPG(Agent):
         return data, timesteps * self.num_actors
 
     def train(self):
-        obs = self.env.reset()
-        self.obs = self._convert_obs(obs)
-        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
+        if not self._resumed:  # a resumed run has its env state, replay buffer and counters from the checkpoint
+            obs = self.env.reset()
+            self.obs = self._convert_obs(obs)
+            self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
 
-        self.set_eval()
-        trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
-        self.memory.add_to_buffer(trajectory)
-        self.agent_steps += steps
+            self.set_eval()
+            trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
+            self.memory.add_to_buffer(trajectory)
+            self.agent_steps += steps
 
         self.protocol_begin()
 

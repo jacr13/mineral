@@ -313,15 +313,16 @@ class LWAIL(DDPG):
         # phase after warm-up, the periodic discriminator update, and richer
         # logging (expert_return, discriminator metrics, best-checkpoint
         # tracking, and a print_every summary), matching GAIL/DAC's loops.
-        obs = self.env.reset()
-        self.obs = self._convert_obs(obs)
-        self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
+        if not self._resumed:  # a resumed run has its env state, replay buffer and counters from the checkpoint
+            obs = self.env.reset()
+            self.obs = self._convert_obs(obs)
+            self.dones = torch.ones((self.num_actors,), dtype=torch.bool, device=self.device)
 
-        self.set_eval()
-        trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
-        self.memory.add_to_buffer(trajectory)
-        self.agent_steps += steps
-        self._pretrain_discriminator()
+            self.set_eval()
+            trajectory, steps = self.explore_env(self.env, self.ddpg_config.warm_up, random=True)
+            self.memory.add_to_buffer(trajectory)
+            self.agent_steps += steps
+            self._pretrain_discriminator()
 
         self.protocol_begin()
 

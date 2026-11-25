@@ -187,9 +187,10 @@ class PPO(DAPGMixin, Agent):
         self.storage.data_dict['returns'] = returns
 
     def train(self):
-        obs = self.env.reset()
-        self.obs = self._convert_obs(obs)
-        self.dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
+        if not self._resumed:  # a resumed run has its env state from the resume checkpoint
+            obs = self.env.reset()
+            self.obs = self._convert_obs(obs)
+            self.dones = torch.zeros((self.num_actors,), dtype=torch.bool, device=self.device)
 
         self.protocol_begin()
 

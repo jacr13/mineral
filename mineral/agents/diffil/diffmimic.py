@@ -104,7 +104,10 @@ class DiffMimic(Agent):
         # max_agent_steps > 0: stop at this many simulated steps (the rerun's budget) instead of after `iters`
         budget = int(float(cfg.get('max_agent_steps', 0) or 0))
         self.protocol_begin()
-        for self.epoch in range(int(cfg.iters)):
+        # dm_next: the iteration to run next (a resumed run continues there)
+        start = self.dm_next if self._resumed else 0
+        for self.epoch in range(start, int(cfg.iters)):
+            self.dm_next = self.epoch
             if budget > 0 and self.agent_steps >= budget:
                 break
             self.protocol_step()
@@ -117,6 +120,8 @@ class DiffMimic(Agent):
             if (self.epoch + 1) % int(cfg.eval_every) == 0:
                 self._log({k: float(np.mean([s[k] for s in stats])) for k in stats[0]})
                 stats = []
+        else:
+            self.dm_next = int(cfg.iters)
         self.protocol_end(budget if budget > 0 else self.agent_steps)
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 

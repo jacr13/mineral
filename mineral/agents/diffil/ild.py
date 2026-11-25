@@ -49,6 +49,10 @@ class ILD(SHAC):
         self.feat_d = state_dims(full_cfg, self.obs_space, bool(self.ild_config.get("loss_state", True)))
         self.full_cfg = full_cfg
         print(f"[ILD] expert state set: {int(valid.sum())} states from {N} demos")
+        if str(self.ild_config.get("mode", "paper")) == "paper":
+            # built here (not in train_paper) so that a resume checkpoint can restore its state before training
+            params = list(self.actor_encoder.parameters()) + list(self.actor.parameters())
+            self.paper_optim = torch.optim.Adam(params, lr=float(self.ild_config.get("lr", 1e-3)))
 
     def train(self):
         if str(self.ild_config.get("mode", "paper")) == "paper":
@@ -57,7 +61,8 @@ class ILD(SHAC):
 
     def train_window(self):
         """Earlier variant: SHAC-style windows of horizon_len steps, Chamfer against the pooled expert states."""
-        self.initialize_env()
+        if not self._resumed:  # a resumed run has its env state from the resume checkpoint
+            self.initialize_env()
 
         self.protocol_begin()
 
@@ -455,20 +460,22 @@ class ILD(SHAC):
         Yraw = self._feat(self.demos["obs"])[:, :T]
         Ymask = self.demo_valid[:, :T]
         Yraw = torch.where(Ymask[..., None], Yraw, torch.zeros_like(Yraw))
-        feat_mean = torch.zeros(Yraw.shape[-1], device=self.device)
-        feat_var = torch.ones(Yraw.shape[-1], device=self.device)
-        feat_count = 0.0
-
-        self.sim_steps = self._bootstrap(lr0)
+        if not self._resumed:  # a resumed run has these (and the iteration to run next) from the checkpoint
+            # running state normaliser of the features: mean, variance, count
+            self.paper_feat = [torch.zeros(Yraw.shape[-1], device=self.device),
+                               torch.ones(Yraw.shape[-1], device=self.device), 0.0]
+            self.sim_steps = self._bootstrap(lr0)
+            self.paper_next = 0
         params = list(self.actor_encoder.parameters()) + list(self.actor.parameters())
-        optim = torch.optim.Adam(params, lr=lr0)
+        optim = self.paper_optim
 
         def step_norm(g):
             n = g.norm()
             return torch.where(n > step_clip, g * (step_clip / n), g)
 
         self.protocol_begin()
-        for it in range(iters):
+        for it in range(self.paper_next, iters):
+            self.paper_next = it
             self.protocol_step()
             self.epoch = it + 1
             if self.job_clock is not None:
@@ -515,11 +522,13 @@ class ILD(SHAC):
                 if os.environ.get("ILD_DEBUG_MEM"):
                     print(f"[ILD] mem after pass A {torch.cuda.memory_allocated() / 2**30:.2f} GiB")
                 # running state normaliser, updated with the rollout states (as the paper's state normaliser)
+                feat_mean, feat_var, feat_count = self.paper_feat
                 m, v, c = Xraw.reshape(-1, Xraw.shape[-1]).mean(0), Xraw.reshape(-1, Xraw.shape[-1]).var(0), B * T
                 delta, tot = m - feat_mean, feat_count + c
                 feat_mean = feat_mean + delta * c / tot
                 feat_var = (feat_var * feat_count + v * c + delta**2 * feat_count * c / tot) / tot
                 feat_count = tot
+                self.paper_feat = [feat_mean, feat_var, feat_count]
                 fstd = feat_var.clamp_min(1e-8).sqrt()
                 Y = (Yraw - feat_mean) / fstd
                 X = (Xraw - feat_mean) / fstd
@@ -615,6 +624,8 @@ class ILD(SHAC):
                     f"[ILD] it {it + 1}/{iters} | steps {int(self.agent_steps):,} | chamfer {loss_a.item():.4f} | "
                     f"grad {gn.item():.3f} | drift {drift:.2e} | ep_rewards {mean_rew:.1f}"
                 )
+        else:
+            self.paper_next = iters
 
         self.protocol_end(self.max_agent_steps)
         self.save(os.path.join(self.ckpt_dir, "final.pth"))

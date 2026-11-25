@@ -152,9 +152,19 @@ def main(config: DictConfig):
     job_clock.print_info()
     agent = AgentCls(config, logdir=logdir, accelerator=accelerator, datasets=datasets, env=env, job_clock=job_clock)
 
+    agent.resume_mark()
+
     if config.ckpt:
         print(f'Loading checkpoint: {config.ckpt}')
         agent.load(config.ckpt, ckpt_keys=config.ckpt_keys)
+
+    # resume_from: continue training from a resume checkpoint (agent.resume_ckpt=true writes ckpt/resume.pth);
+    # 'auto' = this run's own ckpt/resume.pth if it exists (a restarted job), else start from scratch
+    resume_from = config.get('resume_from', None)
+    if resume_from == 'auto':
+        resume_from = agent.resume_path if os.path.exists(agent.resume_path) else None
+    elif resume_from:
+        resume_from = to_absolute_path(resume_from)
 
     # --- Run Agent ---
     print('-' * 20)
@@ -163,12 +173,16 @@ def main(config: DictConfig):
     try:
         if config.run == 'train':
             set_seed(seeds['train'] + rank)
+            if resume_from:
+                agent.resume_load(resume_from)  # after set_seed: restores the RNG streams too
             agent.train()
         elif config.run == 'eval':
             set_seed(seeds['eval'] + rank)
             agent.protocol_final() if agent.protocol_eval else agent.eval()
         elif config.run == 'train_eval':
             set_seed(seeds['train'] + rank)
+            if resume_from:
+                agent.resume_load(resume_from)  # after set_seed: restores the RNG streams too
             agent.train()
 
             agent.load(os.path.join(agent.ckpt_dir, 'final.pth'))

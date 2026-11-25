@@ -129,6 +129,12 @@ class JobClock:
         """Make the next step(check_safe_stop=True) report a safe stop (used by a training-time budget)."""
         self._stop_requested = True
 
+    def decide(self):
+        """Take the stop decision now; the next step(check_safe_stop=True) returns it (resumable checkpoints: the
+        state saved at the top of an iteration is the one the stop leaves)."""
+        self._decided = self.should_safe_stop()
+        return self._decided
+
     def should_safe_stop(self):
         """Stop when we're within the configured buffer before max runtime, or when a stop was requested."""
         if getattr(self, "_stop_requested", False):
@@ -144,6 +150,7 @@ class JobClock:
         If check_safe_stop=True, also return safe_stop.
         """
         now = time.perf_counter()
+        decided, self._decided = getattr(self, "_decided", None), None
 
         if self._step_start is None:
             self._step_start = now
@@ -156,5 +163,5 @@ class JobClock:
         self._step_start = now
 
         if check_safe_stop:
-            return duration, self.should_safe_stop()
+            return duration, decided if decided is not None else self.should_safe_stop()
         return duration

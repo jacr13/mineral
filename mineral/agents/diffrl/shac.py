@@ -389,8 +389,9 @@ class SHAC(Agent):
         self.env.reset()
 
     def train(self):
-        # initializations
-        self.initialize_env()
+        # initializations (a resumed run has its env state, buffers and counters from the resume checkpoint)
+        if not self._resumed:
+            self.initialize_env()
 
         self.protocol_begin()
 
