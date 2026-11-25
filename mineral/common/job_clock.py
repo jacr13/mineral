@@ -125,8 +125,14 @@ class JobClock:
             return None
         return sum(self._step_durations) / len(self._step_durations)
 
+    def request_stop(self):
+        """Make the next step(check_safe_stop=True) report a safe stop (used by a training-time budget)."""
+        self._stop_requested = True
+
     def should_safe_stop(self):
-        """Stop when we're within the configured buffer before max runtime."""
+        """Stop when we're within the configured buffer before max runtime, or when a stop was requested."""
+        if getattr(self, "_stop_requested", False):
+            return True
         remaining = self.remaining_time()
         if remaining is None:
             return False

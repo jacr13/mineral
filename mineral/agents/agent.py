@@ -118,6 +118,11 @@ class Agent:
         self._protocol_t0 = None
         self._protocol_eval_seconds = 0.0
         self._protocol_stopped_by_clock = False
+        # protocol_max_train_seconds > 0: stop training once the protocol's training time (wall time minus the
+        # periodic evaluations) reaches it, through the job clock's clean stop (final checkpoint and final evaluation
+        # as at the step budget). Time-matched baseline runs (writer request R25, 2026-11-25); 0 = off.
+        self.protocol_max_train_seconds = float(full_cfg.agent.get('protocol_max_train_seconds', 0) or 0)
+        self._protocol_stopped_by_train_time = False
 
         # --- Training ---
         self.epoch = -1
@@ -358,6 +363,14 @@ class Agent:
 
     def protocol_step(self):
         """Call after every training iteration: periodic evaluation when the next multiple of eval_every_steps is reached."""
+        if (self.protocol_max_train_seconds > 0 and self._protocol_t0 is not None
+                and not self._protocol_stopped_by_train_time
+                and time.time() - self._protocol_t0 - self._protocol_eval_seconds >= self.protocol_max_train_seconds):
+            self._protocol_stopped_by_train_time = True
+            print(f"[protocol] training time {self.protocol_max_train_seconds:.0f} s reached at "
+                  f"{int(self.agent_steps):,} steps: stopping")
+            if self.job_clock is not None:
+                self.job_clock.request_stop()
         if self._protocol_next is None or self.agent_steps < self._protocol_next:
             return
         t0 = time.time()
@@ -388,8 +401,9 @@ class Agent:
             self._protocol_next += self.eval_every_steps
 
     def protocol_clock_stop(self):
-        """Record that the job clock stopped training before the budget."""
-        self._protocol_stopped_by_clock = True
+        """Record that the job clock stopped training before the budget (not when the training-time budget did)."""
+        if not self._protocol_stopped_by_train_time:
+            self._protocol_stopped_by_clock = True
 
     def protocol_end(self, max_agent_steps):
         """Call after the training loop (before saving final.pth)."""
@@ -400,6 +414,8 @@ class Agent:
             'max_agent_steps': int(max_agent_steps),
             'reached_budget': bool(self.agent_steps >= max_agent_steps),
             'stopped_by_clock': self._protocol_stopped_by_clock,
+            'stopped_by_train_time': self._protocol_stopped_by_train_time,
+            'max_train_seconds': self.protocol_max_train_seconds,
             'epochs': int(self.epoch),
             'train_seconds': time.time() - self._protocol_t0 - self._protocol_eval_seconds,
             'periodic_eval_seconds': self._protocol_eval_seconds,
