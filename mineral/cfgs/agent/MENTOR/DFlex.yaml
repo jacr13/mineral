@@ -94,6 +94,14 @@ mentor:
     mppi_temp: 0.1
     mppi_pull: 0.0
     mppi_antithetic: True
+    # hindsight (REQUESTS R5a): sample_n noisy plans of radius sample_noise around the references, plan = regression
+    # read at zero end error (hs_form reverse: noise on [1, e]; forward: e on [1, noise], then a damped LS step)
+    hs_form: reverse
+    hs_ridge: 0.01
+    hs_passes: 1
+    # firstact (REQUESTS R6): first action by the Stage I solver (iters), continuation fa_cont (policy | refs)
+    fa_cont: policy
+    fa_jacobian: fd
     gf_chunk: 16  # plans per state rolled out together (wide simulator of batch x gf_chunk states)
     gf_seed: ${...seed}  # generator of the sampled directions (the run seed)
     plan_labels: 1  # rejoin: also add (x_k, u_k) for the first plan_labels - 1 later steps of each plan

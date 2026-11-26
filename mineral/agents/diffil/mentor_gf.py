@@ -102,6 +102,17 @@ class _GFTeacher(RejoinTeacher):
     def one_cost(self, x, a, traj, j, a_ref):
         return self.cost(self.rollout(self.sim_base, x, a, grad=False), a, traj, j, a_ref, x)
 
+    @torch.no_grad()
+    def fixed_target(self, x, a_ref, traj, j):
+        """Roll the references once; the phase offset with the smallest end error fixes the target for this state.
+        Returns the target (n, D) and the weighted end error of the references (n, D)."""
+        y, _ = self.rollout(self.sim_base, x, a_ref, grad=False)
+        tg = self.targets(traj, j, x)
+        e = (y[:, None] - tg) * self.w
+        k = (e**2).sum(-1).argmin(-1)
+        ar = torch.arange(x.shape[0], device=x.device)
+        return tg[ar, k], e[ar, k]
+
 
 class FDAdamTeacher(_GFTeacher):
     """The gradient teacher's Adam on a forward-difference (or random-direction) estimate of the plan-cost gradient."""
@@ -301,4 +312,143 @@ class MPPITeacher(_GFTeacher):
         return best_a, self.one_cost(x, best_a, traj, j, a_ref)
 
 
-GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher}
+class HindsightTeacher(_GFTeacher):
+    """Hindsight tutor (REQUESTS R5a): no optimisation per label, one regression on noisy rollouts.
+
+    From the references a_bar (windows, screening, anchor as the rejoin teacher), with the phase offset fixed by the
+    references' own rollout, roll P plans a_bar + eps (eps ~ N(0, sigma^2), clipped) and record the weighted end
+    errors e = w (x_K - s*). hs_form=reverse: ridge regression of the plan noise (K * A) on [1, e]; the plan is
+    a_bar + intercept (the noise predicted at e = 0). hs_form=forward: ridge regression of e on [1, eps] gives c, J;
+    the plan is a_bar + argmin ||c + J d||^2 + action_reg ||a_bar + d - a_ref||^2. hs_passes = 2 re-centres on the
+    plan with half the sigma. A verification rollout gives the label's true cost (the gate reads it).
+    Cost per label: (P + 2) K for one pass, + (P + 1) K per extra pass, plus screening and anchor.
+    """
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.P = int(cfg.get('sample_n', 64))
+        self.sigma = float(cfg.get('sample_noise', 0.1))
+        self.form = str(cfg.get('hs_form', 'reverse'))
+        if self.form not in ('reverse', 'forward'):
+            raise ValueError(f'teacher.hs_form must be reverse or forward, not {self.form!r}')
+        self.ridge = float(cfg.get('hs_ridge', 1e-2))
+        self.passes = int(cfg.get('hs_passes', 1))
+        self.stats = []  # per labelled batch: end-error diagnostics (median over states)
+
+    @staticmethod
+    def _ridge(X, Y, ridge, free_first=True):
+        """Per-state ridge regression: X (n, P, p), Y (n, P, q) -> B (n, p, q); the ridge scales with the mean
+        diagonal of X^T X and leaves the intercept column free."""
+        XtX = X.transpose(1, 2) @ X
+        d = torch.diagonal(XtX, dim1=1, dim2=2)
+        scale = d[:, 1:].mean(-1) if free_first else d.mean(-1)
+        R = torch.ones(X.shape[-1], device=X.device)
+        if free_first:
+            R[0] = 0.0
+        A_ = XtX + (ridge * scale)[:, None, None] * torch.diag(R)[None] + 1e-9 * torch.eye(X.shape[-1], device=X.device)
+        return torch.linalg.solve(A_, X.transpose(1, 2) @ Y)
+
+    @torch.no_grad()
+    def optimise(self, sim, x, traj, j, a_ref):
+        n, K, A = x.shape[0], self.K, self.A
+        tgt, e0 = self.fixed_target(x, a_ref, traj, j)
+        centre, sig = a_ref.clone(), self.sigma
+        st = {}
+        for p in range(self.passes):
+            eps = sig * torch.randn(n, self.P, K, A, device=x.device, generator=self.gen)
+            cand = (centre[:, None] + eps).clamp(-1, 1)
+            eps = (cand - centre[:, None]).reshape(n, self.P, K * A)
+            e = (self.final_states(x, cand) - tgt[:, None]) * self.w  # (n, P, D)
+            one = torch.ones(n, self.P, 1, device=x.device)
+            if self.form == 'reverse':
+                B = self._ridge(torch.cat([one, e], -1), eps, self.ridge)
+                delta = B[:, 0]
+            else:
+                B = self._ridge(torch.cat([one, eps], -1), e, self.ridge)
+                c, J = B[:, 0], B[:, 1:].transpose(1, 2)  # (n, D), (n, D, KA)
+                off = (centre - a_ref).reshape(n, K * A)
+                H = J.transpose(1, 2) @ J + self.lam * torch.eye(K * A, device=x.device)[None]
+                g = (J.transpose(1, 2) @ c[..., None]).squeeze(-1) + self.lam * off
+                delta = -torch.linalg.solve(H + 1e-6 * torch.eye(K * A, device=x.device)[None], g[..., None]).squeeze(-1)
+            if p == 0:
+                en, e0n = e.norm(dim=-1), e0.norm(dim=-1).clamp_min(1e-9)
+                st['min_sample_err_ratio'] = (en.min(1).values / e0n).median().item()
+                st['median_sample_err_ratio'] = (en.median(1).values / e0n).median().item()
+            centre = (centre + delta.view(n, K, A)).clamp(-1, 1)
+            sig = sig / 2
+        y, _ = self.rollout(self.sim_base, x, centre, grad=False)
+        st['plan_err_ratio'] = (((y - tgt) * self.w).norm(dim=-1) / e0.norm(dim=-1).clamp_min(1e-9)).median().item()
+        self.stats.append(st)
+        self.iters_used.append(self.passes)
+        return centre, self.one_cost(x, centre, traj, j, a_ref)
+
+
+class _Continuation:
+    """G(x, a): one step with a, then K - 1 steps of a continuation (closed-loop policy, or the references open loop).
+    Exposes the `spec` and call signature lm_invert expects of a one-step map."""
+
+    def __init__(self, teacher, a_ref, mode):
+        self.t, self.a_ref, self.mode = teacher, a_ref, mode
+        self.spec = teacher.spec
+
+    @torch.no_grad()
+    def __call__(self, s, a, grad=False):
+        sim = self.t.sim_base
+        y = sim(s, a.clamp(-1, 1), grad=False)
+        for k in range(1, self.t.K):
+            u = self.t.cont_policy(y).clamp(-1, 1) if self.mode == 'policy' else self.a_ref[:, k]
+            y = sim(y, u, grad=False)
+        return y
+
+    @torch.no_grad()
+    def plan(self, s, a0):
+        """The full action sequence G executes from s with first action a0 (n, K, A)."""
+        acts, y = [a0.clamp(-1, 1)], self.t.sim_base(s, a0.clamp(-1, 1), grad=False)
+        for k in range(1, self.t.K):
+            u = self.t.cont_policy(y).clamp(-1, 1) if self.mode == 'policy' else self.a_ref[:, k]
+            acts.append(u)
+            if k < self.t.K - 1:
+                y = self.t.sim_base(y, u, grad=False)
+        return torch.stack(acts, 1)
+
+
+class FirstActionTeacher(_GFTeacher):
+    """REQUESTS R6: optimise the first action only; a continuation finishes the K-step plan.
+
+    min_a ||w (G(x, a) - s*)||^2 + action_reg ||a - a_bar_0||^2 with the Stage I solver (lm_invert), G = one step
+    with a then K - 1 steps of fa_cont (policy: the current policy closed loop; refs: a_bar_1..K-1 open loop),
+    s* = the target of the best phase offset of the references' rollout. Jacobian fa_jacobian (fd: A + 1 rollouts of
+    K steps per iteration; broyden: once, then rank-1 updates), iters iterations. Cost per label:
+    K + iters (A + 2) K (fd) or K + (A + 1) K + iters K (broyden), plus the verification rollout K.
+    """
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.cont = str(cfg.get('fa_cont', 'policy'))
+        if self.cont not in ('policy', 'refs'):
+            raise ValueError(f'teacher.fa_cont must be policy or refs, not {self.cont!r}')
+        self.fa_jac = str(cfg.get('fa_jacobian', 'fd'))
+        self.fd_h = float(cfg.get('fd_h', 1e-2))
+        self.cont_policy = None
+
+    def anchor_to(self, policy):
+        super().anchor_to(policy)
+        self.cont_policy = policy
+
+    @torch.no_grad()
+    def optimise(self, sim, x, traj, j, a_ref):
+        from .mentor import lm_invert
+
+        if self.cont == 'policy' and self.cont_policy is None:
+            raise ValueError('teacher.fa_cont=policy needs the policy (anchor_to)')
+        tgt, _ = self.fixed_target(x, a_ref, traj, j)
+        G = _Continuation(self, a_ref, self.cont)
+        a0, _ = lm_invert(G, x, tgt, self.w, iters=self.iters, starts=1, h=self.fd_h, reg=self.lam, target=a_ref[:, 0],
+                          x0=a_ref[:, 0], jacobian=self.fa_jac)
+        plan = G.plan(x, a0)
+        self.iters_used.append(self.iters)
+        return plan, self.one_cost(x, plan, traj, j, a_ref)
+
+
+GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher, 'hindsight': HindsightTeacher,
+               'firstact': FirstActionTeacher}
