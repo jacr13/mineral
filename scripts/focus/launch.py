@@ -68,6 +68,11 @@ def cells(batch):
                 yield task, arm, seed
 
 
+# Supervisor pilots (measured 25-26 Nov: FOCUS Hopper 4 per V100 at 2.4x throughput, Humanoid gains nothing):
+# task -> (gpu_share, expected hours when sharing a GPU, GPU memory GB). Humanoid / SNU Humanoid fill a GPU alone.
+PACK = {'cartpoleswingup': (0.3, 1.0, 1.5), 'hopper': (0.3, 2.5, 1.5), 'cheetah': (0.5, 2.5, 1.5), 'ant': (0.5, 3.0, 1.5)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('batch')
@@ -88,6 +93,11 @@ def main():
     ap.add_argument('--commit', default=None, help='code commit (default HEAD); relaunches keep the batch commit')
     ap.add_argument('--attach_input', action='append', default=[], metavar='DEST=LOCAL_DIR',
                     help='input shipped with each run (spawner --attach_input), e.g. demos not on the cluster')
+    ap.add_argument('--pack', action='store_true',
+                    help='mark the runs of tasks in PACK packable (supervisor pilots: several runs on one GPU); '
+                    'others stay ordinary jobs')
+    ap.add_argument('--resumable', action='store_true',
+                    help='supervisor continues a stopped run from ckpt/resume.pth (needs code from 328d7b8 on)')
     args = ap.parse_args()
 
     todo = list(cells(args.batch))
@@ -139,6 +149,12 @@ def main():
             cmd += ['--cluster', args.cluster]
         for a in args.attach_input:
             cmd += ['--attach_input', a]
+        if args.pack and task in PACK:
+            share, hours, mem_gb = PACK[task]
+            cmd += ['--packable', '--gpu_share', str(share), '--gpu_mem_gb', str(mem_gb),
+                    '--expected_seconds', str(int(hours * 3600))]
+        if args.resumable:
+            cmd += ['--resumable']
         mem = dict(x.split('=') for x in args.memory_arm).get(arm, args.memory)
         if mem:
             cmd += ['--memory', str(mem)]

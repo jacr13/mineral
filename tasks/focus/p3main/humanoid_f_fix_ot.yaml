@@ -6,6 +6,7 @@ task:
 agent:
   name: FOCUS/DFlexAntSAPO
   ckpt_every: -1
+  +resume_ckpt: true
   protocol_eval: true
   eval_every_steps: 500000
   save_eval_rollouts: false
