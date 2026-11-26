@@ -109,10 +109,42 @@ class FDAdamTeacher(_GFTeacher):
     def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
         super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
         self.fd_mode = str(cfg.get('fd_mode', 'full'))
-        if self.fd_mode not in ('full', 'rand'):
-            raise ValueError(f'teacher.fd_mode must be full or rand, not {self.fd_mode!r}')
+        if self.fd_mode not in ('full', 'rand', 'broyden'):
+            raise ValueError(f'teacher.fd_mode must be full, rand or broyden, not {self.fd_mode!r}')
+        if self.fd_mode == 'broyden' and (self.effort > 0 or self.smooth > 0 or self.barrier > 0):
+            raise ValueError('teacher.fd_mode=broyden supports the rejoin error and action_reg only')
         self.fd_h = float(cfg.get('fd_h', 1e-2))
         self.fd_dirs = int(cfg.get('fd_dirs', 16))
+
+    @torch.no_grad()
+    def optimise_broyden(self, x, traj, j, a_ref):
+        """Adam on g = 2 J^T r_state + 2 lam (a - a_ref), J = d(w x_K)/da by forward differences once, then Broyden
+        updates between consecutive iterates (same Jacobians as lmplan with lm_jacobian=broyden; only the optimiser
+        differs)."""
+        n, KA = x.shape[0], self.K * self.A
+        ar = a_ref.reshape(n, KA)
+        lm = self  # LMPlanTeacher's residual / jacobian helpers read only attributes this teacher has
+        a = ar.clone().requires_grad_(True)
+        opt = torch.optim.Adam([a], lr=self.lr)
+        y, rs, ra, cost = LMPlanTeacher.residual(lm, x, a.detach(), traj, j, ar)
+        J = LMPlanTeacher.jacobian(lm, x, a.detach(), y)
+        best, best_a = cost.clone(), a.detach().clone()
+        for it in range(self.iters):
+            a.grad = 2 * (J.transpose(1, 2) @ rs[..., None]).squeeze(-1) + 2 * self.lam * (a.detach() - ar)
+            prev, y_prev = a.detach().clone(), y
+            opt.step()
+            a.data.clamp_(-1, 1)
+            y, rs, ra, cost = LMPlanTeacher.residual(lm, x, a.detach(), traj, j, ar)
+            dx = a.detach() - prev
+            dy = (y - y_prev) * self.w
+            den = (dx**2).sum(-1, keepdim=True).clamp_min(1e-12)
+            J = J + ((dy - (J @ dx[..., None]).squeeze(-1)) / den)[..., None] * dx[:, None]
+            better = cost < best
+            best = torch.where(better, cost, best)
+            best_a[better] = a.detach()[better]
+        self.iters_used.append(self.iters)
+        out = best_a.view(n, self.K, self.A)
+        return out, self.one_cost(x, out, traj, j, a_ref)
 
     @torch.no_grad()
     def grad(self, x, a, c, traj, j, a_ref):
@@ -137,6 +169,8 @@ class FDAdamTeacher(_GFTeacher):
 
     @torch.no_grad()
     def optimise(self, sim, x, traj, j, a_ref):
+        if self.fd_mode == 'broyden':
+            return self.optimise_broyden(x, traj, j, a_ref)
         a = a_ref.clone().requires_grad_(True)  # a leaf for torch.optim.Adam only; no autograd graph is ever built
         opt = torch.optim.Adam([a], lr=self.lr)
         best = torch.full((a.shape[0],), float('inf'), device=self.device)
