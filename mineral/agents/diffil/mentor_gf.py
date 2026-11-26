@@ -1,0 +1,270 @@
+"""TUTOR: rejoin teachers without simulator gradients (forward steps only).
+
+Every teacher here keeps RejoinTeacher's windows, screening, anchored warm start and rejoin cost (min over phase
+offsets of the weighted terminal error, plus action_reg ||a - a_ref||^2 and the optional effort / smoothness /
+barrier terms) and replaces only the optimiser of the K-step open-loop plan. The simulator is called with
+grad=False only, so every step is counted as a forward step (counter.fwd) and no backward pass exists.
+
+teacher.kind:
+  fdadam  the gradient teacher's own Adam (lr, iters, clamp to [-1, 1], best iterate kept) on a gradient of the plan
+          cost estimated from forward steps: fd_mode=full, one-sided forward differences over all K * act_dim plan
+          coordinates (the direct test: is it the exact gradient or the optimiser that Ant needs?); fd_mode=rand,
+          fd_dirs random Gaussian directions per iteration (SPSA-like, cheaper, noisier).
+  lmplan  Levenberg-Marquardt (Gauss-Newton with damping) on the residual [w (x_K(a) - target), sqrt(action_reg)
+          (a - a_ref)], target = the best phase offset at the current iterate; Jacobian of x_K by forward
+          differences (lm_jacobian=fd) or once by forward differences, then Broyden rank-1 updates (broyden).
+  mppi    consistent sampling: Gaussian perturbations of small radius around the current mean, started at the
+          anchored warm start; the new mean is the softmin-weighted mean of the perturbations (not the best sample),
+          with an extra pull mppi_pull ||u_0 - u_0^warm||^2 of the first action towards the warm start in the cost.
+          Neighbouring states then get neighbouring labels.
+
+Cost per label (forward steps; K horizon, A act_dim, I iterations), for the optimiser only (screening adds
+num_windows * K, anchoring K - 1):
+  fdadam full: I (K A + 1) K + K;  fdadam rand: I (M + 1) K + K;  lmplan fd: I (K A + 2) K + K;
+  lmplan broyden: (K A + 1) K + I K + K;  mppi: I (P + 1) K + K.
+"""
+
+import torch
+
+from .mentor import RejoinTeacher
+
+
+class _GFTeacher(RejoinTeacher):
+    """Shared machinery: a wide one-step simulator that rolls out many perturbed plans of a batch at once."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        if self.iters_cfg_zero(cfg):
+            raise ValueError('gradient-free teachers need teacher.iters > 0')
+        self.A = spec.act_dim
+        # plans rolled out together per call of the wide simulator: chunk * batch states
+        self.chunk = max(1, int(cfg.get('gf_chunk', 16)))
+        self.sim_wide = self.make_sim(spec, batch * self.chunk, device, counter)
+        self.sim_base = self.sim_one if self.sim_one is not None else self.make_sim(spec, batch, device, counter)
+        self.gen = torch.Generator(device=device)
+        self.gen.manual_seed(int(cfg.get('gf_seed', 0)))
+
+    @staticmethod
+    def iters_cfg_zero(cfg):
+        return int(cfg.iters) <= 0
+
+    # cost of many candidate plans per state: a (n, P, K, A) -> (n, P)
+    @torch.no_grad()
+    def costs(self, x, a, traj, j, a_ref, extra=None):
+        n, P = a.shape[:2]
+        out = []
+        for p0 in range(0, P, self.chunk):
+            p1 = min(P, p0 + self.chunk)
+            c = p1 - p0
+            ap = a[:, p0:p1].transpose(0, 1).reshape(c * n, self.K, self.A)  # chunk-major: [p0 states, p0+1 states...]
+            rep = lambda t: t.repeat(c, *([1] * (t.dim() - 1)))
+            xs, tr, jj, ar = rep(x), rep(traj), rep(j), rep(a_ref)
+            if c == self.chunk:
+                sim = self.sim_wide
+            elif c == 1:
+                sim = self.sim_base
+            else:  # pad the last chunk to the wide simulator's batch
+                pad = self.chunk - c
+                xs = torch.cat([xs, x.repeat(pad, 1)])
+                ap = torch.cat([ap, a_ref.repeat(pad, 1, 1)])
+                tr, jj, ar = torch.cat([tr, traj.repeat(pad)]), torch.cat([jj, j.repeat(pad)]), torch.cat([ar, a_ref.repeat(pad, 1, 1)])
+                sim = self.sim_wide
+            cc = self.cost(self.rollout(sim, xs, ap, grad=False), ap, tr, jj, ar, xs)
+            if extra is not None:
+                cc = cc + extra(ap)
+            out.append(cc[: c * n].view(c, n).T)
+        return torch.cat(out, 1)
+
+    @torch.no_grad()
+    def final_states(self, x, a):
+        """x_K for candidate plans a (n, P, K, A) -> (n, P, D)."""
+        n, P = a.shape[:2]
+        out = []
+        for p0 in range(0, P, self.chunk):
+            p1 = min(P, p0 + self.chunk)
+            c = p1 - p0
+            ap = a[:, p0:p1].transpose(0, 1).reshape(c * n, self.K, self.A)
+            xs = x.repeat(c, 1)
+            if c == self.chunk:
+                sim = self.sim_wide
+            elif c == 1:
+                sim = self.sim_base
+            else:
+                pad = self.chunk - c
+                xs = torch.cat([xs, x.repeat(pad, 1)])
+                ap = torch.cat([ap, ap[:n].repeat(pad, 1, 1)])
+                sim = self.sim_wide
+            y, _ = self.rollout(sim, xs, ap, grad=False)
+            out.append(y[: c * n].view(c, n, -1).transpose(0, 1))
+        return torch.cat(out, 1)
+
+    @torch.no_grad()
+    def one_cost(self, x, a, traj, j, a_ref):
+        return self.cost(self.rollout(self.sim_base, x, a, grad=False), a, traj, j, a_ref, x)
+
+
+class FDAdamTeacher(_GFTeacher):
+    """The gradient teacher's Adam on a forward-difference (or random-direction) estimate of the plan-cost gradient."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.fd_mode = str(cfg.get('fd_mode', 'full'))
+        if self.fd_mode not in ('full', 'rand'):
+            raise ValueError(f'teacher.fd_mode must be full or rand, not {self.fd_mode!r}')
+        self.fd_h = float(cfg.get('fd_h', 1e-2))
+        self.fd_dirs = int(cfg.get('fd_dirs', 16))
+
+    @torch.no_grad()
+    def grad(self, x, a, c, traj, j, a_ref):
+        n, KA = a.shape[0], self.K * self.A
+        flat = a.reshape(n, KA)
+        h = self.fd_h
+        if self.fd_mode == 'full':
+            # one-sided steps away from the bound (as Stage I): -h where a + h > 1
+            sign = torch.where(flat + h > 1, -1.0, 1.0)
+            eye = torch.eye(KA, device=a.device)
+            pert = flat[:, None] + (sign * h)[:, None] * eye[None]  # (n, KA, KA)
+            cs = self.costs(x, pert.view(n, KA, self.K, self.A), traj, j, a_ref)
+            return ((cs - c[:, None]) / (sign * h)).view(n, self.K, self.A)
+        M = self.fd_dirs
+        u = torch.randn(n, M, KA, device=a.device, generator=self.gen)
+        pert = (flat[:, None] + h * u).clamp(-1, 1)
+        du = (pert - flat[:, None]) / h  # the step actually taken after clamping
+        cs = self.costs(x, pert.view(n, M, self.K, self.A), traj, j, a_ref)
+        # E[(u . g) u] = g for u ~ N(0, I): average of directional derivatives times directions
+        g = ((cs - c[:, None]) / h)[:, :, None] * du
+        return g.mean(1).view(n, self.K, self.A)
+
+    @torch.no_grad()
+    def optimise(self, sim, x, traj, j, a_ref):
+        a = a_ref.clone().requires_grad_(True)  # a leaf for torch.optim.Adam only; no autograd graph is ever built
+        opt = torch.optim.Adam([a], lr=self.lr)
+        best = torch.full((a.shape[0],), float('inf'), device=self.device)
+        best_a = a_ref.clone()
+        for it in range(self.iters + 1):
+            c = self.one_cost(x, a.detach(), traj, j, a_ref)
+            better = c < best
+            best = torch.where(better, c, best)
+            best_a[better] = a.detach()[better].clamp(-1, 1)
+            if it == self.iters:
+                self.iters_used.append(it)
+                break
+            a.grad = self.grad(x, a.detach(), c, traj, j, a_ref)
+            opt.step()
+            a.data.clamp_(-1, 1)
+        return best_a, best
+
+
+class LMPlanTeacher(_GFTeacher):
+    """Levenberg-Marquardt on the K-step plan; Jacobian of the final state by forward differences or Broyden."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.jac = str(cfg.get('lm_jacobian', 'fd'))
+        if self.jac not in ('fd', 'broyden'):
+            raise ValueError(f'teacher.lm_jacobian must be fd or broyden, not {self.jac!r}')
+        self.fd_h = float(cfg.get('fd_h', 1e-2))
+        self.lam0 = float(cfg.get('lm_lambda', 1e-2))
+        if self.effort > 0 or self.smooth > 0 or self.barrier > 0:
+            raise ValueError('teacher.kind=lmplan supports the rejoin error and action_reg only')
+
+    @torch.no_grad()
+    def jacobian(self, x, flat, y):
+        n, KA = flat.shape
+        h = self.fd_h
+        sign = torch.where(flat + h > 1, -1.0, 1.0)
+        eye = torch.eye(KA, device=flat.device)
+        pert = flat[:, None] + (sign * h)[:, None] * eye[None]
+        yp = self.final_states(x, pert.view(n, KA, self.K, self.A))  # (n, KA, D)
+        return ((yp - y[:, None]) / (sign * h)[:, :, None]).transpose(1, 2) * self.w[None, :, None]  # (n, D, KA)
+
+    @torch.no_grad()
+    def residual(self, x, flat, traj, j, a_ref_flat):
+        y, _ = self.rollout(self.sim_base, x, flat.view(-1, self.K, self.A), grad=False)
+        tg = self.targets(traj, j, x)  # (n, offsets, D)
+        e = ((y[:, None] - tg) * self.w)
+        k = (e**2).sum(-1).argmin(-1)
+        r_state = e[torch.arange(x.shape[0], device=x.device), k]
+        r_act = (self.lam**0.5) * (flat - a_ref_flat)
+        cost = (r_state**2).sum(-1) + (r_act**2).sum(-1)
+        return y, r_state, r_act, cost
+
+    @torch.no_grad()
+    def optimise(self, sim, x, traj, j, a_ref):
+        n, KA = x.shape[0], self.K * self.A
+        ar = a_ref.reshape(n, KA)
+        flat = ar.clone()
+        y, rs, ra, cost = self.residual(x, flat, traj, j, ar)
+        lam = torch.full_like(cost, self.lam0)
+        J = None
+        I = torch.eye(KA, device=x.device)[None]
+        for it in range(self.iters):
+            if J is None or self.jac == 'fd':
+                J = self.jacobian(x, flat, y)
+            H = J.transpose(1, 2) @ J + self.lam * I
+            g = (J.transpose(1, 2) @ rs[..., None]).squeeze(-1) + (self.lam**0.5) * ra
+            A_ = H + lam[:, None, None] * torch.diag_embed(torch.diagonal(H, dim1=1, dim2=2).clamp_min(1e-12))
+            new = (flat - torch.linalg.solve(A_, g[..., None]).squeeze(-1)).clamp(-1, 1)
+            y_n, rs_n, ra_n, c_n = self.residual(x, new, traj, j, ar)
+            if self.jac == 'broyden':  # secant update of the final-state Jacobian, accepted step or not
+                dx = new - flat
+                dy = (y_n - y) * self.w
+                den = (dx**2).sum(-1, keepdim=True).clamp_min(1e-12)
+                J = J + ((dy - (J @ dx[..., None]).squeeze(-1)) / den)[..., None] * dx[:, None]
+            ok = c_n < cost
+            flat = torch.where(ok[:, None], new, flat)
+            y = torch.where(ok[:, None], y_n, y)
+            rs = torch.where(ok[:, None], rs_n, rs)
+            ra = torch.where(ok[:, None], ra_n, ra)
+            cost = torch.where(ok, c_n, cost)
+            lam = torch.where(ok, (lam * 0.3).clamp_min(1e-9), (lam * 5.0).clamp_max(1e9))
+        self.iters_used.append(self.iters)
+        a = flat.view(n, self.K, self.A)
+        return a, self.one_cost(x, a, traj, j, a_ref)
+
+
+class MPPITeacher(_GFTeacher):
+    """Softmin-weighted mean of small perturbations around the warm start, with a pull of u_0 towards it."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.P = int(cfg.get('sample_n', 32))
+        self.sigma = float(cfg.get('sample_noise', 0.05))
+        self.temp = float(cfg.get('mppi_temp', 0.1))  # temperature, relative to the spread of the sampled costs
+        self.pull = float(cfg.get('mppi_pull', 0.0))
+        self.antithetic = bool(cfg.get('mppi_antithetic', True))
+
+    @torch.no_grad()
+    def optimise(self, sim, x, traj, j, a_ref):
+        n = x.shape[0]
+        u0w = a_ref[:, 0].clone()
+        pull = (lambda ap: self.pull * ((ap[:, 0] - u0w.repeat(ap.shape[0] // n, 1)) ** 2).sum(-1)) if self.pull > 0 else None
+
+        def total(a):
+            c = self.one_cost(x, a, traj, j, a_ref)
+            return c if pull is None else c + self.pull * ((a[:, 0] - u0w) ** 2).sum(-1)
+
+        mean = a_ref.clone()
+        c_mean = total(mean)
+        best_a, best_c = mean.clone(), c_mean.clone()
+        for _ in range(self.iters):
+            half = self.P // 2 if self.antithetic else self.P
+            eps = torch.randn(n, half, self.K, self.A, device=x.device, generator=self.gen)
+            if self.antithetic:
+                eps = torch.cat([eps, -eps], 1)
+            cand = (mean[:, None] + self.sigma * eps).clamp(-1, 1)
+            cs = self.costs(x, cand, traj, j, a_ref, extra=pull)
+            lo = cs.min(1, keepdim=True).values
+            spread = (cs.median(1, keepdim=True).values - lo).clamp_min(1e-9)
+            wts = torch.softmax(-(cs - lo) / (self.temp * spread), 1)
+            mean = (wts[..., None, None] * cand).sum(1).clamp(-1, 1)
+            c_mean = total(mean)
+            better = c_mean < best_c
+            best_a = torch.where(better[:, None, None], mean, best_a)
+            best_c = torch.where(better, c_mean, best_c)
+        self.iters_used.append(self.iters)
+        # report the rejoin cost without the pull, as every other teacher (the gate reads it)
+        return best_a, self.one_cost(x, best_a, traj, j, a_ref)
+
+
+GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher}

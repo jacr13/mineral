@@ -1600,7 +1600,13 @@ class MENTOR(Agent):
                 raise ValueError('teacher.kind=ilqr needs an observation-to-state map (DFlex bodies)')
             TeacherCls = ILQRTeacher
         elif kind != 'rejoin':
-            raise ValueError(f'unknown teacher.kind {kind!r}')
+            from .mentor_gf import GF_TEACHERS  # TUTOR: teachers without simulator gradients
+
+            if kind not in GF_TEACHERS:
+                raise ValueError(f'unknown teacher.kind {kind!r}')
+            if self.full_state:
+                raise ValueError(f'teacher.kind={kind} is not wired for full-state MENTOR')
+            TeacherCls = GF_TEACHERS[kind]
         self.teacher = TeacherCls(
             self.spec,
             self.S,

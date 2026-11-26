@@ -82,6 +82,20 @@ mentor:
     sample_mode: best  # best: re-sample around the best sequence; cem: around the mean of the best quarter
     sample_u0_iters: 0  # > 0: then refine the first action alone (rest of the plan fixed)
     sample_u0_noise: 0.2
+    # TUTOR teachers without simulator gradients (mentor_gf.py; kind fdadam | lmplan | mppi; forward steps only).
+    # fdadam: Adam (lr, iters as rejoin) on a forward-difference plan gradient (fd_mode full: every plan coordinate;
+    # rand: fd_dirs random directions); lmplan: Levenberg-Marquardt on the plan (lm_jacobian fd | broyden, iters);
+    # mppi: softmin-weighted mean of sample_n perturbations of radius sample_noise (iters), mppi_pull on u_0
+    fd_mode: full
+    fd_h: 0.01
+    fd_dirs: 16
+    lm_jacobian: fd
+    lm_lambda: 0.01
+    mppi_temp: 0.1
+    mppi_pull: 0.0
+    mppi_antithetic: True
+    gf_chunk: 16  # plans per state rolled out together (wide simulator of batch x gf_chunk states)
+    gf_seed: ${...seed}  # generator of the sampled directions (the run seed)
     plan_labels: 1  # rejoin: also add (x_k, u_k) for the first plan_labels - 1 later steps of each plan
     horizon: 8
     num_windows: 3
