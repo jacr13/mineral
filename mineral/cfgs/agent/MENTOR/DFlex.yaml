@@ -102,6 +102,9 @@ mentor:
     # firstact (REQUESTS R6): first action by the Stage I solver (iters), continuation fa_cont (policy | refs)
     fa_cont: policy
     fa_jacobian: fd
+    # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
+    diag_shrink: 1.0
+    diag_noise: 0.0
     gf_chunk: 16  # plans per state rolled out together (wide simulator of batch x gf_chunk states)
     gf_seed: ${...seed}  # generator of the sampled directions (the run seed)
     plan_labels: 1  # rejoin: also add (x_k, u_k) for the first plan_labels - 1 later steps of each plan

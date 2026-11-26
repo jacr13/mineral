@@ -450,5 +450,32 @@ class FirstActionTeacher(_GFTeacher):
         return plan, self.one_cost(x, plan, traj, j, a_ref)
 
 
+class DiagnosticRejoin(RejoinTeacher):
+    """DIAGNOSTIC ONLY (REQUESTS R3; uses simulator gradients, never a TUTOR arm): the gradient teacher's label, then
+    label = u0_warm + diag_shrink (u0_adam - u0_warm) + diag_noise N(0, I), clipped to [-1, 1]. diag_shrink < 1 tests
+    the "no correction" reading, diag_noise > 0 the "arbitrary plans" one. The gate reads the gradient plan's cost."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.shrink = float(cfg.get('diag_shrink', 1.0))
+        self.noise = float(cfg.get('diag_noise', 0.0))
+        self.gen = torch.Generator(device=device)
+        self.gen.manual_seed(int(cfg.get('gf_seed', 0)))
+        if not self.screen:
+            raise ValueError('teacher.kind=rejoin_diag needs screening (teacher.screen and num_windows > 1)')
+
+    def optimise(self, sim, x, traj, j, a_ref):
+        self._warm0 = a_ref[:, 0].detach().clone()
+        return super().optimise(sim, x, traj, j, a_ref)
+
+    def label(self, x):
+        u, c = super().label(x)
+        warm = getattr(self, '_warm0', u)
+        out = warm + self.shrink * (u - warm)
+        if self.noise > 0:
+            out = out + self.noise * torch.randn(out.shape, device=out.device, generator=self.gen)
+        return out.clamp(-1, 1), c
+
+
 GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher, 'hindsight': HindsightTeacher,
-               'firstact': FirstActionTeacher}
+               'firstact': FirstActionTeacher, 'rejoin_diag': DiagnosticRejoin}
