@@ -102,7 +102,7 @@ p3main:
   # original tasks
   skip:
     cheetah: [f_ab_demos16, bl_lwail__d1, bl_opolo__d1, bl_ild_tuned__d1, bl_lwail__d16, bl_opolo__d16, bl_ild_tuned__d16, f_ab_eps0.03, f_ab_eps0.3, f_ab_eps1, f_ab_iters20, f_ab_iters200, f_ab_eps0.03_iters200, f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4, f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq, f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1, f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo, f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64, f_ab_kmin, f_ab_kmean, f_main_ot__n0.1, bl_lwail__n0.1, bl_ild_tuned__n0.1, bl_opolo__n0.1, f_main_ot__n0.3, bl_lwail__n0.3, bl_ild_tuned__n0.3, bl_opolo__n0.3, f_main_ot__n0.6, bl_lwail__n0.6, bl_ild_tuned__n0.6, bl_opolo__n0.6, f_main_ot__n1, bl_lwail__n1, bl_ild_tuned__n1, bl_opolo__n1, f_fix_ot__anneal, bl_ild_tuned__anneal]
-    cartpoleswingup: [f_ab_demos16, bl_lwail__d1, bl_opolo__d1, bl_ild_tuned__d1, bl_lwail__d16, bl_opolo__d16, bl_ild_tuned__d16, f_ab_eps0.03, f_ab_eps0.3, f_ab_eps1, f_ab_iters20, f_ab_iters200, f_ab_eps0.03_iters200, f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4, f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq, f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1, f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo, f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64, f_ab_kmin, f_ab_kmean, f_main_ot__n0.1, bl_lwail__n0.1, bl_ild_tuned__n0.1, bl_opolo__n0.1, f_main_ot__n0.3, bl_lwail__n0.3, bl_ild_tuned__n0.3, bl_opolo__n0.3, f_main_ot__n0.6, bl_lwail__n0.6, bl_ild_tuned__n0.6, bl_opolo__n0.6, f_main_ot__n1, bl_lwail__n1, bl_ild_tuned__n1, bl_opolo__n1, f_fix_ot__anneal, bl_ild_tuned__anneal]
+    cartpoleswingup: [f_ab_demos16, bl_lwail__d1, bl_opolo__d1, bl_ild_tuned__d1, bl_lwail__d16, bl_opolo__d16, bl_ild_tuned__d16, f_ab_eps0.03, f_ab_eps0.3, f_ab_eps1, f_ab_iters20, f_ab_iters200, f_ab_eps0.03_iters200, f_ab_through_sinkhorn, f_ab_score_function, f_ab_score_function_lr2e-4, f_ab_uot_rho0.3, f_ab_uot_rho1, f_ab_uot_rho3, f_ab_uot_rho10, f_ab_uot_rho100, f_ab_dtw_subseq, f_ab_k1, f_ab_k2, f_ab_k4, f_ab_k16, f_ab_noalign_k1, f_ab_minus_c, f_ab_rew_neg, f_ab_rew_exp, f_ab_critic_off, f_ab_shac, f_ab_ent_sapo, f_ab_demos1, f_ab_demos2, f_ab_demos4, f_ab_statepairs, f_ab_cost_l2, f_ab_feat64, f_ab_kmin, f_ab_kmean, f_main_ot__n0.1, bl_lwail__n0.1, bl_ild_tuned__n0.1, bl_opolo__n0.1, f_main_ot__n0.3, bl_lwail__n0.3, bl_ild_tuned__n0.3, bl_opolo__n0.3, f_main_ot__n0.6, bl_lwail__n0.6, bl_ild_tuned__n0.6, bl_opolo__n0.6, f_main_ot__n1, bl_lwail__n1, bl_ild_tuned__n1, bl_opolo__n1, f_fix_ot__anneal, bl_ild_tuned__anneal, bl_ild_paper]
     # SNU: sigma 0.3 / 0.6 / 1.0 only (R24, Joao 2026-11-26)
     snu_humanoid: [f_main_ot__n0.1, bl_lwail__n0.1, bl_ild_tuned__n0.1, bl_opolo__n0.1]
   arms: [bl_gaifo_tuned, bl_maad_tuned, bl_dac, bl_opolo, bl_pwil_tuned, bl_lwail, bl_oops_tuned, bl_ild_tuned,
@@ -130,7 +130,10 @@ p3main:
          f_main_ot__n0.6, bl_lwail__n0.6, bl_ild_tuned__n0.6, bl_opolo__n0.6, f_main_ot__n1, bl_lwail__n1, bl_ild_tuned__n1, bl_opolo__n1,
          # learning rate annealed over the run (Joao 2026-11-26, late collapses): Hopper, paired with f_fix_ot and
          # bl_ild_tuned
-         f_fix_ot__anneal, bl_ild_tuned__anneal]
+         f_fix_ot__anneal, bl_ild_tuned__anneal,
+         # ILD as published (paper mode: whole episodes, truncated gradients, its own decay), reported seeds (Joao
+         # 2026-11-26: report it next to our window adaptation); not on CartPole (DFlex crash in paper mode)
+         bl_ild_paper]
 
 # Light tuning of the score-function arm (Phase 4 item 1: the weaker arm gets light tuning): actor lr, tuning seeds.
 p4sftune:
