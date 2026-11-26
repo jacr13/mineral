@@ -49,6 +49,12 @@ class TUTOR(MENTOR):
             cfg.tutor_kind = kind
         return super().train()
 
+    def _teacher_iter_stats(self):
+        stats = super()._teacher_iter_stats()
+        if hasattr(self._teacher, 'round_stats'):  # diagnostics of the teachers that learn a model
+            stats.update(self._teacher.round_stats())
+        return stats
+
     def collect(self):
         visited = super().collect()
         if hasattr(self._teacher, 'observe_rollout'):

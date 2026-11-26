@@ -38,6 +38,7 @@ mentor:
       # p <- p + g(x, s*) - g(x, y) corrections (hit_iters rollouts) and hit_explore noisy rollouts for the buffer
       hit_head: mse
       hit_iters: 3
+      hit_alphas: [1.0]  # step sizes tried per correction (one rollout each)
       hit_explore: 4
       hit_buffer: 1000000
       hit_round_steps: 2000
@@ -45,6 +46,8 @@ mentor:
       hit_flow_steps: 10
       hit_min_data: 5000
       hit_lr: 0.001
+      # lmmodel: LM on the plan with a learned forward model's Jacobian (broyden: once, then secant updates; every)
+      lm_model_jac: broyden
       # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
       diag_shrink: 1.0
       diag_noise: 0.0

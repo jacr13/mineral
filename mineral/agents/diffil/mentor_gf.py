@@ -537,9 +537,10 @@ GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITea
 
 def _register_late():
     """Teachers in their own modules that build on _GFTeacher (imported here, after it exists)."""
-    from .mentor_hit import HindsightInverseTeacher
+    from .mentor_hit import HindsightInverseTeacher, ModelLMTeacher
 
     GF_TEACHERS['hit'] = HindsightInverseTeacher
+    GF_TEACHERS['lmmodel'] = ModelLMTeacher
 
 
 _register_late()
