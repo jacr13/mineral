@@ -26,7 +26,7 @@ num_windows * K, anchoring K - 1):
 
 import torch
 
-from .mentor import RejoinTeacher
+from .mentor import RejoinTeacher, SampleTeacher
 
 
 class _GFTeacher(RejoinTeacher):
@@ -450,6 +450,58 @@ class FirstActionTeacher(_GFTeacher):
         return plan, self.one_cost(x, plan, traj, j, a_ref)
 
 
+class SharedNoiseSample(SampleTeacher):
+    """REQUESTS R4: the sampling teacher (SampleTeacher, unchanged) with one noise tensor shared by every state.
+
+    sample_shared: batch = one draw of shape (samples, K, A) per labelled batch, used for every state of it; run = one
+    draw for the whole run; sample_corr > 0: the noise is an AR(1) process over the K plan steps with that coefficient
+    (unit variance per step). The first-action refinement (sample_u0_iters) shares its noise the same way. Implemented
+    by substituting torch.randn_like while SampleTeacher.label runs (its only source of randomness)."""
+
+    def __init__(self, spec, S, S1, A_hat, lengths, batch, device, counter, cfg):
+        super().__init__(spec, S, S1, A_hat, lengths, batch, device, counter, cfg)
+        self.shared = str(cfg.get('sample_shared', 'batch'))
+        if self.shared not in ('batch', 'run'):
+            raise ValueError(f'teacher.sample_shared must be batch or run, not {self.shared!r}')
+        self.corr = float(cfg.get('sample_corr', 0.0))
+        self.gen = torch.Generator(device=device)
+        self.gen.manual_seed(int(cfg.get('gf_seed', 0)))
+        self.A = spec.act_dim
+        self.bank = None
+
+    def _draw(self):
+        n_main = max(1, self.sample_iters) * self.P
+        main = torch.randn(n_main, self.K, self.A, device=self.device, generator=self.gen)
+        if self.corr > 0:  # AR(1) over the plan steps, unit marginal variance
+            r = self.corr
+            for k in range(1, self.K):
+                main[:, k] = r * main[:, k - 1] + (1 - r**2) ** 0.5 * main[:, k]
+        u0 = torch.randn(max(1, self.u0_iters) * 32, self.A, device=self.device, generator=self.gen)
+        return main, u0
+
+    def label(self, x):
+        if self.bank is None or self.shared == 'batch':
+            self.bank = self._draw()
+        main, u0 = self.bank
+        it = {'main': 0, 'u0': 0}
+        orig = torch.randn_like
+
+        def shared_randn_like(t, *a, **k):
+            if t.dim() == 3:  # (n, K, A): one plan perturbation, the same for every state
+                e = main[it['main'] % main.shape[0]]
+                it['main'] += 1
+            else:  # (n, A): first-action refinement
+                e = u0[it['u0'] % u0.shape[0]]
+                it['u0'] += 1
+            return e.expand_as(t).clone()
+
+        torch.randn_like = shared_randn_like
+        try:
+            return super().label(x)
+        finally:
+            torch.randn_like = orig
+
+
 class DiagnosticRejoin(RejoinTeacher):
     """DIAGNOSTIC ONLY (REQUESTS R3; uses simulator gradients, never a TUTOR arm): the gradient teacher's label, then
     label = u0_warm + diag_shrink (u0_adam - u0_warm) + diag_noise N(0, I), clipped to [-1, 1]. diag_shrink < 1 tests
@@ -478,4 +530,5 @@ class DiagnosticRejoin(RejoinTeacher):
 
 
 GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher, 'hindsight': HindsightTeacher,
-               'firstact': FirstActionTeacher, 'rejoin_diag': DiagnosticRejoin}
+               'firstact': FirstActionTeacher, 'rejoin_diag': DiagnosticRejoin,
+               'sample_shared': SharedNoiseSample}

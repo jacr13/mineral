@@ -102,6 +102,9 @@ mentor:
     # firstact (REQUESTS R6): first action by the Stage I solver (iters), continuation fa_cont (policy | refs)
     fa_cont: policy
     fa_jacobian: fd
+    # sample_shared (REQUESTS R4): the sample teacher with one noise draw shared by all states (batch | run), AR(1) corr
+    sample_shared: batch
+    sample_corr: 0.0
     # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
     diag_shrink: 1.0
     diag_noise: 0.0
