@@ -20,6 +20,7 @@ agent:
       mlp_kwargs:
         units: [128, 128]
   ckpt_every: -1
+  +resume_ckpt: true
   protocol_eval: true
   eval_every_steps: 500000
 logdir: workdir/focus-p3main-humanoid-bl_opolo__n0.3/$(date +%Y%m%d-%H%M%S.%2N)

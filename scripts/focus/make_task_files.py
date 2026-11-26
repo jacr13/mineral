@@ -389,6 +389,21 @@ def _replace_demo_file(obj, demo, noisy):
     return obj
 
 
+def anneal_task_file(batch, task, arm):
+    """<arm>__anneal: a SHAC-family arm (FOCUS, ILD) whose linear learning-rate schedule spans the run (max_epochs =
+    the epochs of the step budget, 64 envs x 32 steps each), so the rate reaches min_lr at the end. As run, max_epochs is
+    50000 (a cap) and the rate ends at 85-96 % of its start (Joao's question on late collapses, 2026-11-26)."""
+    base = arm[: -len('__anneal')]
+    body = (baseline_task_file if base.startswith('bl_') else task_file)(batch, task, base)
+    shac = body['agent'].get('shac')
+    if not shac or 'max_epochs' not in shac:
+        raise ValueError(f'{arm}: not a SHAC-family arm with max_epochs')
+    per_epoch = 64 * int(shac.get('horizon_len', 32))
+    shac['max_epochs'] = -(-int(shac['max_agent_steps']) // per_epoch)
+    body['logdir'] = f'workdir/focus-{batch}-{task}-{arm}/$(date +%Y%m%d-%H%M%S.%2N)'
+    return body
+
+
 def noisy_task_file(batch, task, arm):
     """<arm>__n<sigma>: the arm with its demonstrations replaced by the noisy copy (scripts/focus/make_noisy_demos.py:
     Gaussian noise of sigma x the per-dimension std on every observation, fixed seed, first 8 episodes). The file is
@@ -450,7 +465,9 @@ def main():
     for task in tasks:
         for arm in arms:
             path = os.path.join(out, f'{task}_{arm}.yaml')
-            if '__n' in arm:
+            if arm.endswith('__anneal'):
+                body = anneal_task_file(batch, task, arm)
+            elif '__n' in arm:
                 body = noisy_task_file(batch, task, arm)
             elif '__d' in arm:
                 body = demos_task_file(batch, task, arm)
