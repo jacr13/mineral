@@ -177,6 +177,9 @@ class FOCUS(SHAC):
             self.timer.end("train/actor_closure/backward_sim")
 
             with torch.no_grad():
+                info["diag_actor_grad_nonfinite"] = sum(
+                    (~torch.isfinite(q.grad)).sum() for q in self.actor.parameters() if q.grad is not None).float()
+                info["diag_actor_loss_nonfinite"] = (~torch.isfinite(actor_loss.detach())).float()
                 grad_norm_before_clip = grad_norm(self.actor.parameters())
                 if self.shac_config.truncate_grads:
                     if self.shac_config.get("max_grad_value", None) is not None:
@@ -205,6 +208,14 @@ class FOCUS(SHAC):
                 "row_mass_max",
                 "row_mass_cv",
                 "entropy",
+                "diag_envs_nonfinite_obs",
+                "diag_envs_exploding_obs",
+                "diag_envs_nonfinite_cost",
+                "diag_envs_nonfinite_cost_finite_obs",
+                "diag_steps_nonfinite_reward",
+                "diag_demo_feat_nonfinite",
+                "diag_actor_grad_nonfinite",
+                "diag_actor_loss_nonfinite",
             )
             for key in stat_keys:
                 if key in info:
@@ -436,6 +447,19 @@ class FOCUS(SHAC):
         self._maybe_save_plan_heatmaps(info)
         per_step_costs = info.pop("per_step_costs")  # [B,T]
         per_step_rewards = self._build_pseudo_rewards(per_step_costs)
+        with torch.no_grad():  # diagnostics of non-finite epochs (logging only, nothing below changes training)
+            obs_ok = torch.stack([torch.isfinite(v).reshape(v.shape[0], v.shape[1], -1).all(-1)
+                                  for v in obs_window.values()]).all(0)  # [B,T]
+            obs_big = torch.stack([(v.abs() > 1e6).reshape(v.shape[0], v.shape[1], -1).any(-1)
+                                   for v in obs_window.values()]).any(0)
+            cost_bad = ~torch.isfinite(per_step_costs)
+            info["diag_envs_nonfinite_obs"] = (~obs_ok).any(1).float().sum()
+            info["diag_envs_exploding_obs"] = (obs_big & obs_ok).any(1).float().sum()
+            info["diag_envs_nonfinite_cost"] = cost_bad.any(1).float().sum()
+            # non-finite cost although every state of the env's window is finite: the OT computation, not the simulator
+            info["diag_envs_nonfinite_cost_finite_obs"] = (cost_bad.any(1) & obs_ok.all(1)).float().sum()
+            info["diag_steps_nonfinite_reward"] = (~torch.isfinite(per_step_rewards)).float().sum()
+            info["diag_demo_feat_nonfinite"] = (~torch.isfinite(exp_z)).float().sum()
         info["pseudo_reward_mean"] = per_step_rewards.detach().mean()
         info["pseudo_reward_std"] = per_step_rewards.detach().std(unbiased=False)
         info["imitation_loss"] = loss.detach()

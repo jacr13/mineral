@@ -187,3 +187,11 @@ p1tune_cartpole:
   tasks: [cartpoleswingup]
   arms: [bl_gaifo_gp1, bl_gaifo_gp10, bl_maad_gp1, bl_maad_gp10, bl_gail_gp1, bl_gail_gp10, bl_pwil_b2, bl_pwil_b5,
          bl_ild_paper, bl_ild_paper_t32, bl_ild_win_sapo, bl_ild_win_shac, f_main_ot]
+
+# Diagnostics of the non-finite (NaN) epochs (Joao 2026-11-27): FOCUS-OT with the fixed bootstrap on Humanoid, two
+# reported seeds (300, 900; 900 fell at its final evaluation in p3main), code that logs per epoch the envs with
+# non-finite / exploding states, non-finite OT costs and rewards, and non-finite actor gradients (training unchanged).
+p6diag:
+  seeds: reported
+  tasks: [humanoid]
+  arms: [f_fix_ot]
