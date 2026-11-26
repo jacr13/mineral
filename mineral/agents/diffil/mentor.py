@@ -1649,6 +1649,12 @@ class MENTOR(Agent):
             visited = self.collect()
             self.last_visited = visited
             t_roll = time.time() - t0
+            # reward-free signal (candidate for choosing the horizon and the gate without the task return): distance of
+            # the learner's rollout states, collected with the policy of the previous round, to the nearest demo state
+            dd = self.demo_distance(visited)
+            qd = torch.quantile(dd, torch.tensor([0.5, 0.9], device=self.device))
+            signal_stats = {'signal/demo_dist_mean': dd.mean().item(), 'signal/demo_dist_q50': qd[0].item(),
+                            'signal/demo_dist_q90': qd[1].item()}
             x, a0, cost = self.label(visited)
             kk = self.last_label_k
             library_stats = self.bootstrap_library(cost)
@@ -1697,6 +1703,7 @@ class MENTOR(Agent):
                     'train/dataset_size': self.data_s.shape[0],
                     'train/fit_loss': fit_loss,
                     **library_stats,
+                    **signal_stats,
                     **adv_stats,
                     **relabel_stats,
                     **self._teacher_iter_stats(),

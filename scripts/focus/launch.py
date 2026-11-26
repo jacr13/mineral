@@ -1,14 +1,14 @@
 """Launch one batch of the design and write its manifest rows (the run list is never edited by hand).
 
-usage (from the FOCUS checkout):
+usage (from the FOCUS or MENTOR checkout; the project is the checkout's folder, see project.py):
   python scripts/focus/launch.py <batch> [--dry-run] [--priority 50] [--runtime 12h] [--gpu_type TYPE]
   python scripts/focus/launch.py <batch> --register-from-index <run_index.tsv>   (batch launched by enqueue.sh)
 
-1. Generates tasks/focus/<batch>/<task>_<arm>.yaml from make_task_files.py and refuses to continue if they differ
+1. Generates <task_dir>/<batch>/<task>_<arm>.yaml from the project's make_task_files.py and refuses to continue if they differ
    from the committed files (the task files of a launched batch are in git).
 2. Refuses a dirty tree for code (mineral/), so the commit stored with each run is the code that ran.
 3. Enqueues one run per (task, arm, seed) through spawner.py --enqueue and appends a row to
-   focus/results/data/manifest.tsv: batch task arm seed run_id commit task_file budget enqueued_utc.
+   <project>/results/data/manifest.tsv: batch task arm seed run_id commit task_file budget enqueued_utc.
    A (batch, task, arm, seed) already in the manifest is never enqueued again (a seed counts once); relaunching one
    needs --relaunch "<reason>", which is recorded in the row.
 """
@@ -24,11 +24,13 @@ import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import make_task_files as mtf  # noqa: E402
+import project  # noqa: E402
 
-FOCUS = os.path.abspath(os.path.join(HERE, '../../..'))  # .../focus
-MANIFEST = os.path.join(FOCUS, 'results/data/manifest.tsv')
-RUN_INDEX = os.path.join(FOCUS, 'agent/run_index.tsv')
+mtf = project.task_generator()
+P = project.P
+MANIFEST = project.MANIFEST
+RUN_INDEX = P['run_index']
+TASK_DIR, TAG = P['task_dir'], P['tag']
 COLS = ['batch', 'task', 'arm', 'seed', 'run_id', 'commit', 'task_file', 'budget', 'enqueued_utc', 'note']
 IMAGE = '/home/users/c/candidor/docker/mineral_uv.sif'
 SUPERVISOR = '/home/joao/docker/cluster-supervisor/data'
@@ -56,8 +58,8 @@ def append_manifest(row):
 
 
 def cells(batch):
-    design = yaml.safe_load(open(os.path.join(HERE, 'design.yaml')))[batch]
-    seeds = yaml.safe_load(open(os.path.join(HERE, 'seeds.yaml')))[design['seeds']]
+    design = yaml.safe_load(open(project.DESIGN))[batch]
+    seeds = yaml.safe_load(open(project.SEEDS))[design['seeds']]
     seeds = seeds[: int(design.get('n_seeds', len(seeds)))]
     skip = design.get('skip', {}) or {}
     for task in design['tasks']:
@@ -107,29 +109,29 @@ def main():
     done = {(r['batch'], r['task'], r['arm'], r['seed']) for r in read_manifest()}
 
     if args.register_from_index:
-        # rows of a batch launched with agent/enqueue.sh: "focus <batch> <task> <arm> seed=N run_id commit"
+        # rows of a batch launched by hand: "<tag> <batch> <task> <arm> seed=N run_id commit"
         want = {(t, a, str(s)) for t, a, s in todo}
         n = 0
         for line in open(args.register_from_index):
-            m = re.match(rf'^focus {re.escape(args.batch)} (\S+) (\S+) seed=(\d+) (\S+) (\S+)$', line.strip())
+            m = re.match(rf'^{TAG} {re.escape(args.batch)} (\S+) (\S+) seed=(\d+) (\S+) (\S+)$', line.strip())
             if not m or (m[1], m[2], m[3]) not in want or (args.batch, m[1], m[2], m[3]) in done:
                 continue
             append_manifest(dict(batch=args.batch, task=m[1], arm=m[2], seed=m[3], run_id=m[4], commit=m[5],
-                                 task_file=f'tasks/focus/{args.batch}/{m[1]}_{m[2]}.yaml',
-                                 budget=mtf.TASKS[m[1]][1], enqueued_utc='', note='registered from run_index'))
+                                 task_file=f'{TASK_DIR}/{args.batch}/{m[1]}_{m[2]}.yaml',
+                                 budget=mtf.budget_of(args.batch, m[1], m[2]), enqueued_utc='', note='registered from run_index'))
             n += 1
         print(f'registered {n} runs of {args.batch}')
         return
 
-    os.chdir(os.path.join(FOCUS, 'code'))
+    os.chdir(project.CODE)
     if git('status', '--porcelain', 'mineral') and not args.dry_run and not args.commit:
         sys.exit('uncommitted changes in mineral/: commit them first (the stored commit must be the code that ran)')
     # generate task files and check they are committed
     arms = sorted({a for _, a, _ in todo})
-    subprocess.run([sys.executable, os.path.join(HERE, 'make_task_files.py'), args.batch, *arms,
+    subprocess.run([sys.executable, project.TASK_GENERATOR, args.batch, *arms,
                     '--tasks', *sorted({t for t, _, _ in todo})], check=True)
-    if git('status', '--porcelain', f'tasks/focus/{args.batch}') and not args.dry_run:
-        sys.exit(f'generated task files of {args.batch} differ from git: commit tasks/focus/{args.batch} first')
+    if git('status', '--porcelain', f'{TASK_DIR}/{args.batch}') and not args.dry_run:
+        sys.exit(f'generated task files of {args.batch} differ from git: commit {TASK_DIR}/{args.batch} first')
     commit = git('rev-parse', args.commit or 'HEAD')
 
     n = 0
@@ -138,11 +140,11 @@ def main():
         if key in done and not args.relaunch:
             continue
         env_file = f'{args.batch}/{task}_{arm}.yaml'
-        cmd = ['uv', 'run', '--locked', 'python', 'spawner.py', '--task_name', 'focus', '--env_files', env_file,
+        cmd = ['uv', 'run', '--locked', 'python', 'spawner.py', '--task_name', P['task_name'], '--env_files', env_file,
                '--deployment', 'slurm', '--docker', '--docker_image', IMAGE,
                '--gpu_constraint', args.gpu_constraint, '--supervisor_dir', SUPERVISOR,
                '--no-deploy_now', '--priority', str(args.priority), '--runtime', args.runtime,
-               '--git_commit', commit, '--git_branch', 'focus-wip', '--set', f'seed={seed}']
+               '--git_commit', commit, '--git_branch', P['branch'], '--set', f'seed={seed}']
         if args.gpu_type:
             cmd += ['--gpu_type', args.gpu_type]
         if args.cluster:
@@ -171,7 +173,7 @@ def main():
                    note=f'relaunch: {args.relaunch}' if key in done else '')
         append_manifest(row)
         with open(RUN_INDEX, 'a') as f:
-            f.write(f'focus {args.batch} {task} {arm} seed={seed} {m[1]} {commit[:7]}\n')
+            f.write(f'{TAG} {args.batch} {task} {arm} seed={seed} {m[1]} {commit[:7]}\n')
         print(args.batch, task, arm, seed, m[1])
         n += 1
     print(f'{n} runs {"listed" if args.dry_run else "enqueued"} for {args.batch}')

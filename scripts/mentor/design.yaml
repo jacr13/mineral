@@ -1,0 +1,38 @@
+# Batches of the MENTOR rerun. One batch = every arm and its control, launched together from one commit.
+# Arms are defined in make_task_files.py (the 16 Nov frozen base plus named changes, composed with '-').
+# launch.py <batch> (scripts/focus/launch.py, run from the MENTOR checkout) generates the task files, enqueues the runs
+# and writes mentor/results/data/manifest.tsv. Seeds: scripts/focus/seeds.yaml (shared with FOCUS).
+# NOTHING HERE IS LAUNCHED WITHOUT JOAO'S GO.
+
+# ---- Phase 0: settings, tuning seeds only (REPORT.md, entry 2026-11-26) ----
+
+# Teacher horizon on the four DFlex tasks. The task's frozen value is one of the arms (Hopper / Ant k8, Humanoid k16,
+# SNU k12): it is the "frozen configuration still holds under the protocol" check. Also the data for a horizon rule
+# that does not read the task return (reward-free signals logged per round: teacher cost, demo distance).
+m0k:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [k8, k12, k16]
+
+# The cheaper budget of X6 against the frozen budget (decides the cost claim). Control: frozen.
+m0cheap:
+  seeds: tuning
+  tasks: [hopper, ant, humanoid, snu_humanoid]
+  arms: [frozen, cheap]
+  control: frozen
+
+# SNU Humanoid: horizon 16 and 24 rounds, with the frozen and the cheap budget (frozen = K 12, 12 rounds;
+# cheap = K 12, 24 rounds). Control: frozen.
+m0snu:
+  seeds: tuning
+  tasks: [snu_humanoid]
+  arms: [frozen, k16, r24, k16-r24, cheap, cheap-k16]
+  control: frozen
+
+# HalfCheetah and CartPole Swing-Up: first settings, from Hopper's (K 8, calibrated gate), plus cloning only.
+# HalfCheetah demos are not on the cluster: --attach_input experts/demos=<dir with the HalfCheetah demo file>.
+m0new:
+  seeds: tuning
+  tasks: [cheetah, cartpoleswingup]
+  arms: [k8, k12, k16, nogate, clone]
+  control: k8
