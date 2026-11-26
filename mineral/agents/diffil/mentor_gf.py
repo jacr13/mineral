@@ -106,7 +106,8 @@ class _GFTeacher(RejoinTeacher):
     def fixed_target(self, x, a_ref, traj, j):
         """Roll the references once; the phase offset with the smallest end error fixes the target for this state.
         Returns the target (n, D) and the weighted end error of the references (n, D)."""
-        y, _ = self.rollout(self.sim_base, x, a_ref, grad=False)
+        y, outside = self.rollout(self.sim_base, x, a_ref, grad=False)
+        self._ref_rollout = (y, outside)
         tg = self.targets(traj, j, x)
         e = (y[:, None] - tg) * self.w
         k = (e**2).sum(-1).argmin(-1)
@@ -532,3 +533,13 @@ class DiagnosticRejoin(RejoinTeacher):
 GF_TEACHERS = {'fdadam': FDAdamTeacher, 'lmplan': LMPlanTeacher, 'mppi': MPPITeacher, 'hindsight': HindsightTeacher,
                'firstact': FirstActionTeacher, 'rejoin_diag': DiagnosticRejoin,
                'sample_shared': SharedNoiseSample}
+
+
+def _register_late():
+    """Teachers in their own modules that build on _GFTeacher (imported here, after it exists)."""
+    from .mentor_hit import HindsightInverseTeacher
+
+    GF_TEACHERS['hit'] = HindsightInverseTeacher
+
+
+_register_late()

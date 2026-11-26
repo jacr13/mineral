@@ -1,0 +1,52 @@
+# TUTOR: MENTOR's three stages without simulator gradients (agent in mineral/agents/diffil/tutor.py).
+# Extends the MENTOR configuration unchanged; adds the options of the gradient-free teachers (mentor_gf.py,
+# mentor_hit.py), selected with mentor.teacher.kind (any MENTOR kind still works and runs MENTOR's own code).
+# Launch through scripts/tutor/run.py (registers the agent, then runs mineral.scripts.run).
+defaults:
+  - /agent/MENTOR/DFlex@_here_
+  - _self_
+
+algo: TUTOR
+
+mentor:
+  teacher:
+      # TUTOR teachers without simulator gradients (mentor_gf.py; kind fdadam | lmplan | mppi; forward steps only).
+      # fdadam: Adam (lr, iters as rejoin) on a forward-difference plan gradient (fd_mode full: every plan coordinate;
+      # rand: fd_dirs random directions); lmplan: Levenberg-Marquardt on the plan (lm_jacobian fd | broyden, iters);
+      # mppi: softmin-weighted mean of sample_n perturbations of radius sample_noise (iters), mppi_pull on u_0
+      fd_mode: full
+      fd_h: 0.01
+      fd_dirs: 16
+      lm_jacobian: fd
+      lm_lambda: 0.01
+      mppi_temp: 0.1
+      mppi_pull: 0.0
+      mppi_antithetic: True
+      # hindsight (REQUESTS R5a): sample_n noisy plans of radius sample_noise around the references, plan = regression
+      # read at zero end error (hs_form reverse: noise on [1, e]; forward: e on [1, noise], then a damped LS step)
+      hs_form: reverse
+      hs_ridge: 0.01
+      hs_passes: 1
+      # firstact (REQUESTS R6): first action by the Stage I solver (iters), continuation fa_cont (policy | refs)
+      fa_cont: policy
+      fa_jacobian: fd
+      # sample_shared (REQUESTS R4): the sample teacher with one noise draw shared by all states (batch | run), AR(1) corr
+      sample_shared: batch
+      sample_corr: 0.0
+      # hit (hindsight inverse teacher, mentor_hit.py): goal-conditioned inverse model g(x0, xK) -> plan trained on every
+      # simulated K-step segment (demo windows + Stage I actions, learner rollouts, its own rollouts); label by
+      # p <- p + g(x, s*) - g(x, y) corrections (hit_iters rollouts) and hit_explore noisy rollouts for the buffer
+      hit_head: mse
+      hit_iters: 3
+      hit_explore: 4
+      hit_buffer: 1000000
+      hit_round_steps: 2000
+      hit_batch_steps: 50
+      hit_flow_steps: 10
+      hit_min_data: 5000
+      hit_lr: 0.001
+      # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
+      diag_shrink: 1.0
+      diag_noise: 0.0
+      gf_chunk: 16  # plans per state rolled out together (wide simulator of batch x gf_chunk states)
+      gf_seed: ${...seed}  # generator of the sampled directions (the run seed)

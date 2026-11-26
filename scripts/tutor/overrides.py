@@ -1,6 +1,6 @@
 """Hydra overrides of a frozen MENTOR task file (tasks/mentor/icml/dflex_<task>.yaml) for local TUTOR runs.
 
-Stage I is replaced by Levenberg-Marquardt with forward-difference Jacobians (no simulator gradient), as in the
+Agent TUTOR/DFlex (MENTOR unchanged for MENTOR teacher kinds). Stage I is replaced by Levenberg-Marquardt with forward-difference Jacobians (no simulator gradient), as in the
 gradient-free Stage I of the 14 Nov ablation (s1v, LM-fd): 5 iterations, Jacobian every iteration; Humanoid and SNU
 use forward differences then Broyden updates (fd-Broyden, as their source groups).
 usage: python scripts/tutor/overrides.py <task> <logdir> [seed] [key=val ...]   (keys under agent.mentor)
@@ -34,7 +34,7 @@ def overrides(task, logdir, seed=10, extra=()):
         k, v = kv.split('=', 1)
         m[k] = v
     fmt = lambda v: '[' + ','.join(map(str, v)) + ']' if isinstance(v, list) else str(v)
-    out = [f'task=DFlex', f'task.env.env_name={task}', f"agent={body['agent']['name']}", f'logdir={logdir}',
+    out = [f'task=DFlex', f'task.env.env_name={task}', 'agent=TUTOR/DFlex', f'logdir={logdir}',
            'wandb.mode=disabled', 'run=train', f'seed={seed}']
     return out + [f'agent.mentor.{k}={fmt(v)}' for k, v in m.items()]
 

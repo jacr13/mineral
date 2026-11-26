@@ -128,6 +128,10 @@ def main():
     orig_train = M.MENTOR.train
     M.MENTOR.train = probe
     sys.argv = ['run'] + args.hydra
+    import mineral.agents as _agents
+    from mineral.agents.diffil.tutor import TUTOR as _TUTOR
+
+    _agents.TUTOR = _TUTOR  # TUTOR agent (scripts/tutor/run.py does the same)
     import runpy
 
     runpy.run_module('mineral.scripts.run', run_name='__main__')

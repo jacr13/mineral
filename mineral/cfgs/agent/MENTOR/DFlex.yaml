@@ -82,34 +82,6 @@ mentor:
     sample_mode: best  # best: re-sample around the best sequence; cem: around the mean of the best quarter
     sample_u0_iters: 0  # > 0: then refine the first action alone (rest of the plan fixed)
     sample_u0_noise: 0.2
-    # TUTOR teachers without simulator gradients (mentor_gf.py; kind fdadam | lmplan | mppi; forward steps only).
-    # fdadam: Adam (lr, iters as rejoin) on a forward-difference plan gradient (fd_mode full: every plan coordinate;
-    # rand: fd_dirs random directions); lmplan: Levenberg-Marquardt on the plan (lm_jacobian fd | broyden, iters);
-    # mppi: softmin-weighted mean of sample_n perturbations of radius sample_noise (iters), mppi_pull on u_0
-    fd_mode: full
-    fd_h: 0.01
-    fd_dirs: 16
-    lm_jacobian: fd
-    lm_lambda: 0.01
-    mppi_temp: 0.1
-    mppi_pull: 0.0
-    mppi_antithetic: True
-    # hindsight (REQUESTS R5a): sample_n noisy plans of radius sample_noise around the references, plan = regression
-    # read at zero end error (hs_form reverse: noise on [1, e]; forward: e on [1, noise], then a damped LS step)
-    hs_form: reverse
-    hs_ridge: 0.01
-    hs_passes: 1
-    # firstact (REQUESTS R6): first action by the Stage I solver (iters), continuation fa_cont (policy | refs)
-    fa_cont: policy
-    fa_jacobian: fd
-    # sample_shared (REQUESTS R4): the sample teacher with one noise draw shared by all states (batch | run), AR(1) corr
-    sample_shared: batch
-    sample_corr: 0.0
-    # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
-    diag_shrink: 1.0
-    diag_noise: 0.0
-    gf_chunk: 16  # plans per state rolled out together (wide simulator of batch x gf_chunk states)
-    gf_seed: ${...seed}  # generator of the sampled directions (the run seed)
     plan_labels: 1  # rejoin: also add (x_k, u_k) for the first plan_labels - 1 later steps of each plan
     horizon: 8
     num_windows: 3

@@ -14,6 +14,6 @@ commit=$(git rev-parse --short HEAD)$(git diff --quiet -- mineral || echo "-dirt
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$tag" "$task" "$seed" "$commit" "$logdir" "$*" "$(date -Is)" >> "$root/agent/run_index.tsv"
 ov=$(uv run --locked python scripts/tutor/overrides.py "$task" "$logdir" "$seed" "$@" | sed "s/ run=train / /")
 mkdir -p "$logdir"
-uv run --locked python -m mineral.scripts.run $ov run=train_eval agent.protocol_eval=True agent.eval_every_steps=1 \
+uv run --locked python scripts/tutor/run.py $ov run=train_eval agent.protocol_eval=True agent.eval_every_steps=1 \
   agent.ckpt_every=-1 > "$logdir/stdout.log" 2>&1
 echo "done $logdir"
