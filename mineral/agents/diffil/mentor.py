@@ -832,11 +832,27 @@ class SampleTeacher(RejoinTeacher):
 class MENTOR(Agent):
     r"""MENTOR: Mimicking Expert states by iNverting the simulaTOR (see module docstring)."""
 
+    # agent_steps is the total of simulator steps of every phase (learner rollouts + PhaseCounters), so that the
+    # shared protocol (eval curve, budget.json, scores.json) and the tables count MENTOR's steps as the protocol asks.
+    # The learner's own rollout steps are kept in learner_steps.
+    @property
+    def agent_steps(self):
+        counters = self.__dict__.get('counters')
+        return self.learner_steps + (int(counters.total) if counters is not None else 0)
+
+    @agent_steps.setter
+    def agent_steps(self, value):
+        counters = self.__dict__.get('counters')
+        self.learner_steps = int(value) - (int(counters.total) if counters is not None else 0)
+
     def __init__(self, full_cfg, **kwargs):
         self.network_config = full_cfg.agent.network
         self.mentor_config = cfg = full_cfg.agent.mentor
         self.num_actors = int(cfg.num_actors)
+        self.learner_steps = 0
         super().__init__(full_cfg, **kwargs)
+        if self.resume_ckpt:  # the generic resume (mineral/common/resume.py) is not checked on MENTOR's state yet
+            raise ValueError('MENTOR does not support agent.resume_ckpt yet: do not launch it with --resumable')
         if self.normalize_input:
             raise ValueError('MENTOR standardises inputs with the demo statistics; set network.normalize_input=False')
 
@@ -954,7 +970,7 @@ class MENTOR(Agent):
         return self.wall_offset + (time.time() - self.t_start if self.t_start is not None else 0.0)
 
     def _sim_stats(self):
-        learner = int(self.agent_steps)
+        learner = int(self.learner_steps)
         return {
             'sim_steps/learner': learner,
             'sim_steps/stage1': int(self.counters['stage1'].total),
@@ -987,6 +1003,10 @@ class MENTOR(Agent):
         return {'synergies/explained_variance': explained}
 
     def get_actions(self, obs, sample: bool = False):
+        return self.env_action(self.policy(self._state_obs(obs)))
+
+    def protocol_act(self, obs, sample=False, t=None):
+        # the policy is deterministic: the stochastic protocol score (scores_stochastic.json) is the same policy
         return self.env_action(self.policy(self._state_obs(obs)))
 
     # ---- Stage I ----
@@ -1302,7 +1322,7 @@ class MENTOR(Agent):
             acts.append(a.clone())
             breaks.append(broken | done.bool())
             self.obs = self._state_obs(self._convert_obs(obs)).clone()
-            self.agent_steps += self.num_actors
+            self.learner_steps += self.num_actors
         # per-step tensors [T, n, ...] for library bootstrapping
         self.last_rollout = {
             'obs': torch.stack(visited),
@@ -1536,6 +1556,8 @@ class MENTOR(Agent):
         cfg = self.mentor_config
         self.t_start = time.time()
         rounds = int(cfg.rounds)
+        max_sim_steps = int(cfg.get('max_sim_steps', 0) or 0)
+        self.protocol_begin()  # with eval_every_steps > 0: evaluation of the initial policy at step 0
         if self.A_hat is None:
             stats = self.invert()
             if int(cfg.get('synergies', {}).get('dims', 0)) > 0:
@@ -1612,7 +1634,11 @@ class MENTOR(Agent):
                 _, safe_stop = self.job_clock.step(check_safe_stop=True)
                 if safe_stop:
                     print('Not enough time left for another round. Exiting cleanly.')
+                    self.protocol_clock_stop()
                     break
+            if max_sim_steps > 0 and self.agent_steps >= max_sim_steps:
+                print(f'[MENTOR] simulator-step budget {max_sim_steps:,} reached at {int(self.agent_steps):,}: stopping')
+                break
             self.round += 1
             self.epoch = self.round
             relabel_stats = {}
@@ -1679,6 +1705,9 @@ class MENTOR(Agent):
                     'time/fit': time.time() - t1,
                 }
             )
+        # budget.json: the budget is the step cap when one is set, else the rounds (reached = every round ran)
+        budget = max_sim_steps if max_sim_steps > 0 else (self.agent_steps if self.round >= rounds else self.agent_steps + 1)
+        self.protocol_end(budget)
         self.save(os.path.join(self.ckpt_dir, 'final.pth'))
 
     def _teacher_iter_stats(self):
@@ -1689,9 +1718,35 @@ class MENTOR(Agent):
         self.teacher.iters_used = []
         return stats
 
+    def _protocol_round(self):
+        """Shared protocol at the end of a round (the policy only changes in a round's fit): periodic evaluation on the
+        dedicated env (eval_curve.jsonl) when due, training-time budget. Returns the evaluation record, or None."""
+        if not self.protocol_eval:
+            return None
+        curve = os.path.join(self.logdir, 'eval_curve.jsonl')
+        n_before = sum(1 for _ in open(curve)) if os.path.exists(curve) else 0
+        self.protocol_step()
+        if not os.path.exists(curve):
+            return None
+        lines = open(curve).read().splitlines()
+        return json.loads(lines[-1]) if len(lines) > n_before else None
+
     def _log_round(self, train_stats):
         t0 = time.time()
-        returns, lengths = self.evaluate(int(self.mentor_config.eval_episodes_per_env))
+        rec = self._protocol_round()
+        if self.protocol_eval:  # one evaluation per round: the protocol's (64 dedicated envs, 2 episodes each)
+            if rec is None:  # not due this round (eval_every_steps > 1)
+                returns, lengths = None, None
+            else:
+                returns, lengths = rec['episode_rewards'], rec['episode_lengths']
+        else:
+            returns, lengths = self.evaluate(int(self.mentor_config.eval_episodes_per_env))
+        if returns is None:
+            metrics = {'round': self.round, **train_stats, **self._sim_stats(), 'time/wall': self._wall()}
+            self.writer.add(self.agent_steps, metrics)
+            self.writer.write()
+            print(f'[MENTOR] round {self.round}: sim steps {metrics["sim_steps/total"]:.3g}, wall {metrics["time/wall"]:.0f}s')
+            return
         mean_ret = float(np.mean(returns))
         metrics = {
             'round': self.round,
@@ -1715,6 +1770,12 @@ class MENTOR(Agent):
         self._write_scores(returns, lengths)
         self._checkpoint_save(mean_ret)
 
+    @property
+    def _scores_file(self):
+        # under the protocol, scores.json is the protocol's final score (protocol_final); MENTOR's per-round file,
+        # with the per-phase step counters, goes next to it
+        return 'mentor_scores.json' if self.protocol_eval else 'scores.json'
+
     def _write_scores(self, returns, lengths):
         scores = {
             'epoch': self.epoch,
@@ -1726,7 +1787,7 @@ class MENTOR(Agent):
             'eval_scores/episode_rewards': returns,
             'eval_scores/episode_lengths': lengths,
         }
-        json.dump(scores, open(os.path.join(self.logdir, 'scores.json'), 'w'), indent=4)
+        json.dump(scores, open(os.path.join(self.logdir, self._scores_file), 'w'), indent=4)
 
     @torch.no_grad()
     def evaluate(self, episodes_per_env=2):
@@ -1799,7 +1860,8 @@ class MENTOR(Agent):
         ckpt = {
             'epoch': self.epoch,
             'round': self.round,
-            'agent_steps': self.agent_steps,
+            'agent_steps': self.agent_steps,  # total simulator steps (learner + every phase counter)
+            'learner_steps': self.learner_steps,
             'policy': self.policy.state_dict(),
             'A_hat': self.A_hat,
             'synergies': (self.spec.mean, self.spec.basis, self.spec.scale) if isinstance(self.spec, SynergySpec) else None,
@@ -1815,7 +1877,7 @@ class MENTOR(Agent):
     def load(self, f, ckpt_keys=''):
         ckpt = torch.load(f, map_location=self.device)
         self.policy.load_state_dict(ckpt['policy'])
-        self.epoch, self.round, self.agent_steps = ckpt['epoch'], ckpt['round'], ckpt['agent_steps']
+        self.epoch, self.round = ckpt['epoch'], ckpt['round']
         self.A_hat, self.data_s, self.data_a = ckpt['A_hat'], ckpt['data_s'], ckpt['data_a']
         self.data_k = ckpt.get('data_k')
         if self.data_k is None:
@@ -1826,6 +1888,8 @@ class MENTOR(Agent):
             self.counters.load_state_dict(ckpt['counters'])
         else:  # older checkpoints kept one counter for everything after the learner: keep its total under teacher
             self.counters['teacher'].load_state_dict(ckpt['counter'])
+        # checkpoints before learner_steps existed stored the learner's rollout steps as agent_steps
+        self.learner_steps = int(ckpt.get('learner_steps', ckpt['agent_steps']))
         self.stage1_steps = ckpt['stage1_steps']
         self.wall_offset = ckpt.get('wall', 0.0)
         self.policy.eval()
