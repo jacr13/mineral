@@ -1,0 +1,37 @@
+# TUTOR smoke test for the pc pilot host (Docker): frozen MENTOR Hopper, Stage I by forward differences, one round,
+# short fits; checks image, GPU, inputs, checkout and results on that machine (about 2 minutes). Not a result.
+task:
+  name: DFlex
+  env:
+    env_name: hopper
+agent:
+  name: MENTOR/DFlex
+  ckpt_every: -1
+  protocol_eval: true
+  eval_every_steps: 1
+  mentor:
+    rounds: 1
+    demos:
+      path: "experts/demos/DFlex_hopper_demos128_return4812_len1000.pt"
+      n_trajs: 8
+    invert:
+      jacobian: fd
+      iters: 5
+    teacher:
+      anchor_mix: 0.5
+      batches_per_round: 2
+      horizon: 8
+    fit:
+      init_steps: 1000
+      steps: 500
+    rollout:
+      length: 120
+      reset_every: 60
+      noise: 0.2
+logdir: "workdir/tutor-smoke-hopper-pc/$(date +%Y%m%d-%H%M%S.%2N)"
+wandb:
+  mode: offline
+run: train_eval
+seed: 10
+spawner:
+  runtime: "1h"

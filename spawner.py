@@ -92,7 +92,7 @@ for v in $(env | awk -F= '/^SLURM_/ {{print $1}}'); do
   export APPTAINERENV_$v="${{!v}}"
 done
 
-srun {command}
+{launcher}{command}
 """
 
 
@@ -392,7 +392,18 @@ def _write_slurm_script(script_path, name, command, args):
     if args.docker:
         if args.docker_image is None:
             raise ValueError("Docker image must be specified when using Apptainer.")
-        if run_info:
+        if run_info and getattr(args, 'container', 'apptainer') == 'docker':
+            # pilot host (a PC without Slurm, e.g. WSL2 + Docker): plain bash, docker run; the image must exist there
+            vols = ['-v "$RUN_ROOT/source:/workspace"', '-v "$RUN_ROOT/results:/results"']
+            vols += ['-v ' + shell_path(host, f':/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
+            vols += ['-v "$WARP_CACHE_ROOT:/cache/warp"']  # persistent kernel cache, set up by bootstrap()
+            command = (
+                'docker run ' + ('--gpus all ' if args.device == 'gpu' else '')
+                + '-u "$(id -u):$(id -g)" -e CLUSTER_RUN_ID -e MINERAL_GIT_COMMIT -e WARP_CACHE_PATH=/cache/warp '
+                + '-e MINERAL_RUN_RESULTS=/results -w /workspace ' + ' '.join(vols) + ' ' + shlex.quote(args.docker_image)
+                + ' bash -c ' + shlex.quote('cd /workspace && ' + command)
+            )
+        elif run_info:
             binds = ['-B "$RUN_ROOT/source:/workspace"', '-B "$RUN_ROOT/results:/results"']
             binds += ['-B ' + shell_path(host, f':/workspace/{relative}:ro') for relative, host in run_info['inputs'].items()]
             binds += ['-B "$WARP_CACHE_ROOT:/cache/warp"']  # persistent kernel cache, set up by bootstrap()
@@ -434,6 +445,7 @@ def _write_slurm_script(script_path, name, command, args):
         memory=memory,
         extra_params=extra_params,
         modules=modules,
+        launcher='' if getattr(args, 'container', 'apptainer') == 'docker' else 'srun ',
         command=command,
     )
     # SLURM opens stdout/stderr before executing the script.
@@ -588,7 +600,7 @@ def run(args):
                 continue
             setattr(effective_args, key, value)
         if supervisor_dir:
-            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'attach_input', 'priority', 'uv_update', 'cluster'):
+            for key in ('deployment', 'deploy_now', 'supervisor_dir', 'enqueue', 'cluster_repo', 'git_commit', 'git_remote', 'git_branch', 'cluster_input', 'mcp_input', 'attach_input', 'priority', 'uv_update', 'cluster', 'container'):
                 if getattr(effective_args, key) != getattr(args, key):
                     raise ValueError(f'Supervisor option {key} must be supplied on the command line, not overridden by the task')
         if effective_args.runtime is None:
@@ -834,6 +846,13 @@ if __name__ == "__main__":
         ),
     )
     boolean_flag(parser, "docker", default=False, help="use docker?")
+    parser.add_argument(
+        "--container",
+        choices=["apptainer", "docker"],
+        default="apptainer",
+        help="supervisor runs with --docker: apptainer exec under srun (Slurm clusters) or docker run in plain bash "
+        "(pilot hosts such as the pc; --docker_image is then a Docker image name that must exist on that machine)",
+    )
     parser.add_argument(
         "--docker_image",
         type=str,
