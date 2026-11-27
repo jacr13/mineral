@@ -29,6 +29,11 @@ ARMS = {
     'lmmodel_every': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 10},
     'lmmodel_every20': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 20},
     'lmmodel_br': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'broyden', 'teacher.iters': 20},
+    # 3x more fitting of the forward model per round and per labelled batch (no extra simulator steps)
+    'lmmodel_every_fit3x': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 10,
+                            'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150},
+    'lmmodel_every20_fit3x': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 20,
+                              'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150},
     'hsfwd': {'teacher.kind': 'hindsight', 'teacher.hs_form': 'forward', 'teacher.sample_n': 64,
               'teacher.sample_noise': 0.1},
 }
