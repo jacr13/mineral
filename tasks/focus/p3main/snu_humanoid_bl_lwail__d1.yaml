@@ -26,6 +26,7 @@ agent:
     gp_coef: 10
     minus: true
   ckpt_every: -1
+  +resume_ckpt: true
   protocol_eval: true
   eval_every_steps: 500000
 logdir: workdir/focus-p3main-snu_humanoid-bl_lwail__d1/$(date +%Y%m%d-%H%M%S.%2N)
