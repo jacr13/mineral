@@ -45,7 +45,8 @@ def main():
         name = os.path.basename(f)
         body = yaml.safe_load(open(f))
         task = body['task']['env']['env_name']
-        arm = name[: -len('.yaml')][len(task) + 1 :]
+        arm = re.sub(r'_s\d+$', '', name[: -len('.yaml')][len(task) + 1 :])
+        seeds = [int(body['seed'])]
         cmd = ['uv', 'run', '--locked', 'python', 'spawner.py', '--task_name', f'tutor/gf/{args.batch}', '--env_files', name,
                '--deployment', 'slurm', '--docker', '--container', 'docker', '--docker_image', IMAGE, '--no-deploy_now',
                '--cluster', 'pc', '--supervisor_dir', SUPERVISOR, '--priority', str(args.priority), '--runtime', '12h',
@@ -56,10 +57,10 @@ def main():
             continue
         out = subprocess.run(cmd + ['--enqueue'], capture_output=True, text=True, cwd=CODE)
         ids = re.findall(r'Enqueued run ([0-9a-f]{32})', out.stdout)
-        if out.returncode != 0 or len(ids) != len(body['sweep']['seed']):
+        if out.returncode != 0 or len(ids) != len(seeds):
             sys.exit(f'enqueue failed for {name}:\n{out.stdout[-1500:]}\n{out.stderr[-1500:]}')
         with open(INDEX, 'a') as fh:
-            for seed, rid in zip(body['sweep']['seed'], ids):
+            for seed, rid in zip(seeds, ids):
                 fh.write(f'gf {args.batch} {arm} {task}\t{task}\t{seed}\t{head[:7]}\tsupervisor:{rid}\tpc docker {IMAGE}'
                          f'\t{datetime.datetime.now().isoformat(timespec="seconds")}\n')
                 print(f'{task} {arm} seed {seed}: {rid}')
