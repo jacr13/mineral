@@ -8,6 +8,7 @@ from .diffil.focus_ppo import FOCUSPPO
 from .diffil.focus_sac import FOCUSSAC
 from .diffil.ild import ILD
 from .diffil.mentor import MENTOR
+from .diffil.tutor import TUTOR  # MENTOR without simulator gradients (TUTOR paper)
 from .diffrl.bptt import BPTT
 from .diffrl.shac import SHAC
 
@@ -26,6 +27,7 @@ from .ppo.ppo import PPO
 from .sac.sac import SAC
 
 __all__ = [
+    'TUTOR',
     'DDPG',
     'BPTT',
     'SHAC',
