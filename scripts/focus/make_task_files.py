@@ -190,6 +190,10 @@ F_ARMS['f_fix_ot'] = dict(_N, actor_bootstrap='next_state')
 # schedule, so the alignment comparison is rerun with it as f_fix_dtw__anneal / f_fix_noalign__anneal)
 F_ARMS['f_fix_dtw'] = dict(_N, imitation_loss_type='softdtw', actor_bootstrap='next_state')
 F_ARMS['f_fix_noalign'] = dict(_N, imitation_loss_type='index', actor_bootstrap='next_state')
+# few-demonstration study with the main arm (Joao, 2026-11-28: redo it with the new formulation), run as
+# f_fix_demos<N>__anneal
+for _n in (1, 2, 4, 16):
+    F_ARMS[f'f_fix_demos{_n}'] = dict(_N, actor_bootstrap='next_state', _n_trajs=_n)
 F_ARMS['f_ab_kmin'] = dict(_N, loss_best_of_k_tau=0.001)
 F_ARMS['f_ab_kmean'] = dict(_N, loss_best_of_k_tau=100.0)
 # Sinkhorn entropy and iterations (Joao, 2026-11-25), FOCUS-OT is eps 0.1 / 60 iterations. Measured on demo windows
