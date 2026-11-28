@@ -34,6 +34,15 @@ ARMS = {
                             'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150},
     'lmmodel_every20_fit3x': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 20,
                               'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150},
+    # LM-Broyden on a low-rank plan: 4 cosine time functions x actions (or x 10 Stage I action PCs)
+    'lmlr4': {'teacher.kind': 'lmlr', 'teacher.lm_jacobian': 'broyden', 'teacher.iters': 20, 'teacher.lr_time': 4},
+    'lmlr4_pca10': {'teacher.kind': 'lmlr', 'teacher.lm_jacobian': 'broyden', 'teacher.iters': 20, 'teacher.lr_time': 4,
+                    'teacher.lr_act': 10},
+    # lmmodel with 3x model fitting and the secant (Sobolev) loss on the LM pairs
+    'lmmodel_every20_fit3x_sob': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 20,
+                                  'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150, 'teacher.lm_sobolev': 1.0},
+    'lmmodel_every_fit3x_sob': {'teacher.kind': 'lmmodel', 'teacher.lm_model_jac': 'every', 'teacher.iters': 10,
+                                'teacher.hit_round_steps': 6000, 'teacher.hit_batch_steps': 150, 'teacher.lm_sobolev': 1.0},
     'hsfwd': {'teacher.kind': 'hindsight', 'teacher.hs_form': 'forward', 'teacher.sample_n': 64,
               'teacher.sample_noise': 0.1},
 }

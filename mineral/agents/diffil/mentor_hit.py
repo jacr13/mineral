@@ -208,6 +208,10 @@ class ModelLMTeacher(_Segments, LMPlanTeacher):
         self.jac = 'fd' if self.model_jac == 'every' else 'broyden'  # LMPlanTeacher: recompute every iteration or once
         self.init_segments(cfg, self.D + self.K * self.A, self.D)
         self._n_fd = 0
+        # lm_sobolev > 0: also fit the model's differences to secant pairs, f(x, a1) - f(x, a0) = w (y1 - y0), from
+        # consecutive LM rollouts of the same states (exact, free); relative squared error, weight lm_sobolev
+        self.sobolev = float(cfg.get('lm_sobolev', 0.0))
+        self.pairs, self._prev = None, None
 
     def loss(self, x0, xK, plan):
         inp = torch.cat([(x0 - self.mu) / self.sd, plan.reshape(plan.shape[0], -1)], -1)
@@ -230,7 +234,47 @@ class ModelLMTeacher(_Segments, LMPlanTeacher):
     def residual(self, x, flat, traj, j, a_ref_flat):
         y, r_state, r_act, cost = LMPlanTeacher.residual(self, x, flat, traj, j, a_ref_flat)
         self.add(x, y, flat)  # every LM rollout is a segment
+        if self.sobolev > 0:  # secant pair with the previous rollout of the same states
+            if self._prev is not None and self._prev[0] is x:
+                _, a0, y0 = self._prev
+                d = (flat - a0).abs().amax(-1) > 1e-6
+                if d.any():
+                    new = (x[d], a0[d], flat[d], ((y - y0) * self.w)[d])
+                    self.pairs = new if self.pairs is None else tuple(
+                        torch.cat([b, c])[-self.cap // 2 :] for b, c in zip(self.pairs, new))
+            self._prev = (x, flat.clone(), y.clone())
         return y, r_state, r_act, cost
+
+    def fit(self, steps, bs=1024):
+        if self.sobolev <= 0 or self.pairs is None:
+            return super().fit(steps, bs)
+        if self.buf is None or self.buf[0].shape[0] < self.min_data or steps <= 0:
+            return
+        N, M = self.buf[0].shape[0], self.pairs[0].shape[0]
+        self.net.train()
+        with torch.enable_grad():
+            for _ in range(steps):
+                i = torch.randint(0, N, (bs,), device=self.device, generator=self.gen)
+                loss = self.loss(self.buf[0][i], self.buf[1][i], self.buf[2][i].view(-1, self.K, self.A))
+                k = torch.randint(0, M, (bs,), device=self.device, generator=self.gen)
+                x, a0, a1, dy = (t[k] for t in self.pairs)
+                z = (x - self.mu) / self.sd
+                pred = self.net(torch.cat([z, a1], -1)) - self.net(torch.cat([z, a0], -1))
+                sec = ((pred - dy) ** 2).sum(-1).mean() / (dy**2).sum(-1).mean().clamp_min(1e-12)
+                total = loss + self.sobolev * sec
+                self.opt.zero_grad()
+                total.backward()
+                self.opt.step()
+        self.net.eval()
+        self.trained, self.last_loss = True, loss.item()
+        self.last_secant = sec.item()
+
+    def round_stats(self):
+        out = super().round_stats()
+        if self.sobolev > 0:
+            out['teacher/secant_rel_err'] = float(getattr(self, 'last_secant', float('nan')))
+            out['teacher/secant_pairs'] = float(self.pairs[0].shape[0]) if self.pairs is not None else 0.0
+        return out
 
     @torch.no_grad()
     def optimise(self, sim, x, traj, j, a_ref):

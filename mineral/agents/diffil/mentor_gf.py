@@ -541,6 +541,9 @@ def _register_late():
 
     GF_TEACHERS['hit'] = HindsightInverseTeacher
     GF_TEACHERS['lmmodel'] = ModelLMTeacher
+    from .mentor_lr import LowRankLMTeacher
+
+    GF_TEACHERS['lmlr'] = LowRankLMTeacher
 
 
 _register_late()

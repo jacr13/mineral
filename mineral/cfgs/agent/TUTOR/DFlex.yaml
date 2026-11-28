@@ -48,6 +48,10 @@ mentor:
       hit_lr: 0.001
       # lmmodel: LM on the plan with a learned forward model's Jacobian (broyden: once, then secant updates; every)
       lm_model_jac: broyden
+      lm_sobolev: 0.0  # > 0: also fit the model's differences to the LM secant pairs (relative error, this weight)
+      # lmlr: LM on a low-rank plan a_bar + B z (lr_time cosines over the K steps x actions, or lr_act Stage I PCs)
+      lr_time: 3
+      lr_act: 0
       # rejoin_diag (DIAGNOSTIC, uses gradients; REQUESTS R3): label = warm + diag_shrink (adam - warm) + diag_noise N(0, I)
       diag_shrink: 1.0
       diag_noise: 0.0
